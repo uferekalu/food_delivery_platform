@@ -33,11 +33,13 @@ push directly to `main`/`master`. Every change goes on a branch named
    (not as a separate throwaway commit).
 5. Do the work for that phase.
 6. Push the branch: `git push -u origin feature/FDP-<n>-<short-description>`.
-7. If `main` exists, open a PR against it (`gh pr create`) summarizing the change and a test
-   plan, and tell the user it's ready for their review — do not merge it yourself. If `main`
-   doesn't exist yet (first branch), tell the user the branch is pushed and that GitHub needs
-   them to establish `main` (e.g. by merging/renaming this branch once they've reviewed it),
-   since a PR can't target a branch that doesn't exist.
-8. After merge, flip the Status column for that phase to "✅ Done" in the next branch's first
+7. Open a PR against `main` (`gh pr create`) summarizing the change and a test plan. Standing
+   instruction as of 2026-08-17: merge it yourself right after (`gh pr merge --squash
+   --delete-branch`) rather than leaving it for manual review — the user hit repeated trouble
+   merging via the GitHub UI and asked Claude to handle it. Still tell the user what shipped
+   and link the (now-merged) PR. Only skip the self-merge if the user has said to go back to
+   manual review for this session. (`main` won't exist yet for the very first branch, FDP-1 —
+   see docs/ENGINEERING_RULES.md for how that bootstrap was handled.)
+8. After merging, flip the Status column for that phase to "✅ Done" in the next branch's first
    commit (ROADMAP.md is always updated from whichever branch is currently active, not
    retroactively on the merged one).
