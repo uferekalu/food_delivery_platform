@@ -4,6 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { setupApp } from '../src/setup-app';
 // AppModule is intentionally NOT statically imported: its `@Module` decorator calls
 // `ConfigModule.forRoot()`, which reads `process.env` the moment the module is evaluated. A
 // static `import` is hoisted and resolved before `beforeAll` runs, so it would validate env
@@ -26,6 +27,12 @@ describe('Health (e2e)', () => {
     process.env.MONGODB_URI = mongod.getUri();
     process.env.CORS_ORIGINS = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+    process.env.JWT_ACCESS_SECRET = 'a'.repeat(32);
+    process.env.JWT_REFRESH_SECRET = 'b'.repeat(32);
+    process.env.JWT_EMAIL_SECRET = 'c'.repeat(32);
+    process.env.RESEND_API_KEY = 're_test_key';
+    process.env.MAIL_FROM = 'Food Delivery Platform <noreply@example.com>';
 
     const { AppModule } =
       require('../src/app.module') as typeof import('../src/app.module');
@@ -34,6 +41,7 @@ describe('Health (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    setupApp(app);
     await app.init();
     // Cold-starting the in-memory MongoDB binary can comfortably exceed Jest's 5s default.
   }, 30_000);

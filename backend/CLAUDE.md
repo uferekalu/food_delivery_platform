@@ -20,6 +20,19 @@ working inside `backend/`.
   `@ApiTags`/`@ApiProperty` decorators so the docs stay useful, not just present.
 - Health check: `GET /health` (Terminus), currently checks MongoDB connectivity. Extend it
   (don't replace it) as new critical dependencies are added.
+- Auth (`src/auth/`) guards are **global and default-deny**: `JwtAuthGuard` + `RolesGuard` are
+  registered via `APP_GUARD`, so every endpoint requires a valid access token unless explicitly
+  marked `@Public()` (see `health.controller.ts` for the pattern — anything hit by an external
+  health checker, webhook, etc. needs this). Add `@Roles('admin', ...)` on top of that for
+  role-restricted endpoints. Password hashing is `bcryptjs` (pure JS — deliberately not the
+  native `bcrypt` binding, to avoid native-module build issues in different deploy
+  environments). Refresh tokens are opaque random strings (not JWTs), stored hashed in a
+  per-token `RefreshToken` document (not a single field on `User`) so multiple devices/sessions
+  work independently, with rotation-on-use and reuse-detection (a replayed, already-rotated
+  token revokes the whole family) — see `auth.service.ts` for the full flow before changing it.
+- Rate-limit sensitive auth endpoints individually with `@Throttle({ default: { limit: N, ttl:
+  ms } })` on top of the global default — see `auth.controller.ts` (login/register/password
+  endpoints are tighter than the app-wide 100/min).
 
 ## Module layout
 
@@ -34,6 +47,16 @@ guards, decorators) only — domain logic never lives there.
   `mongodb-memory-server` — never a real database, never mocked-away Mongoose. Set
   `process.env.MONGODB_URI` (and other required env vars) to the memory server's URI *before*
   compiling the testing module.
+- **Always call `setupApp(app)` (`src/setup-app.ts`) right after `createNestApplication()` and
+  before `app.init()`** in every e2e spec. `Test.createTestingModule(...).createNestApplication()`
+  does **not** run `main.ts`'s `bootstrap()` — skip this and the test runs with no
+  `ValidationPipe` (DTOs silently stop being validated — this exact gap let a weak password
+  through in an early version of the auth e2e test), no exception filter, and no cookie
+  parsing (`req.cookies` is `undefined`, breaking anything cookie-based like refresh/logout).
+- `mongodb-memory-server`'s `MongoMemoryServer.create()` can take 15–30s+ on a cold/loaded
+  machine — give `beforeAll` a generous timeout (`}, 30_000);`) rather than fighting Jest's 5s
+  default, and do the same for individual tests that hash passwords with bcrypt (cost factor
+  12 is deliberately slow) via `jest.setTimeout(30_000)` at the top of the file.
 - Every payment webhook handler (from FDP-8 onward) needs a test asserting it rejects an
   invalid signature — see `docs/ENGINEERING_RULES.md`.
 

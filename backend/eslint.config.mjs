@@ -32,4 +32,14 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    // `expect(mockedService.method).toHaveBeenCalledWith(...)` reads a method off a jest mock
+    // without calling it — real behavior, but indistinguishable from an actually-unsafe unbound
+    // method access to this rule (which has no notion of jest mocks). Standard override absent
+    // eslint-plugin-jest's jest-aware replacement rule.
+    files: ['**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
 );
