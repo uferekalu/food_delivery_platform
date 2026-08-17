@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 handed to the repo owner as a PR to review and merge — nothing is merged automatically.
 See `docs/ENGINEERING_RULES.md` for the branch/PR workflow itself.
 
-**Next available ticket number: FDP-2**
+**Next available ticket number: FDP-3**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).

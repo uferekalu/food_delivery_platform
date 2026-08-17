@@ -38,10 +38,11 @@ Passport JWT (access + refresh), Socket.IO gateway for realtime, Cloudinary SDK 
 Stripe/Paystack/Flutterwave SDKs, `@nestjs/config` + Joi for env validation, `@nestjs/throttler`
 for rate limiting, Helmet, Swagger (`@nestjs/swagger`) for API docs, Jest for unit/e2e tests.
 
-**Frontend:** Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query (server state),
-Zustand (client/UI state — cart, session cache), React Hook Form + Zod (forms/validation),
-Socket.IO client, Mapbox GL JS (behind `NEXT_PUBLIC_MAPBOX_TOKEN`), Vitest + React Testing
-Library (component tests), Playwright (critical-path e2e).
+**Frontend:** Next.js (App Router), TypeScript, Tailwind CSS, **Redux Toolkit + RTK Query**
+(single state layer — RTK Query for all server state/data fetching, plain slices for
+client/UI state such as theme and cart), React Hook Form + Zod (forms/validation), Socket.IO
+client, Mapbox GL JS (behind `NEXT_PUBLIC_MAPBOX_TOKEN`), Vitest + React Testing Library
+(component tests), Playwright (critical-path e2e).
 
 **Cross-cutting:** Cloudinary (all images), MongoDB Atlas (database), Stripe + Paystack +
 Flutterwave (payments), GitHub Actions (CI), Vercel (frontend hosting), Render (backend
@@ -121,7 +122,45 @@ anything that needs runtime theming.
 - **Radius, shadow, z-index, breakpoints, motion/duration:** each a token scale, not
   component-local magic numbers
 
-## 6. UI kit (hand-built, no external component library)
+## 6. State management
+
+Redux Toolkit is the single state management technology for the frontend — no parallel
+context/store systems for app state:
+
+- **`frontend/src/lib/redux/store.ts`** — `configureStore`, combining plain slices with the
+  RTK Query `api` reducer/middleware.
+- **`frontend/src/lib/redux/api.ts`** — one base `createApi` instance (`fetchBaseQuery` pointed
+  at `NEXT_PUBLIC_API_URL`); each feature phase injects its own endpoints via
+  `api.injectEndpoints()` rather than creating separate `createApi` instances, so there's one
+  cache/tag graph for the whole app.
+- **Plain slices** (`frontend/src/lib/redux/slices/`) hold client-only UI/app state that isn't
+  server data — theme preference, cart (until checkout), auth session flags. Server data
+  (restaurants, orders, etc.) always goes through RTK Query, never duplicated into a plain
+  slice.
+- Typed hooks (`useAppDispatch`, `useAppSelector`) in `frontend/src/lib/redux/hooks.ts` are the
+  only way components touch the store — no untyped `useDispatch`/`useSelector`.
+
+## 7. Theming (light/dark)
+
+Token-driven, not component-driven: components never branch on a "dark mode" flag or sprinkle
+`dark:` utility variants — they always read the semantic color tokens (`bg-surface`,
+`text-text`, `bg-primary`, …), and those tokens' underlying CSS custom property values switch
+based on the active theme. This means every component built against the semantic tokens (see
+§5) is dark-mode-correct automatically, with no per-component dark-mode work.
+
+- Light values are the default on bare `:root` in `frontend/src/styles/tokens.css`.
+- Dark values override the same semantic variable names, applied twice: once under
+  `@media (prefers-color-scheme: dark)` (guarded with `:root:not([data-theme="light"])`, so it
+  only fires absent an explicit user choice), and again under `:root[data-theme="dark"]` (so an
+  explicit choice always wins over the OS setting, in both directions).
+- Theme mode (`light | dark | system`) is Redux state (`themeSlice`), the source of truth for
+  the theme toggle UI. To avoid a flash of the wrong theme on load, a small inline script in
+  the root layout (runs before hydration) reads the persisted preference and sets
+  `document.documentElement.dataset.theme` synchronously; Redux re-syncs from that DOM state
+  once it mounts, then owns all subsequent changes and keeps the DOM attribute + `localStorage`
+  in sync with the store.
+
+## 8. UI kit (hand-built, no external component library)
 
 Built from scratch on top of the design tokens — every component in
 `frontend/src/components/ui/`. Minimum inventory:
@@ -144,20 +183,31 @@ focus management itself — this is a hard accessibility bar and should be treat
 implementation task per component, not an afterthought. Component tests (Vitest + RTL) should
 cover keyboard interaction, not just rendering.
 
-## 7. Realtime
+Built in FDP-2 (Tier 1 — universal atoms + forms + feedback + basic navigation/layout):
+Button, IconButton, Badge, Avatar, Link, Divider, Container, Label, Input, Textarea, Checkbox,
+RadioGroup, Select, Switch, FormField, Spinner, Skeleton, Alert, Modal, Toast (+provider+hook),
+Card, Tabs, Tooltip, DropdownMenu, Breadcrumbs, Pagination, EmptyState, ThemeToggle.
+
+Deliberately deferred to the phase that first needs them, so they're built against real data
+shapes instead of speculative ones: Accordion (restaurant details, FDP-5), ImageDropzone
+(Cloudinary upload, FDP-5), DatePicker/TimeRangePicker (opening hours, FDP-5), Stepper (order
+tracking, FDP-7), Rating (reviews, FDP-10), DataTable (admin, FDP-12), Combobox/ContextMenu/
+Slider (built when a concrete screen needs one).
+
+## 9. Realtime
 
 Single Socket.IO gateway (`backend/src/realtime/`) with rooms per order (`order:<id>`) and per
 restaurant (`restaurant:<id>`). Events: order status changes, rider location updates,
 restaurant new-order notification. Frontend connects via a shared `useSocket` hook; the
 customer order-tracking page and restaurant dashboard both subscribe to their relevant rooms.
 
-## 8. Live map tracking
+## 10. Live map tracking
 
 Behind `NEXT_PUBLIC_MAPBOX_TOKEN`. Built as a self-contained `<LiveDeliveryMap>` component that
 degrades gracefully (falls back to the status-timeline Stepper only) if the token is absent, so
 it never blocks other functionality on the key being configured.
 
-## 9. Auth
+## 11. Auth
 
 JWT access token (short-lived, ~15 min) + refresh token (long-lived, httpOnly, secure,
 SameSite cookie), rotation on refresh, role-based guards (`@Roles()` decorator +
@@ -165,7 +215,7 @@ SameSite cookie), rotation on refresh, role-based guards (`@Roles()` decorator +
 expiring tokens delivered by email. CSRF is mitigated by SameSite cookies + a double-submit
 token on state-changing requests from the browser.
 
-## 10. Deployment topology
+## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in
   Vercel project settings (never committed)
@@ -175,7 +225,7 @@ token on state-changing requests from the browser.
 - **Media:** Cloudinary (API key/secret via env var)
 - CORS on the backend is locked to the deployed frontend origin(s) + localhost for dev
 
-## 11. Environment variables
+## 13. Environment variables
 
 Each app ships a `.env.example` documenting every required variable with a placeholder value
 and a one-line comment on where to get it. Real values live only in local `.env` (gitignored)

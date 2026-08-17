@@ -1,0 +1,239 @@
+/*
+ * Design tokens — the single source of truth for color, typography, radius,
+ * shadow, and motion in this app. Tailwind v4 is CSS-first: values defined in
+ * `@theme` below both generate utility classes (e.g. `bg-brand-600`) AND are
+ * emitted as real CSS custom properties on `:root`, so the same token is
+ * usable from Tailwind utilities, arbitrary values, and plain CSS/JS
+ * (see `src/styles/tokens.ts` for a typed accessor).
+ *
+ * Rule (see docs/ENGINEERING_RULES.md): no component may hardcode a color,
+ * spacing, radius, or font-size value that isn't a token defined here. Add
+ * the token here first if one is missing.
+ *
+ * Spacing intentionally uses Tailwind v4's built-in scale (driven by the
+ * single `--spacing` base unit) rather than a hand-rolled scale — it's
+ * already a systematic token, redefining it would just add indirection.
+ */
+
+@theme {
+  /* ---- Color: brand (burgundy) — same hue/saturation, stepped lightness ---- */
+  --color-brand-50: hsl(343 60% 97%);
+  --color-brand-100: hsl(343 62% 93%);
+  --color-brand-200: hsl(344 60% 86%);
+  --color-brand-300: hsl(344 58% 76%);
+  --color-brand-400: hsl(344 56% 63%);
+  --color-brand-500: hsl(344 58% 49%);
+  --color-brand-600: hsl(344 62% 38%); /* primary burgundy */
+  --color-brand-700: hsl(344 64% 30%);
+  --color-brand-800: hsl(344 62% 24%);
+  --color-brand-900: hsl(345 58% 18%);
+  --color-brand-950: hsl(345 55% 10%);
+
+  /* ---- Color: neutral (white/gray, slightly warm to pair with burgundy) ---- */
+  --color-neutral-0: hsl(0 0% 100%);
+  --color-neutral-50: hsl(30 20% 98%);
+  --color-neutral-100: hsl(30 15% 95%);
+  --color-neutral-200: hsl(30 10% 90%);
+  --color-neutral-300: hsl(30 8% 82%);
+  --color-neutral-400: hsl(30 6% 65%);
+  --color-neutral-500: hsl(30 5% 50%);
+  --color-neutral-600: hsl(30 6% 38%);
+  --color-neutral-700: hsl(30 8% 28%);
+  --color-neutral-800: hsl(30 10% 18%);
+  --color-neutral-900: hsl(30 12% 11%);
+  --color-neutral-950: hsl(30 15% 6%);
+
+  /* ---- Color: semantic status ---- */
+  --color-success: hsl(152 55% 32%);
+  --color-success-bg: hsl(152 55% 95%);
+  --color-warning: hsl(38 92% 40%);
+  --color-warning-bg: hsl(38 92% 95%);
+  --color-danger: hsl(4 72% 46%);
+  --color-danger-bg: hsl(4 72% 95%);
+  --color-info: hsl(210 80% 44%);
+  --color-info-bg: hsl(210 80% 95%);
+
+  /* ---- Color: semantic aliases — use these in components, not the raw
+     brand/neutral scale, so the palette can be re-themed in one place ---- */
+  --color-primary: var(--color-brand-600);
+  --color-primary-hover: var(--color-brand-700);
+  --color-primary-active: var(--color-brand-800);
+  --color-primary-subtle: var(--color-brand-50);
+  --color-primary-foreground: var(--color-neutral-0);
+
+  --color-surface: var(--color-neutral-0);
+  --color-surface-subtle: var(--color-neutral-50);
+  --color-surface-raised: var(--color-neutral-0);
+
+  --color-border: var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+
+  --color-text: var(--color-neutral-900);
+  --color-text-muted: var(--color-neutral-600);
+  --color-text-on-primary: var(--color-neutral-0);
+  --color-text-disabled: var(--color-neutral-400);
+
+  /* ---- Typography ---- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1.1;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Radius ---- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* ---- Shadow ---- */
+  --shadow-sm: 0 1px 2px 0 hsl(30 15% 6% / 0.06);
+  --shadow-md: 0 4px 12px -2px hsl(30 15% 6% / 0.1), 0 2px 4px -2px hsl(30 15% 6% / 0.06);
+  --shadow-lg: 0 12px 24px -4px hsl(30 15% 6% / 0.12), 0 4px 8px -4px hsl(30 15% 6% / 0.08);
+  --shadow-xl: 0 24px 48px -8px hsl(30 15% 6% / 0.16);
+
+  /* ---- Motion easing (generates `ease-standard` etc. transition utilities) ---- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Dark palette — defined once here, then activated by BOTH selectors below (OS preference,
+ * and explicit choice) so the two never drift apart. Components never branch on a dark flag;
+ * they only ever read the semantic tokens (`bg-surface`, `text-text`, `bg-primary`, …), so
+ * repointing these is the entire cost of dark mode support (see docs/ARCHITECTURE.md §7).
+ */
+:root {
+  --dark-primary: var(--color-brand-500);
+  --dark-primary-hover: var(--color-brand-400);
+  --dark-primary-active: var(--color-brand-300);
+  --dark-primary-subtle: hsl(344 45% 16%);
+  --dark-primary-foreground: var(--color-neutral-0);
+
+  --dark-surface: var(--color-neutral-950);
+  --dark-surface-subtle: var(--color-neutral-900);
+  --dark-surface-raised: var(--color-neutral-800);
+
+  --dark-border: var(--color-neutral-700);
+  --dark-border-strong: var(--color-neutral-600);
+
+  --dark-text: var(--color-neutral-50);
+  --dark-text-muted: var(--color-neutral-400);
+  --dark-text-on-primary: var(--color-neutral-0);
+  --dark-text-disabled: var(--color-neutral-600);
+
+  --dark-success: hsl(152 55% 55%);
+  --dark-success-bg: hsl(152 45% 14%);
+  --dark-warning: hsl(38 92% 60%);
+  --dark-warning-bg: hsl(38 60% 14%);
+  --dark-danger: hsl(4 80% 62%);
+  --dark-danger-bg: hsl(4 55% 16%);
+  --dark-info: hsl(210 85% 62%);
+  --dark-info-bg: hsl(210 55% 14%);
+}
+
+/*
+ * Activation, matching the "system preference, explicit choice overrides it" contract: once
+ * for the OS-level preference (skipped if the user picked "light" explicitly), and again for
+ * an explicit "dark" choice (wins over the OS preference either way).
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: var(--dark-primary);
+    --color-primary-hover: var(--dark-primary-hover);
+    --color-primary-active: var(--dark-primary-active);
+    --color-primary-subtle: var(--dark-primary-subtle);
+    --color-primary-foreground: var(--dark-primary-foreground);
+
+    --color-surface: var(--dark-surface);
+    --color-surface-subtle: var(--dark-surface-subtle);
+    --color-surface-raised: var(--dark-surface-raised);
+
+    --color-border: var(--dark-border);
+    --color-border-strong: var(--dark-border-strong);
+
+    --color-text: var(--dark-text);
+    --color-text-muted: var(--dark-text-muted);
+    --color-text-on-primary: var(--dark-text-on-primary);
+    --color-text-disabled: var(--dark-text-disabled);
+
+    --color-success: var(--dark-success);
+    --color-success-bg: var(--dark-success-bg);
+    --color-warning: var(--dark-warning);
+    --color-warning-bg: var(--dark-warning-bg);
+    --color-danger: var(--dark-danger);
+    --color-danger-bg: var(--dark-danger-bg);
+    --color-info: var(--dark-info);
+    --color-info-bg: var(--dark-info-bg);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-primary: var(--dark-primary);
+  --color-primary-hover: var(--dark-primary-hover);
+  --color-primary-active: var(--dark-primary-active);
+  --color-primary-subtle: var(--dark-primary-subtle);
+  --color-primary-foreground: var(--dark-primary-foreground);
+
+  --color-surface: var(--dark-surface);
+  --color-surface-subtle: var(--dark-surface-subtle);
+  --color-surface-raised: var(--dark-surface-raised);
+
+  --color-border: var(--dark-border);
+  --color-border-strong: var(--dark-border-strong);
+
+  --color-text: var(--dark-text);
+  --color-text-muted: var(--dark-text-muted);
+  --color-text-on-primary: var(--dark-text-on-primary);
+  --color-text-disabled: var(--dark-text-disabled);
+
+  --color-success: var(--dark-success);
+  --color-success-bg: var(--dark-success-bg);
+  --color-warning: var(--dark-warning);
+  --color-warning-bg: var(--dark-warning-bg);
+  --color-danger: var(--dark-danger);
+  --color-danger-bg: var(--dark-danger-bg);
+  --color-info: var(--dark-info);
+  --color-info-bg: var(--dark-info-bg);
+}
+
+/*
+ * Tokens outside Tailwind's themable `@theme` namespaces (z-index has no
+ * built-in namespace; duration is exposed for JS/animation libs). Still real
+ * custom properties — consume via `z-[var(--z-modal)]` etc., or from JS via
+ * `src/styles/tokens.ts`.
+ */
+:root {
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-modal-backdrop: 1200;
+  --z-modal: 1300;
+  --z-toast: 1400;
+  --z-tooltip: 1500;
+
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+}

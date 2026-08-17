@@ -11,7 +11,8 @@ is only the summary.
 - **Backend** (`backend/`): NestJS, TypeScript, MongoDB (Mongoose), Cloudinary, Socket.IO,
   Stripe + Paystack + Flutterwave. Deployed to **Render**.
 - **Frontend** (`frontend/`): Next.js (App Router), TypeScript, Tailwind CSS, hand-built UI kit
-  on top of design tokens (no Radix/shadcn). Deployed to **Vercel**.
+  on top of design tokens (no Radix/shadcn), Redux Toolkit + RTK Query for all state. Supports
+  light/dark theming (token-driven, see `docs/ARCHITECTURE.md` §7). Deployed to **Vercel**.
 - Two independent apps, no workspace tooling — see `docs/ARCHITECTURE.md` §1 for why.
 
 ## Brand

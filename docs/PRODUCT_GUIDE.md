@@ -72,6 +72,8 @@ Glovo, Chowdeck) — built for global reach with first-class support for African
 
 ### Platform-wide / non-functional requirements
 - Responsive, accessible (WCAG AA target) UI across mobile/tablet/desktop
+- Light/dark theme switcher (light, dark, and system-follows-OS), token-driven so every
+  component is dark-mode-correct automatically — see `docs/ARCHITECTURE.md` §7
 - Real-time updates via WebSockets (order status, rider location, restaurant order queue)
 - Image handling via Cloudinary (menu items, logos, avatars, rider documents) — never store
   binary blobs in MongoDB or on the app servers
