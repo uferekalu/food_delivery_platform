@@ -1,0 +1,182 @@
+# Architecture
+
+Technical source of truth. Product requirements live in `docs/PRODUCT_GUIDE.md`; the phased
+build order lives in `docs/ROADMAP.md`. This doc describes *how* the system is built.
+
+## 1. Repository layout
+
+Plain two-app monorepo (no npm/pnpm workspace tooling), because the two apps deploy to
+different hosts (Vercel vs Render) with independent build roots — a workspace adds complexity
+neither host needs. Each app owns its own `package.json` and lockfile.
+
+```
+food_ordering_platform/
+  backend/            NestJS + TypeScript API (deployed to Render)
+  frontend/           Next.js + TypeScript app (deployed to Vercel)
+  docs/               Product guide, architecture, roadmap, engineering rules
+  .claude/skills/     Project-specific Claude Code skills (e.g. branch creation)
+  CLAUDE.md           Root conventions read every session
+```
+
+`backend/CLAUDE.md` and `frontend/CLAUDE.md` are added when each app is scaffolded
+(FDP-2 / FDP-3) with conventions specific to that app.
+
+### Shared types
+
+There is no shared npm package between the two apps (would require workspace tooling that
+fights the two-host deploy model). Instead:
+- Enums/constants that must match exactly (order status, roles, currency codes, payment
+  provider names) are defined once in `docs/ARCHITECTURE.md` §Domain Model as the source of
+  truth, then hand-mirrored in `backend/src/common/constants` and
+  `frontend/src/lib/constants`.
+- Any drift is a bug — when one side changes, update the other in the same PR.
+
+## 2. Tech stack
+
+**Backend:** NestJS, TypeScript, MongoDB via Mongoose, class-validator/class-transformer DTOs,
+Passport JWT (access + refresh), Socket.IO gateway for realtime, Cloudinary SDK for media,
+Stripe/Paystack/Flutterwave SDKs, `@nestjs/config` + Joi for env validation, `@nestjs/throttler`
+for rate limiting, Helmet, Swagger (`@nestjs/swagger`) for API docs, Jest for unit/e2e tests.
+
+**Frontend:** Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query (server state),
+Zustand (client/UI state — cart, session cache), React Hook Form + Zod (forms/validation),
+Socket.IO client, Mapbox GL JS (behind `NEXT_PUBLIC_MAPBOX_TOKEN`), Vitest + React Testing
+Library (component tests), Playwright (critical-path e2e).
+
+**Cross-cutting:** Cloudinary (all images), MongoDB Atlas (database), Stripe + Paystack +
+Flutterwave (payments), GitHub Actions (CI), Vercel (frontend hosting), Render (backend
+hosting).
+
+## 3. Domain model
+
+Core entities (Mongoose schemas in `backend/src/**/schemas`):
+
+- **User** — email, phone, passwordHash, role (`customer|restaurant_owner|rider|admin`), name,
+  avatarUrl (Cloudinary), addresses[], isEmailVerified
+- **Address** — label, line1/2, city, state, country, postalCode, lat/lng, isDefault
+- **Restaurant** — ownerId, name, slug, description, logoUrl, coverUrl, address+geo,
+  cuisineTypes[], **currency** (ISO 4217 — source of truth for order currency), country,
+  openingHours[], isOpen, isApproved, avgRating
+- **MenuCategory** — restaurantId, name, sortOrder
+- **MenuItem** — restaurantId, categoryId, name, description, price, imageUrl, isAvailable,
+  modifierGroups[]
+- **ModifierGroup** (embedded) — name, min, max, options[{ name, priceDelta }]
+- **Cart** — userId, restaurantId (one active restaurant per cart), items[{ menuItemId, qty,
+  selectedModifiers, notes }]
+- **Order** — orderNumber, customerId, restaurantId, riderId?, items snapshot, subtotal,
+  deliveryFee, serviceFee, tax, discount, total, **currency** (copied from restaurant at order
+  time), status, statusHistory[{ status, at, by }], paymentProvider, paymentStatus, paymentRef,
+  deliveryAddress+geo, estimatedDeliveryAt
+- **OrderStatus** enum — `PENDING_PAYMENT, PLACED, ACCEPTED_BY_RESTAURANT, PREPARING,
+  READY_FOR_PICKUP, ASSIGNED_TO_RIDER, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED,
+  REFUNDED`
+- **Payment** — orderId, provider (`stripe|paystack|flutterwave`), providerRef, amount,
+  currency, status (`initiated|succeeded|failed|refunded`), rawWebhookPayload
+- **Rider** — userId, vehicleType, isOnline, currentLocation{lat,lng}, isVerified, documents[]
+  (Cloudinary), rating
+- **Review** — targetType (`restaurant|rider`), targetId, orderId, authorId, rating, comment,
+  images[]
+- **Notification** — userId, type, title, body, isRead, channel (`email|inapp`), metadata
+- **DeliveryZone** — restaurantId, polygon/radius, baseFee, perKmFee
+
+## 4. Payment routing (Stripe / Paystack / Flutterwave)
+
+Decision: **auto-select by the order's currency/region, with the customer able to manually
+override to any provider that supports that currency.**
+
+Order currency is always the restaurant's configured currency (no cross-currency conversion at
+checkout). A `PaymentProviderResolver` (backend, `backend/src/payments/provider-resolver.ts`)
+maps currency → an ordered list of supported providers; index 0 is the pre-selected default,
+the rest populate the "switch provider" UI:
+
+| Currency | Default | Alternates (if enabled) |
+|---|---|---|
+| NGN | Paystack | Flutterwave, Stripe |
+| GHS, KES, ZAR, UGX, and other supported African currencies | Flutterwave | Paystack (where supported), Stripe |
+| USD, EUR, GBP, CAD, AUD, and other global currencies | Stripe | Flutterwave |
+
+This mapping is a config table, not hardcoded logic — new currencies/providers are added by
+editing the table. Each provider implements a common `PaymentProvider` interface
+(`initiate(order)`, `verify(reference)`, `handleWebhook(payload, signature)`,
+`refund(paymentRef)`) so the checkout/webhook code never branches on provider name outside the
+resolver and the three provider adapters.
+
+Webhook signatures are verified for all three providers before any order/payment state is
+mutated. Payment state transitions only happen server-side, driven by verified webhook events
+or a verified `verify()` poll — never trusted from client-reported "payment succeeded" calls.
+
+## 5. Design tokens (frontend source of truth)
+
+Single source of truth: `frontend/src/styles/tokens.ts`, consumed by `tailwind.config.ts` (so
+Tailwind utility classes and the token file can never drift) and exposed as CSS variables for
+anything that needs runtime theming.
+
+- **Color:** Burgundy primary scale (50–950, brand primary), neutral/white scale (surfaces,
+  borders, text), semantic colors (`success`, `warning`, `danger`, `info`), each with
+  foreground-safe pairings for contrast (WCAG AA)
+- **Typography:** font family token (swappable in one place), a type scale (`xs`…`4xl`) with
+  paired line-height, font-weight tokens
+- **Spacing:** a single spacing scale used for padding/margin/gap everywhere (no ad hoc pixel
+  values in components)
+- **Radius, shadow, z-index, breakpoints, motion/duration:** each a token scale, not
+  component-local magic numbers
+
+## 6. UI kit (hand-built, no external component library)
+
+Built from scratch on top of the design tokens — every component in
+`frontend/src/components/ui/`. Minimum inventory:
+
+- **Primitives:** Button, IconButton, Link, Badge, Avatar, Chip/Tag
+- **Forms:** Input, Textarea, Select (custom listbox), Combobox/Autocomplete, Checkbox,
+  Radio/RadioGroup, Switch, Slider, ImageDropzone (Cloudinary upload), FormField
+  (label+error+hint wrapper), DatePicker, TimeRangePicker
+- **Feedback:** Toast, Alert/Banner, Modal/Dialog, Drawer/Sheet, Tooltip, Popover, Skeleton,
+  Spinner, ProgressBar, EmptyState
+- **Navigation:** Navbar, Sidebar, Tabs, Breadcrumbs, Pagination, Stepper (order tracking
+  timeline)
+- **Data display:** Card, DataTable, List, StatCard, Rating (stars), Accordion
+- **Overlay/menu:** DropdownMenu, ContextMenu
+- **Layout:** Container, Grid/Stack helpers, Divider
+
+Because these are hand-built (no Radix/shadcn), each interactive component (Select, Dialog,
+Combobox, DropdownMenu, RadioGroup) must implement correct ARIA roles, keyboard navigation, and
+focus management itself — this is a hard accessibility bar and should be treated as a real
+implementation task per component, not an afterthought. Component tests (Vitest + RTL) should
+cover keyboard interaction, not just rendering.
+
+## 7. Realtime
+
+Single Socket.IO gateway (`backend/src/realtime/`) with rooms per order (`order:<id>`) and per
+restaurant (`restaurant:<id>`). Events: order status changes, rider location updates,
+restaurant new-order notification. Frontend connects via a shared `useSocket` hook; the
+customer order-tracking page and restaurant dashboard both subscribe to their relevant rooms.
+
+## 8. Live map tracking
+
+Behind `NEXT_PUBLIC_MAPBOX_TOKEN`. Built as a self-contained `<LiveDeliveryMap>` component that
+degrades gracefully (falls back to the status-timeline Stepper only) if the token is absent, so
+it never blocks other functionality on the key being configured.
+
+## 9. Auth
+
+JWT access token (short-lived, ~15 min) + refresh token (long-lived, httpOnly, secure,
+SameSite cookie), rotation on refresh, role-based guards (`@Roles()` decorator +
+`RolesGuard`) on every protected endpoint. Email verification and password reset use signed,
+expiring tokens delivered by email. CSRF is mitigated by SameSite cookies + a double-submit
+token on state-changing requests from the browser.
+
+## 10. Deployment topology
+
+- **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in
+  Vercel project settings (never committed)
+- **Backend → Render:** root directory `backend/`, Node web service, `render.yaml` blueprint
+  checked in (structure only — actual secret values set in Render dashboard)
+- **Database:** MongoDB Atlas (connection string via env var)
+- **Media:** Cloudinary (API key/secret via env var)
+- CORS on the backend is locked to the deployed frontend origin(s) + localhost for dev
+
+## 11. Environment variables
+
+Each app ships a `.env.example` documenting every required variable with a placeholder value
+and a one-line comment on where to get it. Real values live only in local `.env` (gitignored)
+and in the Vercel/Render dashboards.
