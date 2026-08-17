@@ -19,6 +19,9 @@ describe('envValidationSchema', () => {
     JWT_EMAIL_SECRET: 'c'.repeat(32),
     RESEND_API_KEY: 're_test_key',
     MAIL_FROM: 'Food Delivery Platform <noreply@example.com>',
+    CLOUDINARY_CLOUD_NAME: 'test-cloud',
+    CLOUDINARY_API_KEY: '123456789',
+    CLOUDINARY_API_SECRET: 'test-secret',
   };
 
   it('accepts a fully specified valid environment', () => {
@@ -38,6 +41,9 @@ describe('envValidationSchema', () => {
       JWT_EMAIL_SECRET: validEnv.JWT_EMAIL_SECRET,
       RESEND_API_KEY: validEnv.RESEND_API_KEY,
       MAIL_FROM: validEnv.MAIL_FROM,
+      CLOUDINARY_CLOUD_NAME: validEnv.CLOUDINARY_CLOUD_NAME,
+      CLOUDINARY_API_KEY: validEnv.CLOUDINARY_API_KEY,
+      CLOUDINARY_API_SECRET: validEnv.CLOUDINARY_API_SECRET,
     }) as {
       error: unknown;
       value: ValidatedEnv & { JWT_ACCESS_EXPIRES_IN: string };

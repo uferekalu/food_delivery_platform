@@ -33,6 +33,22 @@ working inside `backend/`.
 - Rate-limit sensitive auth endpoints individually with `@Throttle({ default: { limit: N, ttl:
   ms } })` on top of the global default — see `auth.controller.ts` (login/register/password
   endpoints are tighter than the app-wide 100/min).
+- **Roles and how they're reached:** registration lets the person pick `customer` or
+  `restaurant_owner` for themselves (`RegisterDto.role`, restricted to
+  `SELF_REGISTERABLE_ROLES` in `users/schemas/user.schema.ts`) — this is normal (it's the
+  "sign up as a merchant" choice every marketplace has), not a privilege escalation, because
+  `restaurant_owner` only ever grants control over restaurants that user actually owns
+  (enforced in `RestaurantsService.assertOwnerOrAdmin`). `admin` and `rider` are **never**
+  self-selectable. `admin` is granted via `PATCH /users/:id/role` (admin-only) — which means
+  the very first admin has to be bootstrapped outside the API: `npm run seed:admin --
+  you@example.com` (after registering that account normally). Run this once per environment
+  (including once against the production database after first deploy).
+- **Ownership pattern**: any resource with an `ownerId` (restaurants, and menu items/categories
+  transitively via their restaurant) checks ownership in the *service* layer, not a guard —
+  see `RestaurantsService.assertOwnerOrAdmin` and how `MenuService` calls
+  `RestaurantsService.findByIdOrThrow` + `assertOwnerOrAdmin` before every mutation. `@Roles()`
+  only checks the role *label* (e.g. "is this a restaurant_owner at all"); it can't know which
+  restaurant a given owner is allowed to touch, so ownership is always a second, explicit check.
 
 ## Module layout
 
@@ -57,6 +73,12 @@ guards, decorators) only — domain logic never lives there.
   machine — give `beforeAll` a generous timeout (`}, 30_000);`) rather than fighting Jest's 5s
   default, and do the same for individual tests that hash passwords with bcrypt (cost factor
   12 is deliberately slow) via `jest.setTimeout(30_000)` at the top of the file.
+- `test/jest-e2e.json` sets `maxWorkers: 1` **deliberately** — every e2e spec file starts its
+  own `mongodb-memory-server` instance, and Jest's default parallel-worker execution tries to
+  start them all at once. On anything but a very fast machine that resource contention alone
+  blows past the 30s `beforeAll` timeout for *every* suite simultaneously (hit directly during
+  FDP-5, once 3 e2e spec files existed). Running e2e files serially costs wall-clock time but
+  is correct; don't remove `maxWorkers` to "speed things up" without re-solving this.
 - Every payment webhook handler (from FDP-8 onward) needs a test asserting it rejects an
   invalid signature — see `docs/ENGINEERING_RULES.md`.
 

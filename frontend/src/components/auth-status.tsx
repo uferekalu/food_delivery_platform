@@ -15,6 +15,11 @@ export function AuthStatus() {
   if (status === "authenticated" && user) {
     return (
       <div className="flex items-center gap-3">
+        {(user.role === "restaurant_owner" || user.role === "admin") && (
+          <NextLink href="/dashboard/restaurants" className="text-sm text-primary hover:underline">
+            My restaurants
+          </NextLink>
+        )}
         <span className="text-sm text-text-muted">
           Hi, {user.name}
           {!user.isEmailVerified && <span className="ml-1 text-warning">(unverified)</span>}

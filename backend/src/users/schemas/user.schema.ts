@@ -9,6 +9,18 @@ export const USER_ROLES = [
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+/**
+ * Roles a person can pick for themselves at registration — like choosing "customer" vs.
+ * "sell on our platform" at signup on any real marketplace. Deliberately excludes:
+ * - `admin`: a real privilege-escalation risk, must be seeded/promoted manually
+ * - `rider`: will go through its own verification/onboarding flow (FDP-9), not open signup
+ */
+export const SELF_REGISTERABLE_ROLES = [
+  'customer',
+  'restaurant_owner',
+] as const;
+export type SelfRegisterableRole = (typeof SELF_REGISTERABLE_ROLES)[number];
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({

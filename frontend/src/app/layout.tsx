@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import NextLink from "next/link";
 import Script from "next/script";
 import { ToastProvider } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -35,9 +36,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ThemeInitializer />
           <SessionInitializer />
           <ToastProvider>
-            <header className="flex items-center justify-end gap-3 border-b border-border p-3">
-              <AuthStatus />
-              <ThemeToggle />
+            <header className="flex items-center justify-between gap-3 border-b border-border p-3">
+              <NextLink href="/restaurants" className="text-sm font-semibold text-primary">
+                Restaurants
+              </NextLink>
+              <div className="flex items-center gap-3">
+                <AuthStatus />
+                <ThemeToggle />
+              </div>
             </header>
             {children}
           </ToastProvider>

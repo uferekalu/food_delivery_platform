@@ -1,11 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsIn,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { SELF_REGISTERABLE_ROLES } from '../../users/schemas/user.schema';
+import type { SelfRegisterableRole } from '../../users/schemas/user.schema';
 
 export class RegisterDto {
   @ApiProperty({ example: 'jane@example.com' })
@@ -27,4 +31,14 @@ export class RegisterDto {
   @MinLength(2)
   @MaxLength(100)
   name: string;
+
+  @ApiPropertyOptional({
+    enum: SELF_REGISTERABLE_ROLES,
+    default: 'customer',
+    description:
+      'Only customer/restaurant_owner are self-selectable — admin and rider are never open signup.',
+  })
+  @IsOptional()
+  @IsIn(SELF_REGISTERABLE_ROLES)
+  role?: SelfRegisterableRole;
 }

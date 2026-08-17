@@ -84,9 +84,13 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       name: dto.name,
+      role: dto.role,
     });
 
-    await this.sendVerificationEmail(user).catch((error: unknown) => {
+    // Deliberately not awaited: registration shouldn't be coupled to a third-party email
+    // API's latency (or downtime) — the account is already created and usable regardless of
+    // whether/when the verification email lands. Errors are still caught and logged.
+    void this.sendVerificationEmail(user).catch((error: unknown) => {
       this.logger.error(
         `Failed to send verification email to ${user.email}`,
         error,
@@ -163,7 +167,15 @@ export class AuthService {
   async resendVerificationEmail(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
     if (!user || user.isEmailVerified) return; // don't reveal account existence/state
-    await this.sendVerificationEmail(user);
+    // Not awaited — the response never reveals email-send success/failure anyway (same
+    // "don't reveal account state" reasoning as above), so awaiting would only add third-party
+    // API latency to the response with no corresponding benefit. See `register()`.
+    void this.sendVerificationEmail(user).catch((error: unknown) => {
+      this.logger.error(
+        `Failed to resend verification email to ${user.email}`,
+        error,
+      );
+    });
   }
 
   async forgotPassword(email: string): Promise<void> {
@@ -183,7 +195,15 @@ export class AuthService {
     );
 
     const resetUrl = `${this.config.getOrThrow<string>('FRONTEND_URL')}/reset-password?token=${token}`;
-    await this.mailService.sendPasswordResetEmail(user.email, resetUrl);
+    // Not awaited — same reasoning as register()/resendVerificationEmail above.
+    void this.mailService
+      .sendPasswordResetEmail(user.email, resetUrl)
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to send password reset email to ${user.email}`,
+          error,
+        );
+      });
   }
 
   async resetPassword(rawToken: string, newPassword: string): Promise<void> {

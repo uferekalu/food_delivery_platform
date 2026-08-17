@@ -70,9 +70,14 @@ describe('AuthService', () => {
         },
         {
           provide: MailService,
+          // Both real MailService methods always return Promise<void> — matching that here
+          // matters now that AuthService chains .catch() onto these calls (fire-and-forget
+          // email sends, see auth.service.ts). A bare jest.fn() resolves to `undefined`
+          // rather than a promise, which broke with `TypeError: Cannot read properties of
+          // undefined (reading 'catch')` the moment that .catch() chaining was added.
           useValue: {
-            sendVerificationEmail: jest.fn(),
-            sendPasswordResetEmail: jest.fn(),
+            sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+            sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

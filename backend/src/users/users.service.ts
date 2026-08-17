@@ -45,4 +45,11 @@ export class UsersService {
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.userModel.updateOne({ _id: id }, { passwordHash }).exec();
   }
+
+  async updateRole(id: string, role: UserRole): Promise<UserDocument | null> {
+    // Mongoose 9 deprecated `new: true` in favor of `returnDocument: 'after'`.
+    return this.userModel
+      .findByIdAndUpdate(id, { role }, { returnDocument: 'after' })
+      .exec();
+  }
 }
