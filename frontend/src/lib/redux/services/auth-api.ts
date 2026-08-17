@@ -1,10 +1,18 @@
 import { api } from "../api";
 import { clearSession, setSession } from "../slices/auth-slice";
 import type { AuthResponse, PublicUser } from "../types";
+import type { SelfRegisterableRole } from "@/lib/constants/roles";
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  name: string;
+  role?: SelfRegisterableRole;
+}
 
 export const authApi = api.injectEndpoints({
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResponse, { email: string; password: string; name: string }>({
+    register: builder.mutation<AuthResponse, RegisterInput>({
       query: (body) => ({ url: "/auth/register", method: "POST", body }),
       onQueryStarted: async (_arg, { dispatch, queryFulfilled }) => {
         // A rejection here is a *separate* promise chain from the caller's own

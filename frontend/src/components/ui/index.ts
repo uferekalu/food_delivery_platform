@@ -11,6 +11,7 @@ export * from "./dropdown-menu";
 export * from "./empty-state";
 export * from "./form-field";
 export * from "./icon-button";
+export * from "./image-upload";
 export * from "./input";
 export * from "./label";
 export * from "./link";

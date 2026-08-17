@@ -12,8 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
+import { RadioGroup, RadioOption } from "@/components/ui/radio-group";
 import { useRegisterMutation } from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import type { SelfRegisterableRole } from "@/lib/constants/roles";
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
 
@@ -39,6 +41,7 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const [registerUser, { isLoading }] = useRegisterMutation();
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<SelfRegisterableRole>("customer");
   const {
     register,
     handleSubmit,
@@ -50,13 +53,16 @@ export default function RegisterPage() {
     try {
       // The backend's ValidationPipe uses forbidNonWhitelisted — confirmPassword is a
       // client-only field, sending it would get the whole request rejected as 400.
-      await registerUser({ name: values.name, email: values.email, password: values.password }).unwrap();
+      await registerUser({ name: values.name, email: values.email, password: values.password, role }).unwrap();
       toast({
         title: "Account created",
-        description: "Check your email to verify your address.",
+        description:
+          role === "restaurant_owner"
+            ? "Check your email to verify your address, then add your restaurant."
+            : "Check your email to verify your address.",
         variant: "success",
       });
-      router.push("/");
+      router.push(role === "restaurant_owner" ? "/dashboard/restaurants/new" : "/");
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't create your account"));
     }
@@ -71,6 +77,10 @@ export default function RegisterPage() {
       <CardContent className="flex flex-col gap-4">
         {error && <Alert variant="danger">{error}</Alert>}
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-4" noValidate>
+          <RadioGroup label="Account type" value={role} onChange={(value) => setRole(value as SelfRegisterableRole)}>
+            <RadioOption value="customer" label="I'm ordering food" />
+            <RadioOption value="restaurant_owner" label="I run a restaurant" description="Add and manage your restaurant on the platform" />
+          </RadioGroup>
           <FormField label="Full name" error={errors.name?.message} required>
             <Input autoComplete="name" {...register("name")} />
           </FormField>

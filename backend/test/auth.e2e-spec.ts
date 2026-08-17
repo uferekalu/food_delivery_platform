@@ -44,6 +44,9 @@ describe('Auth (e2e)', () => {
     process.env.JWT_EMAIL_SECRET = 'c'.repeat(32);
     process.env.RESEND_API_KEY = 're_test_key';
     process.env.MAIL_FROM = 'Food Delivery Platform <noreply@example.com>';
+    process.env.CLOUDINARY_CLOUD_NAME = 'test-cloud';
+    process.env.CLOUDINARY_API_KEY = '123456789';
+    process.env.CLOUDINARY_API_SECRET = 'test-secret';
 
     const { AppModule } =
       require('../src/app.module') as typeof import('../src/app.module');

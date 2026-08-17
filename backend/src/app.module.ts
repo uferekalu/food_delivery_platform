@@ -8,6 +8,9 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { RestaurantsModule } from './restaurants/restaurants.module';
+import { MenuModule } from './menu/menu.module';
 
 @Module({
   imports: [
@@ -20,7 +23,15 @@ import { AuthModule } from './auth/auth.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
-          level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
+          // 'test' is silent on purpose: every e2e/HTTP-hitting test logs a full request/
+          // response line otherwise, and that noise makes a genuine failure harder to spot
+          // as more e2e suites accumulate (first noticed once there were 3 of them).
+          level:
+            config.get('NODE_ENV') === 'production'
+              ? 'info'
+              : config.get('NODE_ENV') === 'test'
+                ? 'silent'
+                : 'debug',
           // pino-pretty spawns a worker thread — only safe under a real dev server. Under
           // Jest (NODE_ENV=test) a worker-thread transport is a known hang source, since
           // Jest waits on open handles that never close; production wants raw JSON anyway.
@@ -37,6 +48,9 @@ import { AuthModule } from './auth/auth.module';
     HealthModule,
     UsersModule,
     AuthModule,
+    UploadsModule,
+    RestaurantsModule,
+    MenuModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

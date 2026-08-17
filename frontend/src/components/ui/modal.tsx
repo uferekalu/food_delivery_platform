@@ -75,12 +75,15 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return (
     <Portal>
       <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: "var(--z-modal)" }}>
-        <div
-          aria-hidden="true"
-          onClick={onClose}
-          className="fixed inset-0 bg-neutral-950/50"
-          style={{ zIndex: "var(--z-modal-backdrop)" }}
-        />
+        {/*
+          No explicit z-index here on purpose: this backdrop and the dialog below are both
+          direct children of the wrapper that already owns `var(--z-modal)`, so plain DOM
+          order decides their stacking (backdrop painted first = behind). Giving the backdrop
+          its own explicit z-index (as `var(--z-modal-backdrop)`, higher than the dialog's
+          implicit `auto`) put it ABOVE the dialog instead, silently swallowing every click on
+          the dialog's footer buttons — found via a real end-to-end test, not code review.
+        */}
+        <div aria-hidden="true" onClick={onClose} className="fixed inset-0 bg-neutral-950/50" />
         <div
           ref={dialogRef}
           role="dialog"
@@ -89,7 +92,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           aria-describedby={description ? descriptionId : undefined}
           tabIndex={-1}
           className={cn(
-            "relative flex max-h-[90vh] w-full flex-col gap-4 rounded-xl bg-surface p-6 shadow-xl outline-none",
+            "relative z-10 flex max-h-[90vh] w-full flex-col gap-4 rounded-xl bg-surface p-6 shadow-xl outline-none",
             sizeClasses[size],
           )}
         >

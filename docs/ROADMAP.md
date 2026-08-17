@@ -17,7 +17,7 @@ Update the number above every time a new ticket branch is created (the
 | FDP-2 | `frontend-design-system` | Next.js app scaffold, Tailwind config, design tokens, full hand-built UI kit + component showcase page | ✅ Done |
 | FDP-3 | `backend-foundation` | NestJS app scaffold, config/env validation, MongoDB connection, health check, logging, error handling, Swagger | ✅ Done |
 | FDP-4 | `auth` | Backend auth (register/login/refresh/verify/reset, role guards) + frontend auth pages/session handling | ✅ Done |
-| FDP-5 | `restaurants-menu` | Restaurant + menu CRUD (backend), Cloudinary uploads, browse/menu pages (frontend) | 🔄 In progress |
+| FDP-5 | `restaurants-menu` | Restaurant + menu CRUD (backend), Cloudinary uploads, customer browse/menu pages **+ restaurant owner dashboard** (create/edit restaurant, manage menu) — folded in because no later phase owns this UI | ✅ Done |
 | FDP-6 | `cart-checkout` | Cart persistence (backend), cart/checkout UI (frontend) | ⬜ Not started |
 | FDP-7 | `orders-realtime` | Order state machine, Socket.IO gateway, order tracking UI with status stepper | ⬜ Not started |
 | FDP-8 | `payments` | Stripe/Paystack/Flutterwave adapters, provider resolver, webhooks, checkout payment UI | ⬜ Not started |
