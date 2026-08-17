@@ -1,10 +1,10 @@
 # Roadmap
 
-Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pushed and
-handed to the repo owner as a PR to review and merge — nothing is merged automatically.
-See `docs/ENGINEERING_RULES.md` for the branch/PR workflow itself.
+Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pushed as a PR
+against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
+workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-3**
+**Next available ticket number: FDP-4**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -13,9 +13,9 @@ Update the number above every time a new ticket branch is created (the
 
 | # | Branch suffix | Scope | Status |
 |---|---|---|---|
-| FDP-1 | `foundation-docs` | Product guide, architecture doc, roadmap, engineering rules, root CLAUDE.md, branch-creation skill | ✅ In progress (this branch) |
-| FDP-2 | `frontend-design-system` | Next.js app scaffold, Tailwind config, design tokens, full hand-built UI kit + component showcase page | ⬜ Not started |
-| FDP-3 | `backend-foundation` | NestJS app scaffold, config/env validation, MongoDB connection, health check, logging, error handling, Swagger | ⬜ Not started |
+| FDP-1 | `foundation-docs` | Product guide, architecture doc, roadmap, engineering rules, root CLAUDE.md, branch-creation skill | ✅ Done |
+| FDP-2 | `frontend-design-system` | Next.js app scaffold, Tailwind config, design tokens, full hand-built UI kit + component showcase page | ✅ Done |
+| FDP-3 | `backend-foundation` | NestJS app scaffold, config/env validation, MongoDB connection, health check, logging, error handling, Swagger | 🔄 In progress |
 | FDP-4 | `auth` | Backend auth (register/login/refresh/verify/reset, role guards) + frontend auth pages/session handling | ⬜ Not started |
 | FDP-5 | `restaurants-menu` | Restaurant + menu CRUD (backend), Cloudinary uploads, browse/menu pages (frontend) | ⬜ Not started |
 | FDP-6 | `cart-checkout` | Cart persistence (backend), cart/checkout UI (frontend) | ⬜ Not started |

@@ -1,0 +1,22 @@
+# Render Blueprint for the backend API. Structure only — secret values (MONGODB_URI,
+# CORS_ORIGINS, and anything added by later phases such as Cloudinary/JWT/payment provider
+# keys) are set in the Render dashboard, never committed here.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: food-delivery-platform-api
+    runtime: node
+    rootDir: backend
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

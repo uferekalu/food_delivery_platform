@@ -10,9 +10,13 @@ this file is the detailed version.
 - The next ticket number lives at the top of `docs/ROADMAP.md` — read it before creating a
   branch, and bump it in the same commit that creates the branch's first commit.
 - One phase/ticket per branch. Don't bundle unrelated work into an existing branch.
-- After pushing a branch, open a PR (once `main` exists) with a summary of what changed and a
-  test plan, and hand it to the repo owner to review and merge. Never merge your own PR
-  without explicit instruction to do so.
+- After pushing a branch, open a PR against `main` with a summary of what changed and a test
+  plan. As of 2026-08-17, the repo owner has asked Claude to merge these PRs itself once
+  pushed (after they hit repeated GitHub UI trouble merging manually) — so unless told
+  otherwise, open the PR and then merge it (squash, delete branch), rather than leaving it
+  for manual merge. Still never push directly to `main` — every change goes through a PR,
+  it's just that Claude now clicks merge instead of the repo owner. Revert to manual-merge if
+  the user asks.
 - Commit messages: short imperative summary line, body explains *why* when non-obvious.
 
 ## Secrets
