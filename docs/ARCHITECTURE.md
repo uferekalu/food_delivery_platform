@@ -209,11 +209,32 @@ it never blocks other functionality on the key being configured.
 
 ## 11. Auth
 
-JWT access token (short-lived, ~15 min) + refresh token (long-lived, httpOnly, secure,
-SameSite cookie), rotation on refresh, role-based guards (`@Roles()` decorator +
-`RolesGuard`) on every protected endpoint. Email verification and password reset use signed,
-expiring tokens delivered by email. CSRF is mitigated by SameSite cookies + a double-submit
-token on state-changing requests from the browser.
+JWT access token (short-lived, ~15 min, returned in the response body — the frontend keeps it
+in Redux memory only, never `localStorage`, to limit XSS token theft) + refresh token
+(long-lived, httpOnly, secure cookie, scoped to the `/auth/refresh` path), rotated on every
+refresh (the old refresh token is invalidated the moment a new one is issued, so replaying a
+stolen token stops working the moment the legitimate client refreshes). Role-based guards
+(`@Roles()` decorator + `RolesGuard`) on every protected endpoint, checked against the access
+token's payload.
+
+**Cookie `SameSite` is environment-dependent, not a fixed choice** — this matters because
+frontend (Vercel) and backend (Render) are on different registrable domains in production,
+which makes them cross-site for cookie purposes even though local dev (`localhost:3000` →
+`localhost:4000`) is same-site (site = scheme + eTLD+1; port doesn't count). So: `SameSite=Lax`
+in development, `SameSite=None; Secure` in production — using `Lax`/`Strict` in production
+would silently break the refresh flow entirely, since the browser would just never attach the
+cookie to the cross-site request.
+
+Email verification and password reset use short-lived, purpose-scoped JWTs (not general
+access/refresh tokens) delivered by email via **Resend**. Login is allowed before email
+verification (blocking it entirely adds friction for a requirement — verified-only actions —
+that doesn't exist yet); `isEmailVerified` is exposed via `GET /auth/me` so the frontend can
+show a banner, and future phases can gate specific actions (e.g. placing an order) on it.
+
+CSRF: `SameSite=Lax`/`None` alone doesn't stop cross-site requests the way `Strict` would, but
+`/auth/refresh` is the only cookie-authenticated endpoint (everything else uses the
+Bearer-token access token, which a cross-site page can't read or attach), so the actual CSRF
+exposure is narrow. Revisit with a double-submit token if that endpoint's risk profile changes.
 
 ## 12. Deployment topology
 

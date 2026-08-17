@@ -3,8 +3,10 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { ToastProvider } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { AuthStatus } from "@/components/auth-status";
 import { StoreProvider } from "@/lib/redux/store-provider";
 import { ThemeInitializer } from "@/components/theme-initializer";
+import { SessionInitializer } from "@/components/session-initializer";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -31,8 +33,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </Script>
         <StoreProvider>
           <ThemeInitializer />
+          <SessionInitializer />
           <ToastProvider>
-            <header className="flex justify-end border-b border-border p-3">
+            <header className="flex items-center justify-end gap-3 border-b border-border p-3">
+              <AuthStatus />
               <ThemeToggle />
             </header>
             {children}

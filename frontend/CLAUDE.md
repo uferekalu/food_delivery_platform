@@ -43,6 +43,23 @@ For a genuinely new `setState`-in-effect case, fix it for real (e.g. the
 `useSyncExternalStore` trick in `src/lib/theme.ts` / `src/components/ui/portal.tsx`) rather than
 reaching for a suppression — these two are the only known false positives so far.
 
+## RTK Query gotchas hit building auth (FDP-4) — apply to every future endpoint
+
+1. **Always wrap `await queryFulfilled` in `onQueryStarted` in try/catch.** It's a separate
+   promise chain from the calling component's own `.unwrap().catch(...)` — an uncaught
+   rejection there (e.g. a mutation that's *expected* to sometimes fail, like `refresh` for an
+   anonymous visitor, or `login` with a wrong password) surfaces as a real unhandled-rejection
+   page error, independent of whatever error handling the component does. See
+   `src/lib/redux/services/auth-api.ts` for the pattern: `onQueryStarted` only reacts to
+   *success* (syncing Redux); failures are silently swallowed there and handled by the
+   component via `getErrorMessage` (`src/lib/redux/error.ts`).
+2. **Never send a form's full values object straight to a mutation** if the form has
+   client-only fields (e.g. `confirmPassword`). The backend's `ValidationPipe` uses
+   `forbidNonWhitelisted: true` — an extra field fails the *entire* request with a 400, not
+   just a validation warning on that field. Always construct the mutation payload explicitly
+   (`{ name: values.name, email: values.email, password: values.password }`), never
+   `mutation(values)`.
+
 ## Local dev
 
 ```
