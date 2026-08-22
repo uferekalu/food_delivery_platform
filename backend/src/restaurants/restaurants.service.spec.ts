@@ -45,7 +45,9 @@ describe('RestaurantsService', () => {
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
-    mongod = await MongoMemoryServer.create({ instance: { launchTimeout: 60_000 } });
+    mongod = await MongoMemoryServer.create({
+      instance: { launchTimeout: 60_000 },
+    });
 
     moduleRef = await Test.createTestingModule({
       imports: [
