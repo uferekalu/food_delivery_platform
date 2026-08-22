@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import NextLink from "next/link";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +9,33 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
+import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
+
+const TRACKING_STEPS: StepperStep[] = [
+  { key: "PLACED", label: "Order placed" },
+  { key: "ACCEPTED_BY_RESTAURANT", label: "Accepted" },
+  { key: "PREPARING", label: "Preparing" },
+  { key: "READY_FOR_PICKUP", label: "Ready for pickup" },
+  { key: "OUT_FOR_DELIVERY", label: "Out for delivery" },
+  { key: "DELIVERED", label: "Delivered" },
+];
+
+// ASSIGNED_TO_RIDER/PICKED_UP fold into the "Out for delivery" milestone — an internal
+// dispatch detail the customer-facing stepper doesn't need its own step for.
+const STEP_COLLAPSE: Partial<Record<OrderStatus, string>> = {
+  ASSIGNED_TO_RIDER: "OUT_FOR_DELIVERY",
+  PICKED_UP: "OUT_FOR_DELIVERY",
+};
+
+function trackingStepIndex(status: OrderStatus): number {
+  const key = STEP_COLLAPSE[status] ?? status;
+  return TRACKING_STEPS.findIndex((step) => step.key === key);
+}
 
 const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
   PENDING_PAYMENT: "warning",
@@ -51,6 +74,22 @@ function OrderSummary({ order }: { order: Order }) {
         <Alert variant="info" title="Payment coming soon">
           Your order has been placed and is waiting on payment integration — nothing has been charged yet.
         </Alert>
+      )}
+
+      {(order.status === "CANCELLED" || order.status === "REFUNDED") && (
+        <Alert variant={order.status === "CANCELLED" ? "danger" : "neutral"} title={formatStatus(order.status)}>
+          {order.status === "CANCELLED"
+            ? "This order was cancelled and is no longer being prepared."
+            : "This order was refunded."}
+        </Alert>
+      )}
+
+      {trackingStepIndex(order.status) >= 0 && (
+        <Card>
+          <CardContent>
+            <Stepper steps={TRACKING_STEPS} currentIndex={trackingStepIndex(order.status)} />
+          </CardContent>
+        </Card>
       )}
 
       <Card>
@@ -139,7 +178,21 @@ function OrderSummary({ order }: { order: Order }) {
 }
 
 function OrderDetail({ id }: { id: string }) {
-  const { data: order, isLoading, error } = useGetOrderQuery(id);
+  const { data: order, isLoading, error, refetch } = useGetOrderQuery(id);
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.emit("order:subscribe", { orderId: id });
+
+    const handleStatusChanged = (updated: Order) => {
+      if (updated._id === id) void refetch();
+    };
+    socket.on("order:statusChanged", handleStatusChanged);
+    return () => {
+      socket.off("order:statusChanged", handleStatusChanged);
+    };
+  }, [socket, id, refetch]);
 
   if (isLoading) {
     return (

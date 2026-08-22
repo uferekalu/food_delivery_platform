@@ -11,9 +11,23 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { canOwnerTransition } from './order-state-machine';
+import type { OrderStatus } from './schemas/order-status';
+
+// Statuses a restaurant owner still needs to act on — what their "live order queue" shows.
+// Excludes PENDING_PAYMENT (not actionable until FDP-14's webhook moves it to PLACED) and every
+// terminal/rider-stage status (nothing left for the restaurant to do).
+const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
+  'PLACED',
+  'ACCEPTED_BY_RESTAURANT',
+  'PREPARING',
+  'READY_FOR_PICKUP',
+];
 
 // Flat placeholder rates — see Order schema for why these aren't real DeliveryZone-based fees
 // yet (docs/ROADMAP.md FDP-15).
@@ -34,6 +48,7 @@ export class OrdersService {
     private readonly restaurantsService: RestaurantsService,
     private readonly promoCodesService: PromoCodesService,
     private readonly paymentProviderResolver: PaymentProviderResolver,
+    private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
   async createOrder(
@@ -167,5 +182,55 @@ export class OrdersService {
       .find({ customerId: userId })
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  /** The restaurant owner's live order queue — orders still awaiting some action from them,
+   * oldest first (a queue is processed in the order it was received, not newest-first). */
+  async findForRestaurant(
+    requester: AccessTokenPayload,
+    restaurantId: string,
+  ): Promise<OrderDocument[]> {
+    const restaurant =
+      await this.restaurantsService.findByIdOrThrow(restaurantId);
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+
+    return this.orderModel
+      .find({ restaurantId, status: { $in: ACTIVE_RESTAURANT_STATUSES } })
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  /** The restaurant owner's accept/reject/prepare/ready actions (docs/ROADMAP.md FDP-13) — see
+   * order-state-machine.ts for exactly which transitions this allows and why
+   * PENDING_PAYMENT→PLACED and every rider-stage transition are deliberately excluded. */
+  async updateStatusByOwner(
+    requester: AccessTokenPayload,
+    orderId: string,
+    targetStatus: OrderStatus,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+
+    const restaurant = await this.restaurantsService.findByIdOrThrow(
+      order.restaurantId.toString(),
+    );
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+
+    if (!canOwnerTransition(order.status, targetStatus)) {
+      throw new BadRequestException(
+        `Cannot move an order from ${order.status} to ${targetStatus}`,
+      );
+    }
+
+    order.status = targetStatus;
+    order.statusHistory.push({
+      status: targetStatus,
+      at: new Date(),
+      by: requester.sub,
+    });
+    await order.save();
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    return order;
   }
 }

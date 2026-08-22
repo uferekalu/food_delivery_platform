@@ -2,6 +2,7 @@ import { api } from "../api";
 import { clearSession, setSession } from "../slices/auth-slice";
 import type { AuthResponse, PublicUser } from "../types";
 import type { SelfRegisterableRole } from "@/lib/constants/roles";
+import { disconnectSocket } from "@/lib/socket";
 
 export interface RegisterInput {
   email: string;
@@ -64,6 +65,7 @@ export const authApi = api.injectEndpoints({
           // recovery action for the user to take, and staying "authenticated" locally while
           // the server-side call failed would be worse than a false "logged out".
           dispatch(clearSession());
+          disconnectSocket();
         }
       },
     }),

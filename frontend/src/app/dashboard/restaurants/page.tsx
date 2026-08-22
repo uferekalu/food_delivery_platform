@@ -67,6 +67,12 @@ function MyRestaurantsList() {
                 >
                   Manage menu
                 </NextLink>
+                <NextLink
+                  href={`/dashboard/restaurants/${restaurant._id}/orders`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Order queue
+                </NextLink>
                 <Button
                   variant="ghost"
                   size="sm"

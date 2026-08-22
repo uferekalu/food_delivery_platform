@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { OrdersService } from './orders.service';
@@ -8,7 +8,9 @@ import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { Order, OrderDocument, OrderSchema } from './schemas/order.schema';
+import type { OrderStatus } from './schemas/order-status';
 import { Cart, CartDocument, CartSchema } from '../cart/schemas/cart.schema';
 import {
   Restaurant,
@@ -34,6 +36,7 @@ describe('OrdersService', () => {
   let cartService: CartService;
   let restaurantsService: RestaurantsService;
   let promoCodesService: PromoCodesService;
+  let realtimeGateway: { emitOrderStatusChanged: jest.Mock };
   let restaurantModel: Model<RestaurantDocument>;
   let itemModel: Model<MenuItemDocument>;
   let cartModel: Model<CartDocument>;
@@ -65,6 +68,10 @@ describe('OrdersService', () => {
         RestaurantsService,
         PromoCodesService,
         PaymentProviderResolver,
+        {
+          provide: RealtimeGateway,
+          useValue: { emitOrderStatusChanged: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -72,6 +79,7 @@ describe('OrdersService', () => {
     cartService = moduleRef.get(CartService);
     restaurantsService = moduleRef.get(RestaurantsService);
     promoCodesService = moduleRef.get(PromoCodesService);
+    realtimeGateway = moduleRef.get(RealtimeGateway);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
     itemModel = moduleRef.get(getModelToken(MenuItem.name));
     cartModel = moduleRef.get(getModelToken(Cart.name));
@@ -268,5 +276,189 @@ describe('OrdersService', () => {
     expect(mine).toHaveLength(1);
     const someoneElses = await ordersService.findMine('someone-else');
     expect(someoneElses).toHaveLength(0);
+  });
+
+  // PENDING_PAYMENT→PLACED is exclusively FDP-14's webhook (see order-state-machine.ts) — not
+  // reachable through any service method yet, so these tests seed an order directly at PLACED
+  // via the model rather than going through `createOrder`.
+  async function createOrderAtStatus(
+    restaurantId: string,
+    status: OrderStatus,
+  ) {
+    return orderModel.create({
+      orderNumber: `ORD-TEST-${Math.random().toString(36).slice(2, 8)}`,
+      customerId: userId,
+      restaurantId,
+      items: [
+        {
+          menuItemId: restaurantId,
+          name: 'Jollof Rice',
+          price: 10,
+          qty: 1,
+          selectedModifiers: [],
+          notes: '',
+        },
+      ],
+      subtotal: 10,
+      deliveryFee: 1,
+      serviceFee: 0.5,
+      tax: 0,
+      discount: 0,
+      total: 11.5,
+      currency: 'NGN',
+      status,
+      statusHistory: [{ status, at: new Date(), by: userId }],
+      paymentProvider: 'paystack',
+      paymentStatus: 'pending',
+      deliveryAddress: validAddress,
+    });
+  }
+
+  describe('findForRestaurant', () => {
+    it("returns only that restaurant's active orders, oldest first", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const other = await createApprovedRestaurant();
+      const placed = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PLACED',
+      );
+      await createOrderAtStatus(restaurant._id.toString(), 'DELIVERED'); // not active
+      await createOrderAtStatus(other._id.toString(), 'PLACED'); // different restaurant
+      const preparing = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PREPARING',
+      );
+
+      const owner = {
+        sub: 'owner-id',
+        email: 'owner@test.local',
+        role: 'restaurant_owner',
+      } as const;
+      const queue = await ordersService.findForRestaurant(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(queue.map((o) => o._id.toString())).toEqual([
+        placed._id.toString(),
+        preparing._id.toString(),
+      ]);
+    });
+
+    it('rejects a caller who does not own the restaurant', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.findForRestaurant(intruder, restaurant._id.toString()),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('updateStatusByOwner', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    it('accepts a PLACED order, records history, and emits a realtime event', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PLACED',
+      );
+
+      const updated = await ordersService.updateStatusByOwner(
+        owner,
+        order._id.toString(),
+        'ACCEPTED_BY_RESTAURANT',
+      );
+
+      expect(updated.status).toBe('ACCEPTED_BY_RESTAURANT');
+      expect(updated.statusHistory).toHaveLength(2);
+      expect(updated.statusHistory[1]).toMatchObject({
+        status: 'ACCEPTED_BY_RESTAURANT',
+        by: 'owner-id',
+      });
+      expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a transition not allowed by the state machine', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PLACED',
+      );
+
+      await expect(
+        ordersService.updateStatusByOwner(
+          owner,
+          order._id.toString(),
+          'DELIVERED',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects PENDING_PAYMENT→PLACED even from the owner endpoint', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      await expect(
+        ordersService.updateStatusByOwner(
+          owner,
+          order._id.toString(),
+          'PLACED',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a caller who does not own the restaurant', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PLACED',
+      );
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.updateStatusByOwner(
+          intruder,
+          order._id.toString(),
+          'ACCEPTED_BY_RESTAURANT',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows an admin to act on any restaurant', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PLACED',
+      );
+      const admin = {
+        sub: 'admin-id',
+        email: 'admin@test.local',
+        role: 'admin',
+      } as const;
+
+      const updated = await ordersService.updateStatusByOwner(
+        admin,
+        order._id.toString(),
+        'ACCEPTED_BY_RESTAURANT',
+      );
+      expect(updated.status).toBe('ACCEPTED_BY_RESTAURANT');
+    });
   });
 });
