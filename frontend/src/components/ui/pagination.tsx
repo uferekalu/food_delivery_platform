@@ -34,7 +34,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
         aria-label="Previous page"
-        className="flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-10 min-w-10 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
         ‹
       </button>
@@ -51,7 +51,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
             aria-current={p === page ? "page" : undefined}
             onClick={() => onChange(p)}
             className={cn(
-              "flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm transition-colors duration-150",
+              "flex h-10 min-w-10 items-center justify-center rounded-md px-2 text-sm transition-colors duration-150",
               p === page ? "bg-primary text-primary-foreground" : "text-text hover:bg-neutral-100",
             )}
           >
@@ -64,7 +64,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
         onClick={() => onChange(page + 1)}
         disabled={page >= totalPages}
         aria-label="Next page"
-        className="flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-10 min-w-10 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
         ›
       </button>

@@ -11,9 +11,13 @@ export interface IconButtonProps
   size?: "sm" | "md" | "lg";
 }
 
+// `md`/`lg` meet the 44px touch-target guideline for standalone icon actions (modal close,
+// hamburger, theme toggle). `sm` stays under that deliberately for dense inline rows (e.g. a
+// delete button per menu item) where a 44px target per icon would blow out row height — 36px
+// still clears WCAG 2.5.8's 24px AA minimum with real gap-based spacing to the next target.
 const sizeClasses = {
-  sm: "size-8",
-  md: "size-10",
+  sm: "size-9",
+  md: "size-11",
   lg: "size-12",
 } as const;
 

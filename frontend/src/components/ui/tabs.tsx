@@ -58,7 +58,7 @@ export function TabList({ children, className }: { children: ReactNode; classNam
       ref={listRef}
       role="tablist"
       onKeyDown={handleKeyDown}
-      className={cn("flex gap-1 border-b border-border", className)}
+      className={cn("flex gap-1 overflow-x-auto border-b border-border", className)}
     >
       {children}
     </div>
@@ -80,7 +80,7 @@ export function Tab({ value, children, disabled }: { value: string; children: Re
       disabled={disabled}
       onClick={() => onChange(value)}
       className={cn(
-        "border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150",
+        "shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150",
         selected ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50",
       )}

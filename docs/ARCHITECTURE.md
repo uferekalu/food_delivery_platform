@@ -108,19 +108,25 @@ or a verified `verify()` poll — never trusted from client-reported "payment su
 
 ## 5. Design tokens (frontend source of truth)
 
-Single source of truth: `frontend/src/styles/tokens.ts`, consumed by `tailwind.config.ts` (so
-Tailwind utility classes and the token file can never drift) and exposed as CSS variables for
-anything that needs runtime theming.
+Single source of truth: `frontend/src/styles/tokens.css` (Tailwind v4 is CSS-first — values
+defined under `@theme` both generate utility classes, e.g. `bg-brand-600`, and are emitted as
+real `:root` CSS custom properties, so there's no separate `tailwind.config.ts` to drift out of
+sync). `frontend/src/styles/tokens.ts` layers typed `var()` accessors on top for the rare
+non-Tailwind/JS consumer.
 
 - **Color:** Burgundy primary scale (50–950, brand primary), neutral/white scale (surfaces,
   borders, text), semantic colors (`success`, `warning`, `danger`, `info`), each with
   foreground-safe pairings for contrast (WCAG AA)
 - **Typography:** font family token (swappable in one place), a type scale (`xs`…`4xl`) with
   paired line-height, font-weight tokens
-- **Spacing:** a single spacing scale used for padding/margin/gap everywhere (no ad hoc pixel
-  values in components)
-- **Radius, shadow, z-index, breakpoints, motion/duration:** each a token scale, not
-  component-local magic numbers
+- **Spacing:** Tailwind v4's built-in spacing scale (single `--spacing` base unit) — used as-is
+  rather than a hand-rolled scale, since it's already systematic
+- **Radius, shadow, z-index, motion/duration:** each a token scale, not component-local magic
+  numbers (z-index/duration live outside Tailwind's themable namespaces but are still real CSS
+  custom properties — see `tokens.css`)
+- **Breakpoints:** Tailwind v4's default scale (`sm`=640px, `md`=768px, `lg`=1024px, `xl`=1280px)
+  is used unmodified — mobile-first, `sm:` is the one breakpoint most layouts actually branch on
+  (see `frontend/CLAUDE.md` "Responsive design")
 
 ## 6. State management
 
@@ -235,6 +241,15 @@ CSRF: `SameSite=Lax`/`None` alone doesn't stop cross-site requests the way `Stri
 `/auth/refresh` is the only cookie-authenticated endpoint (everything else uses the
 Bearer-token access token, which a cross-site page can't read or attach), so the actual CSRF
 exposure is narrow. Revisit with a double-submit token if that endpoint's risk profile changes.
+
+**Silent reauth on access-token expiry (FDP-6):** the frontend's single RTK Query base query
+(`frontend/src/lib/redux/api.ts`) wraps `fetchBaseQuery` so a 401 from any endpoint (other than
+`/auth/login`/`/auth/register`/`/auth/refresh`, where a 401 means genuinely-not-authenticated,
+not expiry) triggers one silent `/auth/refresh` call and a retry of the original request —
+without this, the ~15 min access token expiring mid-session would surface as a bare error to
+whatever the user happened to be doing. An `async-mutex` lock ensures concurrent 401s share one
+refresh attempt rather than racing several against the single-use rotating refresh token above.
+Session state is only cleared if the refresh itself fails (refresh token genuinely gone/reused).
 
 ## 12. Deployment topology
 

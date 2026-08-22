@@ -43,7 +43,8 @@ Glovo, Chowdeck) — built for global reach with first-class support for African
   Mapbox token is configured
 - Order history, reorder, receipts
 - Ratings & reviews (restaurant + rider)
-- Notifications: email + in-app (order status, promos)
+- Notifications: email + in-app + SMS (order status, promos) — SMS via Termii (African SMS
+  gateway, see `docs/ARCHITECTURE.md` §Notifications)
 - Profile & saved addresses management
 - Favorites/saved restaurants
 
@@ -97,7 +98,6 @@ Documented here so it's a deliberate choice, not an oversight — revisit via a 
 in `docs/ROADMAP.md` if priorities change:
 
 - Native mobile apps (the web app is responsive/mobile-first instead)
-- SMS notifications (email + in-app only initially; SMS provider can be added later)
 - In-house payout/ledger system beyond a read-only view (providers handle actual settlement)
 - Multi-language / i18n (structured to allow it later, not implemented initially)
 

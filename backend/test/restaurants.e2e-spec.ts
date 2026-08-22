@@ -6,14 +6,21 @@ import type { App } from 'supertest/types';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { setupApp } from '../src/setup-app';
 
-jest.setTimeout(30_000);
+// Higher than the other e2e specs' 30s: this file's one test does several sequential
+// registrations (each a bcrypt cost-12 hash, ~3-4s on this machine — see backend/CLAUDE.md)
+// plus a full create/approve/browse/menu-CRUD/ownership-enforcement lifecycle in one `it()`.
+// 30s was cutting it close even before FDP-6 and started intermittently exceeding it.
+jest.setTimeout(60_000);
 
 describe('Restaurants + Menu (e2e)', () => {
   let app: INestApplication<App>;
   let mongod: MongoMemoryServer;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create();
+    // See auth.e2e-spec.ts for why `launchTimeout` is set explicitly.
+    mongod = await MongoMemoryServer.create({
+      instance: { launchTimeout: 60_000 },
+    });
     process.env.MONGODB_URI = mongod.getUri();
     process.env.CORS_ORIGINS = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
@@ -45,7 +52,7 @@ describe('Restaurants + Menu (e2e)', () => {
     app = moduleFixture.createNestApplication();
     setupApp(app);
     await app.init();
-  }, 30_000);
+  }, 60_000); // headroom for the 60s mongod launchTimeout above, not just app.init()
 
   afterAll(async () => {
     if (app) await app.close();
