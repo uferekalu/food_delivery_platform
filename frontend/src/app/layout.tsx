@@ -5,6 +5,7 @@ import Script from "next/script";
 import { ToastProvider } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AuthStatus } from "@/components/auth-status";
+import { MobileNav } from "@/components/mobile-nav";
 import { StoreProvider } from "@/lib/redux/store-provider";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { SessionInitializer } from "@/components/session-initializer";
@@ -36,14 +37,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ThemeInitializer />
           <SessionInitializer />
           <ToastProvider>
-            <header className="flex items-center justify-between gap-3 border-b border-border p-3">
-              <NextLink href="/restaurants" className="text-sm font-semibold text-primary">
+            <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between gap-3 border-b border-border bg-surface p-3">
+              <NextLink href="/restaurants" className="shrink-0 text-sm font-semibold text-primary">
                 Restaurants
               </NextLink>
-              <div className="flex items-center gap-3">
+              <div className="hidden items-center gap-3 sm:flex">
                 <AuthStatus />
                 <ThemeToggle />
               </div>
+              <MobileNav />
             </header>
             {children}
           </ToastProvider>

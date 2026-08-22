@@ -39,12 +39,14 @@ export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuPr
   const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const menuRef = useRef<HTMLUListElement>(null);
+  const hasClampedRef = useRef(false);
   const id = useId();
 
   const openMenu = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    hasClampedRef.current = false;
     setRect({
       top: r.bottom + window.scrollY + 4,
       left: align === "end" ? r.right + window.scrollX : r.left + window.scrollX,
@@ -61,6 +63,35 @@ export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuPr
   useEffect(() => {
     if (open) menuRef.current?.focus();
   }, [open]);
+
+  // The menu's own size is only known after it renders (Portal → real DOM node), so viewport
+  // clamping is a second pass: render at the naive position, measure, then nudge back on-screen
+  // if it overflowed. Found via a real audit — near a screen edge (common on mobile, e.g.
+  // `align="end"` close to the left edge), the un-clamped menu rendered partially or fully
+  // off-viewport with no way to reach the cut-off items.
+  useEffect(() => {
+    if (!open || !rect || hasClampedRef.current) return;
+    const menu = menuRef.current;
+    const trigger = triggerRef.current;
+    if (!menu) return;
+    hasClampedRef.current = true;
+
+    const GUTTER = 8;
+    const menuRect = menu.getBoundingClientRect();
+    let { top, left } = rect;
+
+    const overflowRight = menuRect.right - (window.innerWidth - GUTTER);
+    if (overflowRight > 0) left -= overflowRight;
+    if (left < GUTTER) left = GUTTER;
+
+    const overflowBottom = menuRect.bottom - (window.innerHeight + window.scrollY - GUTTER);
+    if (overflowBottom > 0 && trigger) {
+      const triggerRect = trigger.getBoundingClientRect();
+      top = triggerRect.top + window.scrollY - menuRect.height - 4;
+    }
+
+    if (top !== rect.top || left !== rect.left) setRect({ top, left });
+  }, [open, rect]);
 
   useEffect(() => {
     if (!open) return;

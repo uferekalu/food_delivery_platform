@@ -73,6 +73,21 @@ guards, decorators) only — domain logic never lives there.
   machine — give `beforeAll` a generous timeout (`}, 30_000);`) rather than fighting Jest's 5s
   default, and do the same for individual tests that hash passwords with bcrypt (cost factor
   12 is deliberately slow) via `jest.setTimeout(30_000)` at the top of the file.
+- Separately from that, `MongoMemoryServer`'s own mongod-process-ready wait defaults to a
+  **10-second internal `launchTimeout`**, unrelated to Jest's timeouts and not overridable via
+  env var in this version — hit directly during FDP-6 (`GenericMMSError: Instance failed to
+  start within 10000ms` even with a generous `beforeAll` timeout, since the failure happens
+  inside `MongoMemoryServer.create()` itself). Every spec passes `MongoMemoryServer.create({
+  instance: { launchTimeout: 60_000 } })` for this reason — don't drop the option when adding a
+  new e2e spec. **The outer Jest `beforeAll(..., timeout)` must be at least as generous as
+  `launchTimeout`** (all specs use `60_000` for both) — `beforeAll` awaits `mongod.create()`
+  directly, so a shorter outer timeout would kill it before the inner one even gets a chance to.
+- `restaurants.e2e-spec.ts`'s single lifecycle test does several sequential registrations (each
+  a bcrypt cost-12 hash) plus a full create/approve/browse/menu-CRUD/ownership sequence in one
+  `it()` — its `jest.setTimeout` is `60_000`, higher than the other specs' `30_000`, because it
+  does meaningfully more real work per test. If a new e2e test times out on a correct
+  implementation, check whether it's actually this — a slow/cold machine, not a bug — before
+  reaching for `--detectOpenHandles`.
 - `test/jest-e2e.json` sets `maxWorkers: 1` **deliberately** — every e2e spec file starts its
   own `mongodb-memory-server` instance, and Jest's default parallel-worker execution tries to
   start them all at once. On anything but a very fast machine that resource contention alone

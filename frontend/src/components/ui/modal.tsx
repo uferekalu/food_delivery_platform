@@ -115,7 +115,6 @@ export function Modal({ open, onClose, title, description, children, footer, siz
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               }
-              size="sm"
             />
           </div>
           {children && <div className="overflow-y-auto">{children}</div>}

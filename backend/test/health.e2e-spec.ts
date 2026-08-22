@@ -23,7 +23,10 @@ describe('Health (e2e)', () => {
   let mongod: MongoMemoryServer;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create();
+    // See auth.e2e-spec.ts for why `launchTimeout` is set explicitly.
+    mongod = await MongoMemoryServer.create({
+      instance: { launchTimeout: 60_000 },
+    });
     process.env.MONGODB_URI = mongod.getUri();
     process.env.CORS_ORIGINS = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
@@ -47,7 +50,7 @@ describe('Health (e2e)', () => {
     setupApp(app);
     await app.init();
     // Cold-starting the in-memory MongoDB binary can comfortably exceed Jest's 5s default.
-  }, 30_000);
+  }, 60_000); // headroom for the 60s mongod launchTimeout above, not just app.init()
 
   afterAll(async () => {
     // `app` may be unset if beforeAll threw before assigning it — still tear down mongod.

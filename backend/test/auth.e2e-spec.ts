@@ -34,7 +34,13 @@ describe('Auth (e2e)', () => {
   let sendVerificationEmail: jest.Mock;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create();
+    // `launchTimeout` (mongod-process-ready timeout) is separate from Jest's `beforeAll` timeout
+    // above, and defaults to 10s internally — too tight on a cold/loaded machine, where the
+    // downloaded mongod binary's first launch can take 20s+ (hit directly during FDP-6). Not
+    // configurable via env var in this version, must be passed here.
+    mongod = await MongoMemoryServer.create({
+      instance: { launchTimeout: 60_000 },
+    });
     process.env.MONGODB_URI = mongod.getUri();
     process.env.CORS_ORIGINS = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
@@ -68,7 +74,7 @@ describe('Auth (e2e)', () => {
     app = moduleFixture.createNestApplication();
     setupApp(app);
     await app.init();
-  }, 30_000);
+  }, 60_000); // headroom for the 60s mongod launchTimeout above, not just app.init()
 
   afterAll(async () => {
     if (app) await app.close();
