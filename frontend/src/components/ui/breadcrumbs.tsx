@@ -21,7 +21,7 @@ export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
           return (
             <Fragment key={item.label}>
               {index > 0 && (
-                <li aria-hidden="true" className="text-neutral-300">
+                <li aria-hidden="true" className="text-border-strong">
                   /
                 </li>
               )}

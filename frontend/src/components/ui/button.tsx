@@ -9,9 +9,9 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary: "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active",
-        secondary: "bg-neutral-100 text-text hover:bg-neutral-200 active:bg-neutral-300",
-        outline: "border border-border-strong bg-transparent text-text hover:bg-neutral-50",
-        ghost: "bg-transparent text-text hover:bg-neutral-100",
+        secondary: "bg-secondary text-text hover:bg-secondary-hover active:bg-secondary-active",
+        outline: "border border-border-strong bg-transparent text-text hover:bg-surface-subtle",
+        ghost: "bg-transparent text-text hover:bg-secondary",
         destructive: "bg-danger text-neutral-0 hover:opacity-90 active:opacity-80",
         link: "bg-transparent text-primary underline-offset-4 hover:underline p-0 h-auto",
       },

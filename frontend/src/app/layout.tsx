@@ -6,6 +6,8 @@ import { ToastProvider } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AuthStatus } from "@/components/auth-status";
 import { MobileNav } from "@/components/mobile-nav";
+import { Logo } from "@/components/logo";
+import { Footer } from "@/components/footer";
 import { StoreProvider } from "@/lib/redux/store-provider";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { SessionInitializer } from "@/components/session-initializer";
@@ -38,7 +40,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <SessionInitializer />
           <ToastProvider>
             <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between gap-3 border-b border-border bg-surface p-3">
-              <NextLink href="/restaurants" className="shrink-0 text-sm font-semibold text-primary">
+              <NextLink href="/restaurants" className="flex shrink-0 items-center gap-2 text-sm font-semibold text-primary">
+                <Logo className="size-8" />
                 Restaurants
               </NextLink>
               <div className="hidden items-center gap-3 sm:flex">
@@ -47,7 +50,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               </div>
               <MobileNav />
             </header>
-            {children}
+            <div className="flex-1">{children}</div>
+            <Footer />
           </ToastProvider>
         </StoreProvider>
       </body>

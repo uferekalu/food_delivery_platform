@@ -187,7 +187,7 @@ export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuPr
                 className={cn(
                   "cursor-pointer px-3 py-2 text-sm",
                   item.destructive ? "text-danger" : "text-text",
-                  index === activeIndex && (item.destructive ? "bg-danger-bg" : "bg-neutral-100"),
+                  index === activeIndex && (item.destructive ? "bg-danger-bg" : "bg-secondary"),
                   item.disabled && "cursor-not-allowed opacity-50",
                 )}
               >

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { RadioGroup, RadioOption } from "@/components/ui/radio-group";
 import { useRegisterMutation } from "@/lib/redux/services/auth-api";
@@ -36,12 +37,45 @@ const registerSchema = z
   });
 type RegisterValues = z.infer<typeof registerSchema>;
 
+/**
+ * `useSearchParams()` opts the tree above it out of static prerendering unless wrapped in
+ * `Suspense` (Next.js would otherwise fail the build with "URL data in a Client Component
+ * outside of Suspense") — the actual form lives in `RegisterForm` below so only that part
+ * bails out to client rendering, not the whole page.
+ */
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterFormSkeleton />}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterFormSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Create an account</CardTitle>
+        <CardDescription>Order from your favorite restaurants in minutes.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center justify-center py-12">
+        <Spinner />
+      </CardContent>
+    </Card>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [registerUser, { isLoading }] = useRegisterMutation();
   const [error, setError] = useState<string | null>(null);
-  const [role, setRole] = useState<SelfRegisterableRole>("customer");
+  // Lets the footer's "Partner with us" link (`/register?role=restaurant_owner`) preselect the
+  // right account type instead of dropping restaurant owners into the generic customer default.
+  const [role, setRole] = useState<SelfRegisterableRole>(
+    searchParams.get("role") === "restaurant_owner" ? "restaurant_owner" : "customer",
+  );
   const {
     register,
     handleSubmit,

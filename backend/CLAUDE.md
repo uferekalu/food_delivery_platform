@@ -94,7 +94,7 @@ guards, decorators) only — domain logic never lives there.
   blows past the 30s `beforeAll` timeout for *every* suite simultaneously (hit directly during
   FDP-5, once 3 e2e spec files existed). Running e2e files serially costs wall-clock time but
   is correct; don't remove `maxWorkers` to "speed things up" without re-solving this.
-- Every payment webhook handler (from FDP-8 onward) needs a test asserting it rejects an
+- Every payment webhook handler (FDP-11, `payments`, onward) needs a test asserting it rejects an
   invalid signature — see `docs/ENGINEERING_RULES.md`.
 
 ## Local dev
