@@ -33,6 +33,11 @@ describe('Restaurants + Menu (e2e)', () => {
     process.env.CLOUDINARY_CLOUD_NAME = 'test-cloud';
     process.env.CLOUDINARY_API_KEY = '123456789';
     process.env.CLOUDINARY_API_SECRET = 'test-secret';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_dummy';
+    process.env.PAYSTACK_SECRET_KEY = 'sk_test_dummy';
+    process.env.FLUTTERWAVE_SECRET_KEY = 'FLWSECK_TEST-dummy';
+    process.env.FLUTTERWAVE_WEBHOOK_HASH = 'dummy-webhook-hash';
 
     const { AppModule } =
       require('../src/app.module') as typeof import('../src/app.module');
