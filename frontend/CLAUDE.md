@@ -99,11 +99,32 @@ reaching for a suppression — these two are the only known false positives so f
    each fire their own refresh against the single-use rotating refresh token. New endpoints get
    this for free through the shared `api` instance — don't add per-endpoint 401 handling.
 
+## Component testing (FDP-7)
+
+Vitest + React Testing Library (`vitest.config.mts`, jsdom environment). Tests are colocated
+next to the component they cover (`button.tsx` → `button.test.tsx`) — not a parallel `__tests__`
+tree. Per `docs/PRODUCT_GUIDE.md`, component tests must cover keyboard interaction and real
+component behavior, not just that something rendered — see `dropdown-menu.test.tsx` (keyboard
+nav, viewport-clamping via a mocked `getBoundingClientRect`) and `modal.test.tsx` (focus trap,
+Escape, backdrop click) for the bar to hit on a new interactive component.
+
+- **Accessible-name queries can surprise you**: a wrapping `<label>` folds ALL its text content
+  (including a secondary description line, e.g. `RadioOption`'s `description` prop) into the
+  input's accessible name — `getByRole(..., { name: "Restaurant owner" })` won't match if a
+  description is present; use a regex (`{ name: /Restaurant owner/ }`) instead of an exact
+  string whenever the label has adjacent text. Same applies to a spinner's `aria-label` folding
+  into a loading button's name (see `button.test.tsx`).
+- `testTimeout` is raised to `20_000` in `vitest.config.mts` — jsdom environment setup itself
+  (not test logic) was intermittently exceeding Vitest's 5000ms default on a cold/loaded
+  machine, the same class of issue as the backend's e2e specs (`backend/CLAUDE.md`).
+
 ## Local dev
 
 ```
 npm run dev        # http://localhost:3000
 npm run lint
+npm run test        # vitest run — component tests, single pass
+npm run test:watch  # vitest — interactive watch mode
 npm run build
 ```
 
