@@ -1,14 +1,17 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { ItemDetailModal } from "@/components/item-detail-modal";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
+import type { MenuItem } from "@/lib/redux/restaurant-types";
 
 export default function RestaurantDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -16,6 +19,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
   const { data: menu, isLoading: loadingMenu } = useGetMenuQuery(restaurant?._id ?? "", {
     skip: !restaurant,
   });
+  const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
 
   if (loadingRestaurant) {
     return (
@@ -76,7 +80,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                 {category.items
                   .filter((item) => item.isAvailable)
                   .map((item) => (
-                    <div key={item._id} className="flex flex-col gap-2 rounded-lg border border-border p-4">
+                    <div key={item._id} className="flex flex-col gap-3 rounded-lg border border-border p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex flex-col gap-1">
                           <span className="font-medium text-text">{item.name}</span>
@@ -104,6 +108,11 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                           ))}
                         </div>
                       )}
+                      {restaurant.isOpen && (
+                        <Button variant="outline" size="sm" className="self-start" onClick={() => setActiveItem(item)}>
+                          Add to cart
+                        </Button>
+                      )}
                     </div>
                   ))}
               </div>
@@ -111,6 +120,15 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
           ))
         )}
       </div>
+
+      {activeItem && (
+        <ItemDetailModal
+          item={activeItem}
+          currency={restaurant.currency}
+          open={!!activeItem}
+          onClose={() => setActiveItem(null)}
+        />
+      )}
     </Container>
   );
 }

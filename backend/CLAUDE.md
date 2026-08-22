@@ -77,11 +77,16 @@ guards, decorators) only — domain logic never lives there.
   **10-second internal `launchTimeout`**, unrelated to Jest's timeouts and not overridable via
   env var in this version — hit directly during FDP-6 (`GenericMMSError: Instance failed to
   start within 10000ms` even with a generous `beforeAll` timeout, since the failure happens
-  inside `MongoMemoryServer.create()` itself). Every spec passes `MongoMemoryServer.create({
-  instance: { launchTimeout: 60_000 } })` for this reason — don't drop the option when adding a
-  new e2e spec. **The outer Jest `beforeAll(..., timeout)` must be at least as generous as
-  `launchTimeout`** (all specs use `60_000` for both) — `beforeAll` awaits `mongod.create()`
-  directly, so a shorter outer timeout would kill it before the inner one even gets a chance to.
+  inside `MongoMemoryServer.create()` itself). Every spec — e2e **and** unit (`*.service.spec.ts`
+  files that boot a real Mongoose connection, e.g. `menu.service.spec.ts`, `cart.service.spec.ts`)
+  — passes `MongoMemoryServer.create({ instance: { launchTimeout: 60_000 } })` for this reason.
+  This was only actually applied to the e2e specs when first fixed (FDP-6) — three unit specs
+  (`auth`, `menu`, `restaurants`) were still missing it and only got caught when `auth.service
+  .spec.ts` flaked during FDP-10. **Don't drop the option when adding any new spec that boots
+  `mongodb-memory-server`.** The outer Jest `beforeAll(..., timeout)` must be at least as
+  generous as `launchTimeout` (all specs use `60_000` for both) — `beforeAll` awaits
+  `mongod.create()` directly, so a shorter outer timeout would kill it before the inner one even
+  gets a chance to.
 - `restaurants.e2e-spec.ts`'s single lifecycle test does several sequential registrations (each
   a bcrypt cost-12 hash) plus a full create/approve/browse/menu-CRUD/ownership sequence in one
   `it()` — its `jest.setTimeout` is `60_000`, higher than the other specs' `30_000`, because it
@@ -94,7 +99,14 @@ guards, decorators) only — domain logic never lives there.
   blows past the 30s `beforeAll` timeout for *every* suite simultaneously (hit directly during
   FDP-5, once 3 e2e spec files existed). Running e2e files serially costs wall-clock time but
   is correct; don't remove `maxWorkers` to "speed things up" without re-solving this.
-- Every payment webhook handler (FDP-11, `payments`, onward) needs a test asserting it rejects an
+- **Never `toEqual` a live Mongoose subdocument array directly against a plain-object
+  expectation** — hit in `cart.service.spec.ts`: `expect(cart.items[0].selectedModifiers)
+  .toEqual([{ groupName, optionName, priceDelta }])` throws `'caller', 'callee', and 'arguments'
+  properties may not be accessed on strict mode functions...`, because Jest's deep-equality walk
+  trips over the subdocument array's internal strict-mode getters. Map to plain objects first
+  (`array.map((x) => ({ ...fields }))`) before asserting. Comparing an *empty* array is fine
+  (nothing to walk); this only bites when the array actually has subdocuments in it.
+- Every payment webhook handler (FDP-14, `payments`, onward) needs a test asserting it rejects an
   invalid signature — see `docs/ENGINEERING_RULES.md`.
 
 ## Local dev

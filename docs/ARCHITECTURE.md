@@ -79,6 +79,11 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
   images[]
 - **Notification** — userId, type, title, body, isRead, channel (`email|inapp`), metadata
 - **DeliveryZone** — restaurantId, polygon/radius, baseFee, perKmFee
+- **PromoCode** (FDP-11) — code (unique, uppercase), discountType (`percentage|fixed`),
+  discountValue, minOrderAmount?, maxDiscountAmount? (caps a percentage discount), restaurantId?
+  (`null` = platform-wide), expiresAt?, isActive, usageLimit?, usedCount — not in the original
+  domain model, added when "promo/coupon code redemption" was found to be a gap against
+  `PRODUCT_GUIDE.md`'s "modern platform" bar with no owning phase (see `docs/ROADMAP.md` FDP-9)
 
 ## 4. Payment routing (Stripe / Paystack / Flutterwave)
 
@@ -140,9 +145,13 @@ context/store systems for app state:
   `api.injectEndpoints()` rather than creating separate `createApi` instances, so there's one
   cache/tag graph for the whole app.
 - **Plain slices** (`frontend/src/lib/redux/slices/`) hold client-only UI/app state that isn't
-  server data — theme preference, cart (until checkout), auth session flags. Server data
-  (restaurants, orders, etc.) always goes through RTK Query, never duplicated into a plain
-  slice.
+  server data — theme preference, auth session flags. Server data (restaurants, orders, cart,
+  etc.) always goes through RTK Query, never duplicated into a plain slice. **Cart is
+  backend-persisted** (FDP-10) — it's a real Mongoose entity (§3) owned by a `cart-api.ts` RTK
+  Query slice like any other server resource, not client-only Redux state; this earlier version
+  of this doc said "cart (until checkout)" as if it were client-only, which contradicted §3's
+  persisted `Cart` schema — persisting server-side is what lets a logged-in customer's cart
+  survive a refresh/device switch, consistent with why a `Cart` schema exists at all.
 - Typed hooks (`useAppDispatch`, `useAppSelector`) in `frontend/src/lib/redux/hooks.ts` are the
   only way components touch the store — no untyped `useDispatch`/`useSelector`.
 
@@ -198,9 +207,14 @@ in `frontend/CLAUDE.md` for why it's a separate component from `Modal` rather th
 
 Deliberately deferred to the phase that first needs them, so they're built against real data
 shapes instead of speculative ones: Accordion (restaurant details, FDP-5), ImageDropzone
-(Cloudinary upload, FDP-5), DatePicker/TimeRangePicker (opening hours, FDP-5), Stepper (order
-tracking, FDP-10), Rating (reviews, FDP-13), DataTable (admin, FDP-15), Combobox/ContextMenu/
-Slider (built when a concrete screen needs one).
+(Cloudinary upload, FDP-5), Stepper (order tracking, FDP-13), Rating (reviews, FDP-16),
+DataTable (admin, FDP-18), Combobox/ContextMenu/Slider (built when a concrete screen needs one).
+**DatePicker/TimeRangePicker were never built** — FDP-5's opening-hours fields and FDP-11's
+scheduled-delivery field both use a native `<input type="time">`/`<input type="datetime-local">`
+via the existing `Input` component instead. That's the established precedent now, not a gap:
+native date/time inputs are accessible, zero-maintenance, and good enough for every date/time
+need so far — only build a custom picker if a real screen needs something a native input can't
+do (e.g. a range picker, or a calendar with availability shading).
 
 ## 9. Realtime
 
