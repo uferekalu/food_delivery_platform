@@ -207,8 +207,8 @@ in `frontend/CLAUDE.md` for why it's a separate component from `Modal` rather th
 
 Deliberately deferred to the phase that first needs them, so they're built against real data
 shapes instead of speculative ones: Accordion (restaurant details, FDP-5), ImageDropzone
-(Cloudinary upload, FDP-5), Stepper (order tracking, FDP-13), Rating (reviews, FDP-16),
-DataTable (admin, FDP-18), Combobox/ContextMenu/Slider (built when a concrete screen needs one).
+(Cloudinary upload, FDP-5), Stepper (order tracking, FDP-13), Rating (reviews, FDP-18),
+DataTable (admin, FDP-20), Combobox/ContextMenu/Slider (built when a concrete screen needs one).
 **DatePicker/TimeRangePicker were never built** — FDP-5's opening-hours fields and FDP-11's
 scheduled-delivery field both use a native `<input type="time">`/`<input type="datetime-local">`
 via the existing `Input` component instead. That's the established precedent now, not a gap:

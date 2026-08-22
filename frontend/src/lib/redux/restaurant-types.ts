@@ -8,6 +8,18 @@ export interface Address {
   lng?: number;
 }
 
+export interface DeliveryZone {
+  _id: string;
+  restaurantId: string;
+  name: string;
+  maxDistanceKm: number;
+  baseFee: number;
+  perKmFee: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface OpeningHour {
   dayOfWeek: number; // 0 = Sunday … 6 = Saturday
   openTime: string; // "HH:mm"

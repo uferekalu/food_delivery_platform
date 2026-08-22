@@ -15,6 +15,7 @@ import { CartModule } from './cart/cart.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
+import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { PaymentsModule } from './payments/payments.module';
     PromoCodesModule,
     OrdersModule,
     PaymentsModule,
+    DeliveryZonesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

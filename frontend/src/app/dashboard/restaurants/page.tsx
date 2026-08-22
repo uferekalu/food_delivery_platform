@@ -73,6 +73,12 @@ function MyRestaurantsList() {
                 >
                   Order queue
                 </NextLink>
+                <NextLink
+                  href={`/dashboard/restaurants/${restaurant._id}/delivery-zones`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Delivery zones
+                </NextLink>
                 <Button
                   variant="ghost"
                   size="sm"

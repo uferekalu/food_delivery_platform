@@ -219,5 +219,51 @@ describe('Restaurants + Menu (e2e)', () => {
     expect(menu[0].name).toBe('Mains');
     expect(menu[0].items[0].name).toBe('Jollof Rice');
     expect(menu[0].items[0].isAvailable).toBe(true);
+
+    // Delivery zones (FDP-15): owner-only, not public.
+    await request(server)
+      .get(`/restaurants/${restaurantId}/delivery-zones`)
+      .expect(401); // no auth at all
+
+    await request(server)
+      .get(`/restaurants/${restaurantId}/delivery-zones`)
+      .set('Authorization', `Bearer ${otherOwner.accessToken}`)
+      .expect(403); // wrong owner
+
+    const zoneRes = await request(server)
+      .post(`/restaurants/${restaurantId}/delivery-zones`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ name: 'Nearby', maxDistanceKm: 5, baseFee: 300, perKmFee: 50 })
+      .expect(201);
+    const zoneId = (zoneRes.body as { _id: string })._id;
+
+    const zonesList = await request(server)
+      .get(`/restaurants/${restaurantId}/delivery-zones`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(200);
+    expect(zonesList.body as unknown[]).toHaveLength(1);
+
+    await request(server)
+      .patch(`/restaurants/${restaurantId}/delivery-zones/${zoneId}`)
+      .set('Authorization', `Bearer ${otherOwner.accessToken}`)
+      .send({ baseFee: 999 })
+      .expect(403);
+
+    await request(server)
+      .patch(`/restaurants/${restaurantId}/delivery-zones/${zoneId}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ baseFee: 400 })
+      .expect(200);
+
+    await request(server)
+      .delete(`/restaurants/${restaurantId}/delivery-zones/${zoneId}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(200);
+
+    const zonesAfterDelete = await request(server)
+      .get(`/restaurants/${restaurantId}/delivery-zones`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(200);
+    expect(zonesAfterDelete.body as unknown[]).toHaveLength(0);
   });
 });

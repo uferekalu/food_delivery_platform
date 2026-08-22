@@ -26,8 +26,17 @@ const schema = z.object({
   city: z.string().min(1, "Required"),
   state: z.string().min(1, "Required"),
   postalCode: z.string().optional(),
+  lat: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(-90, "Must be between -90 and 90").max(90).optional(),
+  ),
+  lng: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(-180, "Must be between -180 and 180").max(180).optional(),
+  ),
 });
-type FormValues = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
+type FormValues = z.output<typeof schema>;
 
 function defaultHours(): OpeningHour[] {
   return DAY_LABELS.map((_, dayOfWeek) => ({
@@ -39,7 +48,7 @@ function defaultHours(): OpeningHour[] {
 }
 
 export interface RestaurantFormProps {
-  defaultValues?: Partial<FormValues>;
+  defaultValues?: Partial<FormInput>;
   defaultOpeningHours?: OpeningHour[];
   defaultLogoUrl?: string | null;
   defaultCoverUrl?: string | null;
@@ -61,7 +70,7 @@ export function RestaurantForm({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues });
+  } = useForm<FormInput, unknown, FormValues>({ resolver: zodResolver(schema), defaultValues });
 
   const [hours, setHours] = useState<OpeningHour[]>(
     defaultOpeningHours && defaultOpeningHours.length === 7 ? defaultOpeningHours : defaultHours(),
@@ -89,6 +98,8 @@ export function RestaurantForm({
         city: values.city,
         state: values.state,
         postalCode: values.postalCode,
+        lat: values.lat,
+        lng: values.lng,
       },
       openingHours: hours,
       ...(logoUrl ? { logoUrl } : {}),
@@ -142,6 +153,19 @@ export function RestaurantForm({
         </FormField>
         <FormField label="Postal code" error={errors.postalCode?.message}>
           <Input {...register("postalCode")} />
+        </FormField>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField
+          label="Latitude"
+          hint="Optional — enables real distance-based delivery fees"
+          error={errors.lat?.message}
+        >
+          <Input type="number" step="any" {...register("lat")} />
+        </FormField>
+        <FormField label="Longitude" error={errors.lng?.message}>
+          <Input type="number" step="any" {...register("lng")} />
         </FormField>
       </div>
 
