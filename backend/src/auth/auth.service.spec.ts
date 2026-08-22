@@ -66,6 +66,7 @@ describe('AuthService', () => {
             findByEmail: jest.fn(),
             findByEmailWithPassword: jest.fn(),
             findById: jest.fn(),
+            findByIdWithPassword: jest.fn(),
             create: jest.fn(),
             markEmailVerified: jest.fn(),
             updatePasswordHash: jest.fn(),
@@ -266,6 +267,53 @@ describe('AuthService', () => {
       expect(usersService.updatePasswordHash).toHaveBeenCalledWith(
         user._id.toString(),
         expect.any(String),
+      );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('rejects an incorrect current password', async () => {
+      const passwordHash = await bcrypt.hash('CorrectPass1', 12);
+      const user = await createUser(passwordHash);
+      usersService.findByIdWithPassword.mockResolvedValue(user);
+
+      await expect(
+        authService.changePassword(
+          user._id.toString(),
+          'WrongPass1',
+          'BrandNewPass1',
+        ),
+      ).rejects.toThrow(
+        new UnauthorizedException('Current password is incorrect'),
+      );
+      expect(usersService.updatePasswordHash).not.toHaveBeenCalled();
+    });
+
+    it('updates the password and revokes existing refresh tokens on success', async () => {
+      const passwordHash = await bcrypt.hash('CorrectPass1', 12);
+      const user = await createUser(passwordHash);
+      usersService.findByIdWithPassword.mockResolvedValue(user);
+      usersService.findById.mockResolvedValue(user);
+      usersService.findByEmailWithPassword.mockResolvedValue(user);
+
+      const { tokens } = await authService.login(
+        'jane@example.com',
+        'CorrectPass1',
+      );
+
+      await authService.changePassword(
+        user._id.toString(),
+        'CorrectPass1',
+        'BrandNewPass1',
+      );
+
+      expect(usersService.updatePasswordHash).toHaveBeenCalledWith(
+        user._id.toString(),
+        expect.any(String),
+      );
+      // The refresh token issued before the change must now be dead.
+      await expect(authService.refresh(tokens.refreshToken)).rejects.toThrow(
+        UnauthorizedException,
       );
     });
   });

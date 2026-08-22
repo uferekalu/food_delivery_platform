@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ItemDetailModal } from "@/components/item-detail-modal";
+import { FavoriteButton } from "@/components/favorite-button";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
@@ -46,6 +47,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-text">{restaurant.name}</h1>
           <Badge variant={restaurant.isOpen ? "success" : "neutral"}>{restaurant.isOpen ? "Open" : "Closed"}</Badge>
+          <FavoriteButton restaurantId={restaurant._id} />
         </div>
         <p className="text-text-muted">
           {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)} ({restaurant.reviewCount}{" "}

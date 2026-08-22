@@ -101,6 +101,13 @@ export interface Cart {
   subtotal: number;
 }
 
+export interface SavedAddress {
+  _id: string;
+  label: string;
+  address: Address;
+  isDefault: boolean;
+}
+
 export type PaymentProvider = "stripe" | "paystack" | "flutterwave";
 
 export type OrderStatus =

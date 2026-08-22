@@ -38,6 +38,7 @@ export interface PublicUser {
   name: string;
   role: string;
   isEmailVerified: boolean;
+  avatarUrl: string | null;
 }
 
 function toPublicUser(user: UserDocument): PublicUser {
@@ -47,6 +48,7 @@ function toPublicUser(user: UserDocument): PublicUser {
     name: user.name,
     role: user.role,
     isEmailVerified: user.isEmailVerified,
+    avatarUrl: user.avatarUrl,
   };
 }
 
@@ -229,6 +231,35 @@ export class AuthService {
     await this.refreshTokenModel
       .updateMany(
         { userId: target._id, revokedAt: null },
+        { revokedAt: new Date() },
+      )
+      .exec();
+  }
+
+  /**
+   * Change password while already logged in — separate from `resetPassword`'s
+   * email-token flow, which is for someone who *can't* log in. Requires the current password
+   * rather than just trusting the access token, in case a session was left open on a shared
+   * device. Revokes every refresh token on success (same as `resetPassword`) — the current
+   * access token stays valid until it naturally expires (~15 min), so this doesn't force an
+   * immediate logout, but the next silent refresh anywhere will fail and require a fresh login.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+    await this.usersService.updatePasswordHash(userId, passwordHash);
+
+    await this.refreshTokenModel
+      .updateMany(
+        { userId: user._id, revokedAt: null },
         { revokedAt: new Date() },
       )
       .exec();

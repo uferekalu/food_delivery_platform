@@ -1,19 +1,99 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
   Patch,
+  Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { UsersService } from './users.service';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { CreateSavedAddressDto } from './dto/create-saved-address.dto';
+import { UpdateSavedAddressDto } from './dto/update-saved-address.dto';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Patch('me')
+  async updateProfile(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    const updated = await this.usersService.updateProfile(user.sub, dto);
+    return {
+      id: updated._id.toString(),
+      email: updated.email,
+      name: updated.name,
+      role: updated.role,
+      isEmailVerified: updated.isEmailVerified,
+      avatarUrl: updated.avatarUrl,
+    };
+  }
+
+  @Get('me/addresses')
+  listAddresses(@CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.listAddresses(user.sub);
+  }
+
+  @Post('me/addresses')
+  addAddress(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: CreateSavedAddressDto,
+  ) {
+    return this.usersService.addAddress(user.sub, dto);
+  }
+
+  @Patch('me/addresses/:addressId')
+  updateAddress(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('addressId') addressId: string,
+    @Body() dto: UpdateSavedAddressDto,
+  ) {
+    return this.usersService.updateAddress(user.sub, addressId, dto);
+  }
+
+  @Delete('me/addresses/:addressId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeAddress(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('addressId') addressId: string,
+  ) {
+    return this.usersService.removeAddress(user.sub, addressId);
+  }
+
+  @Get('me/favorites')
+  listFavorites(@CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.listFavorites(user.sub);
+  }
+
+  @Post('me/favorites/:restaurantId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  addFavorite(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('restaurantId') restaurantId: string,
+  ) {
+    return this.usersService.addFavorite(user.sub, restaurantId);
+  }
+
+  @Delete('me/favorites/:restaurantId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeFavorite(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('restaurantId') restaurantId: string,
+  ) {
+    return this.usersService.removeFavorite(user.sub, restaurantId);
+  }
 
   /**
    * The only way any user reaches `admin` or `rider` after registration (both are excluded

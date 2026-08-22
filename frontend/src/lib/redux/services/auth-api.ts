@@ -87,6 +87,10 @@ export const authApi = api.injectEndpoints({
     resetPassword: builder.mutation<void, { token: string; newPassword: string }>({
       query: (body) => ({ url: "/auth/reset-password", method: "POST", body }),
     }),
+
+    changePassword: builder.mutation<void, { currentPassword: string; newPassword: string }>({
+      query: (body) => ({ url: "/auth/change-password", method: "PATCH", body }),
+    }),
   }),
 });
 
@@ -101,4 +105,5 @@ export const {
   useResendVerificationMutation,
   useForgotPasswordMutation,
   useResetPasswordMutation,
+  useChangePasswordMutation,
 } = authApi;
