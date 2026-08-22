@@ -76,3 +76,27 @@ export interface MenuCategory {
   sortOrder: number;
   items: MenuItem[];
 }
+
+export interface SelectedModifier {
+  groupName: string;
+  optionName: string;
+  priceDelta: number;
+}
+
+export interface CartItem {
+  _id: string;
+  menuItemId: string;
+  name: string;
+  price: number;
+  qty: number;
+  selectedModifiers: SelectedModifier[];
+  notes: string;
+}
+
+export interface Cart {
+  restaurantId: string | null;
+  restaurantName: string | null;
+  currency: string | null;
+  items: CartItem[];
+  subtotal: number;
+}

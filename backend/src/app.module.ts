@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { MenuModule } from './menu/menu.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { MenuModule } from './menu/menu.module';
     UploadsModule,
     RestaurantsModule,
     MenuModule,
+    CartModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

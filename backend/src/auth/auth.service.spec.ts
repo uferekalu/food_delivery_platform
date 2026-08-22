@@ -31,7 +31,8 @@ describe('AuthService', () => {
   let refreshTokenModel: Model<RefreshTokenDocument>;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create();
+    // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
+    mongod = await MongoMemoryServer.create({ instance: { launchTimeout: 60_000 } });
 
     moduleRef = await Test.createTestingModule({
       imports: [
@@ -88,7 +89,7 @@ describe('AuthService', () => {
     mailService = moduleRef.get(MailService);
     userModel = moduleRef.get(getModelToken(User.name));
     refreshTokenModel = moduleRef.get(getModelToken(RefreshToken.name));
-  }, 30_000);
+  }, 60_000); // headroom for the 60s mongod launchTimeout above, not just module compile
 
   afterEach(async () => {
     await refreshTokenModel.deleteMany({}).exec();
