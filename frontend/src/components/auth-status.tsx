@@ -35,6 +35,13 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
             My restaurants
           </NextLink>
         )}
+        <NextLink
+          href="/orders"
+          onClick={onNavigate}
+          className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
+        >
+          My orders
+        </NextLink>
         <span className={cn("truncate text-sm text-text-muted", stacked && "py-1")}>
           Hi, {user.name}
           {!user.isEmailVerified && <span className="ml-1 text-warning">(unverified)</span>}

@@ -7,6 +7,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+// Moved from restaurants/dto/ in FDP-11 alongside common/schemas/address.schema.ts — Order's
+// deliveryAddress needs the same validated shape as Restaurant's storefront address.
 export class AddressDto {
   @ApiProperty()
   @IsString()

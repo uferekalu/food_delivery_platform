@@ -100,3 +100,63 @@ export interface Cart {
   items: CartItem[];
   subtotal: number;
 }
+
+export type PaymentProvider = "stripe" | "paystack" | "flutterwave";
+
+export type OrderStatus =
+  | "PENDING_PAYMENT"
+  | "PLACED"
+  | "ACCEPTED_BY_RESTAURANT"
+  | "PREPARING"
+  | "READY_FOR_PICKUP"
+  | "ASSIGNED_TO_RIDER"
+  | "PICKED_UP"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "REFUNDED";
+
+export type OrderPaymentStatus = "pending" | "succeeded" | "failed" | "refunded";
+
+export interface OrderItem {
+  menuItemId: string;
+  name: string;
+  price: number;
+  qty: number;
+  selectedModifiers: SelectedModifier[];
+  notes: string;
+}
+
+export interface StatusHistoryEntry {
+  status: OrderStatus;
+  at: string;
+  by: string;
+}
+
+export interface Order {
+  _id: string;
+  orderNumber: string;
+  customerId: string;
+  restaurantId: string;
+  riderId: string | null;
+  items: OrderItem[];
+  subtotal: number;
+  deliveryFee: number;
+  serviceFee: number;
+  tax: number;
+  discount: number;
+  total: number;
+  currency: string;
+  status: OrderStatus;
+  statusHistory: StatusHistoryEntry[];
+  paymentProvider: PaymentProvider;
+  paymentStatus: OrderPaymentStatus;
+  paymentRef: string | null;
+  deliveryAddress: Address;
+  deliveryInstructions: string;
+  scheduledFor: string | null;
+  estimatedDeliveryAt: string | null;
+  promoCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

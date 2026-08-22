@@ -11,7 +11,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { AddressDto } from './address.dto';
+import { AddressDto } from '../../common/dto/address.dto';
 import { OpeningHourDto } from './opening-hour.dto';
 
 export class CreateRestaurantDto {

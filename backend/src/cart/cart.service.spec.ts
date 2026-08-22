@@ -111,7 +111,13 @@ describe('CartService', () => {
 
   it('returns an empty cart when none exists', async () => {
     const cart = await cartService.getCart(userId);
-    expect(cart).toEqual({ restaurantId: null, restaurantName: null, currency: null, items: [], subtotal: 0 });
+    expect(cart).toEqual({
+      restaurantId: null,
+      restaurantName: null,
+      currency: null,
+      items: [],
+      subtotal: 0,
+    });
   });
 
   it('adds an item and computes the subtotal', async () => {
@@ -184,7 +190,9 @@ describe('CartService', () => {
       optionName: m.optionName,
       priceDelta: m.priceDelta,
     }));
-    expect(modifiers).toEqual([{ groupName: 'Size', optionName: 'Large', priceDelta: 2 }]);
+    expect(modifiers).toEqual([
+      { groupName: 'Size', optionName: 'Large', priceDelta: 2 },
+    ]);
     expect(cart.subtotal).toBe(12); // 10 + 2 priceDelta, qty 1
   });
 
@@ -204,8 +212,8 @@ describe('CartService', () => {
 
     const cart = await cartService.addItem(userId, {
       menuItemId: item._id.toString(),
-      // @ts-expect-error -- simulating a malicious/stale client payload with a forged priceDelta
       selectedModifiers: [
+        // @ts-expect-error -- simulating a malicious/stale client payload with a forged priceDelta
         { groupName: 'Size', optionName: 'Large', priceDelta: 999 },
       ],
     });
@@ -280,7 +288,13 @@ describe('CartService', () => {
     expect(afterUpdate.subtotal).toBe(15);
 
     const afterRemove = await cartService.removeItem(userId, cartItemId);
-    expect(afterRemove).toEqual({ restaurantId: null, restaurantName: null, currency: null, items: [], subtotal: 0 });
+    expect(afterRemove).toEqual({
+      restaurantId: null,
+      restaurantName: null,
+      currency: null,
+      items: [],
+      subtotal: 0,
+    });
 
     const cartInDb = await cartModel.findOne({ userId }).exec();
     expect(cartInDb).toBeNull();
@@ -304,6 +318,12 @@ describe('CartService', () => {
 
     await cartService.clearCart(userId);
     const cart = await cartService.getCart(userId);
-    expect(cart).toEqual({ restaurantId: null, restaurantName: null, currency: null, items: [], subtotal: 0 });
+    expect(cart).toEqual({
+      restaurantId: null,
+      restaurantName: null,
+      currency: null,
+      items: [],
+      subtotal: 0,
+    });
   });
 });

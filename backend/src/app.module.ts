@@ -12,6 +12,8 @@ import { UploadsModule } from './uploads/uploads.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { MenuModule } from './menu/menu.module';
 import { CartModule } from './cart/cart.module';
+import { PromoCodesModule } from './promo-codes/promo-codes.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import { CartModule } from './cart/cart.module';
     RestaurantsModule,
     MenuModule,
     CartModule,
+    PromoCodesModule,
+    OrdersModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
