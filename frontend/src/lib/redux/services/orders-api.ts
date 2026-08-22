@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { Address, Order } from "../restaurant-types";
+import type { Address, Order, OrderStatus } from "../restaurant-types";
 
 export interface CreateOrderInput {
   deliveryAddress: Address;
@@ -28,7 +28,29 @@ export const ordersApi = api.injectEndpoints({
           ? [...result.map((o) => ({ type: "Order" as const, id: o._id })), { type: "Order" as const, id: "LIST" }]
           : [{ type: "Order", id: "LIST" }],
     }),
+
+    getRestaurantOrders: builder.query<Order[], string>({
+      query: (restaurantId) => `/orders/restaurant/${restaurantId}`,
+      providesTags: (result) =>
+        result
+          ? [...result.map((o) => ({ type: "Order" as const, id: o._id })), { type: "Order" as const, id: "QUEUE" }]
+          : [{ type: "Order", id: "QUEUE" }],
+    }),
+
+    updateOrderStatus: builder.mutation<Order, { orderId: string; status: OrderStatus }>({
+      query: ({ orderId, status }) => ({ url: `/orders/${orderId}/status`, method: "PATCH", body: { status } }),
+      invalidatesTags: (result, _error, { orderId }) => [
+        { type: "Order", id: orderId },
+        { type: "Order", id: "QUEUE" },
+      ],
+    }),
   }),
 });
 
-export const { useCreateOrderMutation, useGetOrderQuery, useGetMyOrdersQuery } = ordersApi;
+export const {
+  useCreateOrderMutation,
+  useGetOrderQuery,
+  useGetMyOrdersQuery,
+  useGetRestaurantOrdersQuery,
+  useUpdateOrderStatusMutation,
+} = ordersApi;

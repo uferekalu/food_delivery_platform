@@ -4,6 +4,7 @@ import { CartModule } from '../cart/cart.module';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { MenuItem, MenuItemSchema } from '../menu/schemas/menu-item.schema';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
+import { RealtimeModule } from '../realtime/realtime.module';
 import { Order, OrderSchema } from './schemas/order.schema';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
@@ -18,6 +19,7 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
     CartModule,
     RestaurantsModule,
     PromoCodesModule,
+    RealtimeModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, PaymentProviderResolver],
