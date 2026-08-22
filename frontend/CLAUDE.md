@@ -35,8 +35,10 @@ row, `DropdownMenu` rendering off-viewport, sub-44px tap targets).
   no 1-column fallback below `sm`).
 - **Primary nav**: the root header (`src/app/layout.tsx`) shows inline auth/theme controls only
   at `sm:` and up (`hidden ... sm:flex`); below that, `MobileNav` (`src/components/mobile-nav.tsx`)
-  collapses them into a hamburger-triggered `Modal` rather than letting them wrap/overflow. Any
-  new header-level control goes through this pattern, not directly into the inline row.
+  collapses them into a hamburger-triggered slide-in `Drawer` (FDP-8; originally a `Modal` — see
+  "Never nest a DropdownMenu-based control inside Modal/Drawer" below for why that changed)
+  rather than letting them wrap/overflow. Any new header-level control goes through this
+  pattern, not directly into the inline row.
 - **Any row of controls that could grow** (button groups, badge lists, form field groups) needs
   `flex-wrap` or an explicit `grid-cols-1 sm:grid-cols-N`; never assume the row always fits.
 - **Touch targets**: standalone icon actions (modal close, hamburger, theme toggle) are 44px
@@ -52,6 +54,44 @@ row, `DropdownMenu` rendering off-viewport, sub-44px tap targets).
 - **Horizontally-scrollable content** (tab strips, wide tables) needs an explicit
   `overflow-x-auto` wrapper with non-shrinking children (`shrink-0`) — don't let content wrap
   awkwardly or clip with no way to reach it.
+
+## Color tokens: raw scale vs. semantic alias (FDP-8)
+
+`bg-neutral-100`, `text-neutral-700`, etc. (the raw brand/neutral scale in `tokens.css`) are
+**fixed values that never change for dark mode** — only the semantic aliases (`bg-secondary`,
+`text-text`, `bg-surface-subtle`, …) get a `--dark-*` override. A real, user-reported bug shipped
+in FDP-6 because of this: `DropdownMenu`'s highlighted item used `bg-neutral-100` (a light gray
+that stays light gray in dark mode), which combined with dark mode's near-white text made the
+highlighted option almost unreadable — the same bug existed in `Button`'s secondary/ghost/outline
+variants, `Badge`, `Pagination`, `Switch`, `Skeleton`, and `Breadcrumbs`' divider, all fixed
+together in FDP-8.
+
+**Rule: never reach for a raw `bg-neutral-*`/`text-neutral-*` class for anything that needs to
+look correct in both themes.** Use a semantic alias; if the right one doesn't exist yet, add it
+to `tokens.css` (light value + both dark-activation blocks) and `tokens.ts` before using it — see
+`--color-secondary`/`-hover`/`-active` (interactive neutral surfaces: secondary buttons, hover/
+highlight states, badges, skeletons) for the pattern. The only legitimate raw-scale uses are
+values that are genuinely theme-invariant by design (e.g. a switch thumb or button text that's
+always white-on-color regardless of theme).
+
+## Never nest a DropdownMenu-based control inside Modal/Drawer (FDP-8)
+
+`DropdownMenu` portals to `document.body` at `--z-dropdown` (1000). `Modal` and `Drawer` portal
+to `document.body` too, but at `--z-modal` (1300) — and critically, their full-screen backdrop
+lives *inside* that same higher stacking context. Since all these portals are siblings under
+`document.body`, the backdrop (z-1300) paints over the entire viewport above the dropdown
+(z-1000) **regardless of DOM/mount order**, making a `DropdownMenu` opened from inside a
+`Modal`/`Drawer` invisible and unclickable everywhere on screen.
+
+This shipped for real in FDP-6: `MobileNav`'s theme switcher reused the header's `ThemeToggle`
+(a `DropdownMenu`) inside the mobile menu `Modal`, so it was effectively broken — the user's
+report was "I can't switch themes on mobile." Fixed in FDP-8 by giving the drawer its own inline
+theme control (`ThemeSwitcher` in `mobile-nav.tsx`, a plain segmented-control `<button>` group,
+no portal) instead of nesting the dropdown-based one. **When a control needs to live inside a
+`Modal`/`Drawer`, prefer an inline control over anything portal-based** (`DropdownMenu`,
+`Tooltip`, another `Modal`); if a nested overlay is unavoidable, it needs a higher z-index than
+its parent, layered correctly relative to that parent's backdrop specifically, not just the
+parent's own panel.
 
 ## Known ESLint friction (React Compiler rules)
 

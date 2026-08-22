@@ -65,6 +65,15 @@
   --color-surface-subtle: var(--color-neutral-50);
   --color-surface-raised: var(--color-neutral-0);
 
+  /* Neutral interactive surface (secondary buttons, hover/highlight states, badges,
+     skeletons) — anything that used to reach for the raw `neutral-100/200/300` scale
+     directly stayed light-gray in dark mode (the raw scale is never re-pointed below),
+     which is exactly the near-invisible-text-on-light-chip bug found in FDP-8. Always use
+     this 3-step alias instead of a raw `bg-neutral-*` class for an interactive surface. */
+  --color-secondary: var(--color-neutral-100);
+  --color-secondary-hover: var(--color-neutral-200);
+  --color-secondary-active: var(--color-neutral-300);
+
   --color-border: var(--color-neutral-200);
   --color-border-strong: var(--color-neutral-300);
 
@@ -136,6 +145,10 @@
   --dark-surface-subtle: var(--color-neutral-900);
   --dark-surface-raised: var(--color-neutral-800);
 
+  --dark-secondary: var(--color-neutral-800);
+  --dark-secondary-hover: var(--color-neutral-700);
+  --dark-secondary-active: var(--color-neutral-600);
+
   --dark-border: var(--color-neutral-700);
   --dark-border-strong: var(--color-neutral-600);
 
@@ -171,6 +184,10 @@
     --color-surface-subtle: var(--dark-surface-subtle);
     --color-surface-raised: var(--dark-surface-raised);
 
+    --color-secondary: var(--dark-secondary);
+    --color-secondary-hover: var(--dark-secondary-hover);
+    --color-secondary-active: var(--dark-secondary-active);
+
     --color-border: var(--dark-border);
     --color-border-strong: var(--dark-border-strong);
 
@@ -200,6 +217,10 @@
   --color-surface: var(--dark-surface);
   --color-surface-subtle: var(--dark-surface-subtle);
   --color-surface-raised: var(--dark-surface-raised);
+
+  --color-secondary: var(--dark-secondary);
+  --color-secondary-hover: var(--dark-secondary-hover);
+  --color-secondary-active: var(--dark-secondary-active);
 
   --color-border: var(--dark-border);
   --color-border-strong: var(--dark-border-strong);

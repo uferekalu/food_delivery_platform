@@ -192,12 +192,14 @@ cover keyboard interaction, not just rendering.
 Built in FDP-2 (Tier 1 — universal atoms + forms + feedback + basic navigation/layout):
 Button, IconButton, Badge, Avatar, Link, Divider, Container, Label, Input, Textarea, Checkbox,
 RadioGroup, Select, Switch, FormField, Spinner, Skeleton, Alert, Modal, Toast (+provider+hook),
-Card, Tabs, Tooltip, DropdownMenu, Breadcrumbs, Pagination, EmptyState, ThemeToggle.
+Card, Tabs, Tooltip, DropdownMenu, Breadcrumbs, Pagination, EmptyState, ThemeToggle. Drawer
+added in FDP-8 (mobile nav — see §"Never nest a DropdownMenu-based control inside Modal/Drawer"
+in `frontend/CLAUDE.md` for why it's a separate component from `Modal` rather than a variant).
 
 Deliberately deferred to the phase that first needs them, so they're built against real data
 shapes instead of speculative ones: Accordion (restaurant details, FDP-5), ImageDropzone
 (Cloudinary upload, FDP-5), DatePicker/TimeRangePicker (opening hours, FDP-5), Stepper (order
-tracking, FDP-7), Rating (reviews, FDP-10), DataTable (admin, FDP-12), Combobox/ContextMenu/
+tracking, FDP-10), Rating (reviews, FDP-13), DataTable (admin, FDP-15), Combobox/ContextMenu/
 Slider (built when a concrete screen needs one).
 
 ## 9. Realtime
