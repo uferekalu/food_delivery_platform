@@ -18,6 +18,7 @@ import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { canOwnerTransition } from './order-state-machine';
 import type { OrderStatus } from './schemas/order-status';
+import type { PaymentProvider } from '../payments/payment-provider';
 
 // Statuses a restaurant owner still needs to act on — what their "live order queue" shows.
 // Excludes PENDING_PAYMENT (not actionable until FDP-14's webhook moves it to PLACED) and every
@@ -228,6 +229,63 @@ export class OrdersService {
       at: new Date(),
       by: requester.sub,
     });
+    await order.save();
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    return order;
+  }
+
+  /** Records which provider/reference an in-flight payment attempt is using — called right
+   * after `PaymentsService` creates the provider-hosted checkout session, before the customer
+   * has actually paid, so a later webhook delivery can look the order back up by reference. */
+  async setPaymentRef(
+    order: OrderDocument,
+    provider: PaymentProvider,
+    paymentRef: string,
+  ): Promise<OrderDocument> {
+    order.paymentProvider = provider;
+    order.paymentRef = paymentRef;
+    return order.save();
+  }
+
+  findByPaymentRef(reference: string): Promise<OrderDocument | null> {
+    return this.orderModel.findOne({ paymentRef: reference }).exec();
+  }
+
+  /**
+   * The *only* place `PENDING_PAYMENT` → `PLACED` happens (see order-state-machine.ts) —
+   * called exclusively from `PaymentsService` after a webhook signature has been verified.
+   * Idempotent: providers retry webhook delivery, and a second delivery for an order that's
+   * already past `PENDING_PAYMENT` is a silent no-op, not an error.
+   */
+  async markPaidFromWebhook(orderId: string): Promise<OrderDocument | null> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) return null;
+    if (order.status !== 'PENDING_PAYMENT') return order;
+
+    order.paymentStatus = 'succeeded';
+    order.status = 'PLACED';
+    order.statusHistory.push({
+      status: 'PLACED',
+      at: new Date(),
+      by: 'system',
+    });
+    await order.save();
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    return order;
+  }
+
+  /** A failed/declined payment attempt — the order stays in `PENDING_PAYMENT` so the customer
+   * can retry (possibly with a different provider), it just stops looking like a silent hang. */
+  async markPaymentFailed(orderId: string): Promise<OrderDocument | null> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) return null;
+    // Never downgrade a payment that another (successful) webhook already confirmed — provider
+    // webhook delivery order isn't guaranteed.
+    if (order.paymentStatus === 'succeeded') return order;
+
+    order.paymentStatus = 'failed';
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);

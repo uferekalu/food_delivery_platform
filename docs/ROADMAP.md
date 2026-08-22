@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-22**
+**Next available ticket number: FDP-23**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -26,7 +26,7 @@ Update the number above every time a new ticket branch is created (the
 | FDP-11 | `checkout` | Checkout form (inline delivery address entry, delivery instructions, ASAP vs. scheduled — native `<input type="datetime-local">`, matching the native-input precedent already set for opening-hours time fields rather than a custom DatePicker component), promo/coupon code redemption (**new `PromoCode` schema** — gap found against `PRODUCT_GUIDE.md`'s "modern platform" bar, no other phase owns it), order creation (`Order` in `PENDING_PAYMENT` status per `docs/ARCHITECTURE.md` §3 — real payment processing is FDP-14, this phase only creates the order and resolves the default provider), order confirmation + basic order history list | ✅ Done |
 | FDP-12 | `customer-account` | Standalone profile management (name/email/password/avatar) and saved-addresses list (reusing the `Address` shape FDP-11 introduces inline at checkout), **favorites/saved restaurants** — both listed in `PRODUCT_GUIDE.md` §4 but had no owning ticket until the FDP-9 audit added one | ✅ Done |
 | FDP-13 | `orders-realtime` | Order state machine (status transitions beyond the `PENDING_PAYMENT` FDP-11 creates orders in), Socket.IO gateway, order tracking UI with status stepper, restaurant owner's live order queue (accept/reject/prepare/ready) | ✅ Done |
-| FDP-14 | `payments` | Stripe/Paystack/Flutterwave adapters, provider resolver, webhooks, checkout payment UI — this is what actually moves an order out of `PENDING_PAYMENT` | ⬜ Not started |
+| FDP-14 | `payments` | Stripe/Paystack/Flutterwave adapters, provider resolver, webhooks, checkout payment UI — this is what actually moves an order out of `PENDING_PAYMENT` | ✅ Done |
 | FDP-15 | `delivery-rider-tracking` | Rider dashboard, delivery assignment, live Mapbox tracking, **real `DeliveryZone`-based delivery fee calculation** (FDP-11's checkout uses a simple flat-fee placeholder — replace it here once geo/zone data exists) | ⬜ Not started |
 | FDP-16 | `reviews-ratings` | Restaurant + rider reviews/ratings | ⬜ Not started |
 | FDP-17 | `notifications` | Email + in-app + **SMS notifications (Termii)** | ⬜ Not started |

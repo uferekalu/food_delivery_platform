@@ -22,6 +22,11 @@ describe('envValidationSchema', () => {
     CLOUDINARY_CLOUD_NAME: 'test-cloud',
     CLOUDINARY_API_KEY: '123456789',
     CLOUDINARY_API_SECRET: 'test-secret',
+    STRIPE_SECRET_KEY: 'sk_test_dummy',
+    STRIPE_WEBHOOK_SECRET: 'whsec_dummy',
+    PAYSTACK_SECRET_KEY: 'sk_test_dummy',
+    FLUTTERWAVE_SECRET_KEY: 'FLWSECK_TEST-dummy',
+    FLUTTERWAVE_WEBHOOK_HASH: 'dummy-webhook-hash',
   };
 
   it('accepts a fully specified valid environment', () => {
@@ -44,6 +49,11 @@ describe('envValidationSchema', () => {
       CLOUDINARY_CLOUD_NAME: validEnv.CLOUDINARY_CLOUD_NAME,
       CLOUDINARY_API_KEY: validEnv.CLOUDINARY_API_KEY,
       CLOUDINARY_API_SECRET: validEnv.CLOUDINARY_API_SECRET,
+      STRIPE_SECRET_KEY: validEnv.STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET: validEnv.STRIPE_WEBHOOK_SECRET,
+      PAYSTACK_SECRET_KEY: validEnv.PAYSTACK_SECRET_KEY,
+      FLUTTERWAVE_SECRET_KEY: validEnv.FLUTTERWAVE_SECRET_KEY,
+      FLUTTERWAVE_WEBHOOK_HASH: validEnv.FLUTTERWAVE_WEBHOOK_HASH,
     }) as {
       error: unknown;
       value: ValidatedEnv & { JWT_ACCESS_EXPIRES_IN: string };

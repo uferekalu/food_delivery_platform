@@ -461,4 +461,102 @@ describe('OrdersService', () => {
       expect(updated.status).toBe('ACCEPTED_BY_RESTAURANT');
     });
   });
+
+  describe('payment webhook flow', () => {
+    it('setPaymentRef records the provider/reference without changing status', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      const updated = await ordersService.setPaymentRef(
+        order,
+        'stripe',
+        'cs_test_abc123',
+      );
+
+      expect(updated.paymentProvider).toBe('stripe');
+      expect(updated.paymentRef).toBe('cs_test_abc123');
+      expect(updated.status).toBe('PENDING_PAYMENT');
+    });
+
+    it('findByPaymentRef finds the order that ref was set on', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+      await ordersService.setPaymentRef(order, 'stripe', 'cs_test_xyz');
+
+      const found = await ordersService.findByPaymentRef('cs_test_xyz');
+      expect(found?._id.toString()).toBe(order._id.toString());
+
+      const notFound = await ordersService.findByPaymentRef('nope');
+      expect(notFound).toBeNull();
+    });
+
+    it('markPaidFromWebhook moves PENDING_PAYMENT to PLACED and is idempotent on replay', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      const first = await ordersService.markPaidFromWebhook(
+        order._id.toString(),
+      );
+      expect(first?.status).toBe('PLACED');
+      expect(first?.paymentStatus).toBe('succeeded');
+      expect(first?.statusHistory.at(-1)).toMatchObject({
+        status: 'PLACED',
+        by: 'system',
+      });
+
+      // A retried webhook delivery for the same (already-paid) order must not double-transition
+      // or duplicate the status history entry.
+      const second = await ordersService.markPaidFromWebhook(
+        order._id.toString(),
+      );
+      expect(second?.status).toBe('PLACED');
+      expect(second?.statusHistory).toHaveLength(2); // PENDING_PAYMENT, PLACED — not 3
+
+      expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it('markPaidFromWebhook returns null for an unknown order id', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const missingId = restaurant._id.toString(); // any valid-shaped id that isn't an order
+      const result = await ordersService.markPaidFromWebhook(missingId);
+      expect(result).toBeNull();
+    });
+
+    it('markPaymentFailed sets paymentStatus without changing order status', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      const updated = await ordersService.markPaymentFailed(
+        order._id.toString(),
+      );
+      expect(updated?.paymentStatus).toBe('failed');
+      expect(updated?.status).toBe('PENDING_PAYMENT'); // stays retryable
+    });
+
+    it('markPaymentFailed never downgrades an already-succeeded payment', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+      await ordersService.markPaidFromWebhook(order._id.toString());
+
+      const updated = await ordersService.markPaymentFailed(
+        order._id.toString(),
+      );
+      expect(updated?.paymentStatus).toBe('succeeded');
+    });
+  });
 });

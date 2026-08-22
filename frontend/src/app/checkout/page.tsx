@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,13 +16,20 @@ import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useToast } from "@/components/ui/toast";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetCartQuery } from "@/lib/redux/services/cart-api";
 import { useCreateOrderMutation } from "@/lib/redux/services/orders-api";
 import { useValidatePromoCodeMutation } from "@/lib/redux/services/promo-codes-api";
 import { useListAddressesQuery } from "@/lib/redux/services/account-api";
+import { useGetPaymentProvidersQuery, useInitiatePaymentMutation } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import type { PaymentProvider } from "@/lib/redux/restaurant-types";
+
+const PROVIDER_LABELS: Record<PaymentProvider, string> = {
+  stripe: "Card (Stripe)",
+  paystack: "Paystack",
+  flutterwave: "Flutterwave",
+};
 
 // Mirrors backend/src/orders/orders.service.ts's DELIVERY_FEE_RATE/SERVICE_FEE_RATE — a
 // client-side preview only. The authoritative fees/total are always whatever the created
@@ -68,17 +74,20 @@ interface AppliedPromo {
 }
 
 function CheckoutForm() {
-  const router = useRouter();
-  const { toast } = useToast();
   const { data: cart, isLoading: isLoadingCart } = useGetCartQuery();
   const { data: savedAddresses } = useListAddressesQuery();
+  const { data: availableProviders } = useGetPaymentProvidersQuery(cart?.currency ?? "", {
+    skip: !cart?.currency,
+  });
   const [createOrder, { isLoading: isPlacingOrder }] = useCreateOrderMutation();
+  const [initiatePayment, { isLoading: isStartingPayment }] = useInitiatePaymentMutation();
   const [validatePromoCode, { isLoading: isValidatingPromo }] = useValidatePromoCodeMutation();
 
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | undefined>(undefined);
 
   const {
     register,
@@ -145,8 +154,11 @@ function CheckoutForm() {
         scheduledFor: values.timing === "scheduled" && values.scheduledFor ? new Date(values.scheduledFor).toISOString() : undefined,
         promoCode: appliedPromo?.code,
       }).unwrap();
-      toast({ title: "Order placed", description: `Order ${order.orderNumber} is on its way to being confirmed.`, variant: "success" });
-      router.push(`/orders/${order._id}`);
+
+      const payment = await initiatePayment({ orderId: order._id, provider: selectedProvider }).unwrap();
+      // A hard navigation, not router.push — the payment provider's hosted checkout page lives
+      // on a different origin entirely.
+      window.location.href = payment.redirectUrl;
     } catch (err) {
       setSubmitError(getErrorMessage(err, "Couldn't place your order"));
     }
@@ -293,6 +305,25 @@ function CheckoutForm() {
           </CardContent>
         </Card>
 
+        {availableProviders && availableProviders.length > 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment method</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup
+                label="Payment method"
+                value={selectedProvider ?? availableProviders[0]}
+                onChange={(value) => setSelectedProvider(value as PaymentProvider)}
+              >
+                {availableProviders.map((provider) => (
+                  <RadioOption key={provider} value={provider} label={PROVIDER_LABELS[provider]} />
+                ))}
+              </RadioGroup>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>Order summary</CardTitle>
@@ -347,7 +378,7 @@ function CheckoutForm() {
           </CardContent>
         </Card>
 
-        <Button type="submit" isLoading={isPlacingOrder} size="lg">
+        <Button type="submit" isLoading={isPlacingOrder || isStartingPayment} size="lg">
           Place order
         </Button>
       </form>

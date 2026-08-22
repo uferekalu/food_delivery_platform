@@ -13,8 +13,8 @@ export function Footer() {
 
   return (
     <footer className="border-t border-border bg-surface-subtle">
-      <Container className="flex flex-col gap-10 py-12">
-        <div className="flex flex-col gap-10 sm:flex-row sm:justify-between">
+      <Container className="flex flex-col gap-8 py-8">
+        <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="flex max-w-sm flex-col gap-3">
             <NextLink href="/restaurants" className="flex items-center gap-2">
               <Logo className="size-8" />
@@ -61,7 +61,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-text-muted">© {year} Food Delivery Platform. All rights reserved.</p>
           <p className="text-xs text-text-muted">Built for fast, reliable delivery — everywhere we operate.</p>
         </div>

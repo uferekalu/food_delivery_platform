@@ -1,0 +1,230 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { BadRequestException } from '@nestjs/common';
+import { PaymentsService } from './payments.service';
+import { OrdersService } from '../orders/orders.service';
+import { PaymentProviderResolver } from './provider-resolver';
+import { StripeAdapter } from './adapters/stripe.adapter';
+import { PaystackAdapter } from './adapters/paystack.adapter';
+import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
+
+describe('PaymentsService', () => {
+  let service: PaymentsService;
+  let ordersService: jest.Mocked<
+    Pick<
+      OrdersService,
+      | 'findOne'
+      | 'setPaymentRef'
+      | 'findByPaymentRef'
+      | 'markPaidFromWebhook'
+      | 'markPaymentFailed'
+    >
+  >;
+  let providerResolver: jest.Mocked<Pick<PaymentProviderResolver, 'resolve'>>;
+  let stripeAdapter: { initiate: jest.Mock; handleWebhook: jest.Mock };
+  let paystackAdapter: { initiate: jest.Mock; handleWebhook: jest.Mock };
+
+  const user = {
+    sub: 'customer-1',
+    email: 'jane@example.com',
+    role: 'customer',
+  } as const;
+
+  beforeEach(async () => {
+    ordersService = {
+      findOne: jest.fn(),
+      setPaymentRef: jest.fn(),
+      findByPaymentRef: jest.fn(),
+      markPaidFromWebhook: jest.fn(),
+      markPaymentFailed: jest.fn(),
+    };
+    providerResolver = { resolve: jest.fn() };
+    stripeAdapter = { initiate: jest.fn(), handleWebhook: jest.fn() };
+    paystackAdapter = { initiate: jest.fn(), handleWebhook: jest.fn() };
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        { provide: OrdersService, useValue: ordersService },
+        { provide: PaymentProviderResolver, useValue: providerResolver },
+        {
+          provide: ConfigService,
+          useValue: { getOrThrow: () => 'http://localhost:3000' },
+        },
+        { provide: StripeAdapter, useValue: stripeAdapter },
+        { provide: PaystackAdapter, useValue: paystackAdapter },
+        {
+          provide: FlutterwaveAdapter,
+          useValue: { initiate: jest.fn(), handleWebhook: jest.fn() },
+        },
+      ],
+    }).compile();
+
+    service = moduleRef.get(PaymentsService);
+  });
+
+  describe('initiatePayment', () => {
+    it('rejects an order that is not PENDING_PAYMENT', async () => {
+      ordersService.findOne.mockResolvedValue({
+        status: 'PLACED',
+      } as never);
+
+      await expect(service.initiatePayment(user, 'order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it("initiates against the order's default provider and records the payment ref", async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'stripe',
+        orderNumber: 'ORD-1',
+        total: 25,
+        currency: 'USD',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      stripeAdapter.initiate.mockResolvedValue({
+        redirectUrl: 'https://checkout.stripe.com/session/abc',
+        reference: 'cs_test_abc',
+      });
+
+      const result = await service.initiatePayment(user, 'order-1');
+
+      expect(result.redirectUrl).toBe(
+        'https://checkout.stripe.com/session/abc',
+      );
+      expect(stripeAdapter.initiate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderId: 'order-1',
+          orderNumber: 'ORD-1',
+          amount: 25,
+          currency: 'USD',
+          customerEmail: 'jane@example.com',
+        }),
+      );
+      expect(ordersService.setPaymentRef).toHaveBeenCalledWith(
+        order,
+        'stripe',
+        'cs_test_abc',
+      );
+    });
+
+    it('rejects a provider override the currency does not support', async () => {
+      ordersService.findOne.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        currency: 'NGN',
+      } as never);
+      providerResolver.resolve.mockReturnValue(['paystack', 'flutterwave']);
+
+      await expect(
+        service.initiatePayment(user, 'order-1', 'stripe'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('honors a valid provider override', async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        orderNumber: 'ORD-1',
+        total: 5000,
+        currency: 'NGN',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      providerResolver.resolve.mockReturnValue(['paystack', 'flutterwave']);
+      paystackAdapter.initiate.mockResolvedValue({
+        redirectUrl: 'https://checkout.paystack.com/abc',
+        reference: 'ORD-1-abcd',
+      });
+
+      await service.initiatePayment(user, 'order-1', 'paystack');
+
+      expect(paystackAdapter.initiate).toHaveBeenCalled();
+      expect(ordersService.setPaymentRef).toHaveBeenCalledWith(
+        order,
+        'paystack',
+        'ORD-1-abcd',
+      );
+    });
+
+    it("wraps a raw adapter error (e.g. the provider's own API rejection) as a BadRequestException instead of letting it surface as a 500", async () => {
+      // Found via live testing against the real Stripe API (FDP-14): a tiny order total
+      // triggers Stripe's ~$0.50 minimum-charge rejection, which previously bubbled up as an
+      // opaque "Internal server error".
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'stripe',
+        orderNumber: 'ORD-1',
+        total: 0.01,
+        currency: 'USD',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      stripeAdapter.initiate.mockRejectedValue(
+        new Error(
+          "The Checkout Session's total amount must convert to at least 50 cents.",
+        ),
+      );
+
+      await expect(service.initiatePayment(user, 'order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(ordersService.setPaymentRef).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleWebhook', () => {
+    it('does nothing for an unverifiable event', async () => {
+      stripeAdapter.handleWebhook.mockResolvedValue(null);
+
+      await service.handleWebhook('stripe', Buffer.from('{}'), 'bad-sig');
+
+      expect(ordersService.findByPaymentRef).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the reference matches no order', async () => {
+      stripeAdapter.handleWebhook.mockResolvedValue({
+        reference: 'cs_test_unknown',
+        success: true,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue(null);
+
+      await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
+    });
+
+    it('marks the order paid on a successful event', async () => {
+      stripeAdapter.handleWebhook.mockResolvedValue({
+        reference: 'cs_test_abc',
+        success: true,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+      } as never);
+
+      await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.markPaidFromWebhook).toHaveBeenCalledWith('order-1');
+      expect(ordersService.markPaymentFailed).not.toHaveBeenCalled();
+    });
+
+    it('marks the order failed on a failed event', async () => {
+      stripeAdapter.handleWebhook.mockResolvedValue({
+        reference: 'cs_test_abc',
+        success: false,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+      } as never);
+
+      await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.markPaymentFailed).toHaveBeenCalledWith('order-1');
+      expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
+    });
+  });
+});
