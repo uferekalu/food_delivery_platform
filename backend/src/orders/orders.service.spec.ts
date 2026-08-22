@@ -9,6 +9,12 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
+import {
+  DeliveryZone,
+  DeliveryZoneDocument,
+  DeliveryZoneSchema,
+} from '../delivery-zones/schemas/delivery-zone.schema';
 import { Order, OrderDocument, OrderSchema } from './schemas/order.schema';
 import type { OrderStatus } from './schemas/order-status';
 import { Cart, CartDocument, CartSchema } from '../cart/schemas/cart.schema';
@@ -36,11 +42,13 @@ describe('OrdersService', () => {
   let cartService: CartService;
   let restaurantsService: RestaurantsService;
   let promoCodesService: PromoCodesService;
+  let deliveryZonesService: DeliveryZonesService;
   let realtimeGateway: { emitOrderStatusChanged: jest.Mock };
   let restaurantModel: Model<RestaurantDocument>;
   let itemModel: Model<MenuItemDocument>;
   let cartModel: Model<CartDocument>;
   let orderModel: Model<OrderDocument>;
+  let zoneModel: Model<DeliveryZoneDocument>;
 
   const userId = 'customer-id';
   const validAddress = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' };
@@ -60,6 +68,7 @@ describe('OrdersService', () => {
           { name: Restaurant.name, schema: RestaurantSchema },
           { name: MenuItem.name, schema: MenuItemSchema },
           { name: PromoCode.name, schema: PromoCodeSchema },
+          { name: DeliveryZone.name, schema: DeliveryZoneSchema },
         ]),
       ],
       providers: [
@@ -68,6 +77,7 @@ describe('OrdersService', () => {
         RestaurantsService,
         PromoCodesService,
         PaymentProviderResolver,
+        DeliveryZonesService,
         {
           provide: RealtimeGateway,
           useValue: { emitOrderStatusChanged: jest.fn() },
@@ -79,11 +89,13 @@ describe('OrdersService', () => {
     cartService = moduleRef.get(CartService);
     restaurantsService = moduleRef.get(RestaurantsService);
     promoCodesService = moduleRef.get(PromoCodesService);
+    deliveryZonesService = moduleRef.get(DeliveryZonesService);
     realtimeGateway = moduleRef.get(RealtimeGateway);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
     itemModel = moduleRef.get(getModelToken(MenuItem.name));
     cartModel = moduleRef.get(getModelToken(Cart.name));
     orderModel = moduleRef.get(getModelToken(Order.name));
+    zoneModel = moduleRef.get(getModelToken(DeliveryZone.name));
   }, 60_000);
 
   afterEach(async () => {
@@ -92,6 +104,7 @@ describe('OrdersService', () => {
       itemModel.deleteMany({}).exec(),
       cartModel.deleteMany({}).exec(),
       orderModel.deleteMany({}).exec(),
+      zoneModel.deleteMany({}).exec(),
     ]);
   });
 
@@ -100,13 +113,22 @@ describe('OrdersService', () => {
     await mongod.stop();
   });
 
-  async function createApprovedRestaurant(currency = 'NGN') {
+  async function createApprovedRestaurant(
+    currency = 'NGN',
+    address: {
+      line1: string;
+      city: string;
+      state: string;
+      lat?: number;
+      lng?: number;
+    } = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+  ) {
     const restaurant = await restaurantsService.create('owner-id', {
       name: 'Burgundy Kitchen',
       cuisineTypes: ['Nigerian'],
       currency,
       country: 'Nigeria',
-      address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+      address,
     });
     return restaurantsService.approve(restaurant._id.toString());
   }
@@ -157,6 +179,100 @@ describe('OrdersService', () => {
 
     const cartAfter = await cartService.getCart(userId);
     expect(cartAfter.items).toHaveLength(0);
+  });
+
+  describe('delivery fee calculation (FDP-15)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    it('uses zone-based pricing when both restaurant and delivery address have coordinates', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        lat: 6.5,
+        lng: 3.3792,
+      });
+      await deliveryZonesService.create(restaurant._id.toString(), owner, {
+        name: 'Nearby',
+        maxDistanceKm: 20,
+        baseFee: 300,
+        perKmFee: 50,
+      });
+      const item = await createItem(restaurant._id.toString(), 100);
+      await cartService.addItem(userId, { menuItemId: item._id.toString() });
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: {
+          line1: '2 Second St',
+          city: 'Lagos',
+          state: 'Lagos',
+          lat: 6.545,
+          lng: 3.3792,
+        },
+      });
+
+      // ~5.01km at 0.045deg latitude, same longitude — not the flat 10% placeholder (10).
+      expect(order.deliveryFee).toBeGreaterThan(300);
+      expect(order.deliveryFee).not.toBe(10);
+    });
+
+    it('falls back to the flat rate when no zone covers the computed distance', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        lat: 6.5,
+        lng: 3.3792,
+      });
+      await deliveryZonesService.create(restaurant._id.toString(), owner, {
+        name: 'Nearby only',
+        maxDistanceKm: 1,
+        baseFee: 300,
+        perKmFee: 50,
+      });
+      const item = await createItem(restaurant._id.toString(), 100);
+      await cartService.addItem(userId, { menuItemId: item._id.toString() });
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: {
+          line1: '2 Second St',
+          city: 'Lagos',
+          state: 'Lagos',
+          lat: 6.545, // ~5km away, outside the 1km-only zone
+          lng: 3.3792,
+        },
+      });
+
+      expect(order.deliveryFee).toBe(10); // 10% of subtotal 100, the flat fallback
+    });
+
+    it('falls back to the flat rate when the delivery address has no coordinates', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        lat: 6.5,
+        lng: 3.3792,
+      });
+      await deliveryZonesService.create(restaurant._id.toString(), owner, {
+        name: 'Nearby',
+        maxDistanceKm: 20,
+        baseFee: 300,
+        perKmFee: 50,
+      });
+      const item = await createItem(restaurant._id.toString(), 100);
+      await cartService.addItem(userId, { menuItemId: item._id.toString() });
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress, // no lat/lng
+      });
+
+      expect(order.deliveryFee).toBe(10);
+    });
   });
 
   it('resolves Stripe as the default provider for a global currency', async () => {

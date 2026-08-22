@@ -12,6 +12,7 @@ import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
 import { Order, OrderDocument } from './schemas/order.schema';
@@ -30,9 +31,9 @@ const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
   'READY_FOR_PICKUP',
 ];
 
-// Flat placeholder rates — see Order schema for why these aren't real DeliveryZone-based fees
-// yet (docs/ROADMAP.md FDP-15).
-const DELIVERY_FEE_RATE = 0.1;
+// deliveryFee is real distance-based DeliveryZone pricing as of FDP-15 (see
+// DeliveryZonesService.calculateFee) — this flat rate only applies to serviceFee, which is a
+// platform fee unrelated to distance.
 const SERVICE_FEE_RATE = 0.05;
 
 function round2(value: number): number {
@@ -50,6 +51,7 @@ export class OrdersService {
     private readonly promoCodesService: PromoCodesService,
     private readonly paymentProviderResolver: PaymentProviderResolver,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly deliveryZonesService: DeliveryZonesService,
   ) {}
 
   async createOrder(
@@ -104,7 +106,11 @@ export class OrdersService {
     }
 
     const subtotal = cart.subtotal;
-    const deliveryFee = round2(subtotal * DELIVERY_FEE_RATE);
+    const deliveryFee = await this.deliveryZonesService.calculateFee(
+      restaurant,
+      dto.deliveryAddress,
+      subtotal,
+    );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
     const tax = 0;
 

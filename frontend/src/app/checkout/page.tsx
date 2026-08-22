@@ -88,6 +88,27 @@ function CheckoutForm() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | undefined>(undefined);
+  // Real distance-based delivery fees (FDP-15) need lat/lng, not the free-text address fields —
+  // there's no geocoding integration, so this is the only source of real coordinates at
+  // checkout. Kept out of the address zod schema since it's device-derived, not typed.
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "error">("idle");
+
+  function detectLocation() {
+    if (!navigator.geolocation) {
+      setGeoStatus("error");
+      return;
+    }
+    setGeoStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setGeoStatus("idle");
+      },
+      () => setGeoStatus("error"),
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
 
   const {
     register,
@@ -109,6 +130,11 @@ function CheckoutForm() {
     setValue("city", saved.address.city, { shouldValidate: true });
     setValue("state", saved.address.state, { shouldValidate: true });
     setValue("postalCode", saved.address.postalCode ?? "");
+    setCoords(
+      saved.address.lat != null && saved.address.lng != null
+        ? { lat: saved.address.lat, lng: saved.address.lng }
+        : null,
+    );
   }
 
   async function applyPromo() {
@@ -149,6 +175,8 @@ function CheckoutForm() {
           city: values.city,
           state: values.state,
           postalCode: values.postalCode?.trim() || undefined,
+          lat: coords?.lat,
+          lng: coords?.lng,
         },
         deliveryInstructions: values.deliveryInstructions?.trim() || undefined,
         scheduledFor: values.timing === "scheduled" && values.scheduledFor ? new Date(values.scheduledFor).toISOString() : undefined,
@@ -222,6 +250,15 @@ function CheckoutForm() {
                 />
               </FormField>
             )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" isLoading={geoStatus === "loading"} onClick={detectLocation}>
+                Use my current location
+              </Button>
+              {coords && <span className="text-sm text-success">Location detected — real delivery fee will apply</span>}
+              {geoStatus === "error" && (
+                <span className="text-sm text-text-muted">Couldn&apos;t get your location — an estimated fee will apply</span>
+              )}
+            </div>
             <FormField label="Address line 1" error={errors.line1?.message} required>
               <Input {...register("line1")} />
             </FormField>

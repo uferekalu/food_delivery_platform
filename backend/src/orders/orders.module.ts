@@ -5,6 +5,7 @@ import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { MenuItem, MenuItemSchema } from '../menu/schemas/menu-item.schema';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { DeliveryZonesModule } from '../delivery-zones/delivery-zones.module';
 import { Order, OrderSchema } from './schemas/order.schema';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
@@ -20,6 +21,7 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
     RestaurantsModule,
     PromoCodesModule,
     RealtimeModule,
+    DeliveryZonesModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, PaymentProviderResolver],
