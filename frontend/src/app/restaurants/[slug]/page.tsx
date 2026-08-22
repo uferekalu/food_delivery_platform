@@ -76,17 +76,34 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                 {category.items
                   .filter((item) => item.isAvailable)
                   .map((item) => (
-                    <div
-                      key={item._id}
-                      className="flex items-start justify-between gap-4 rounded-lg border border-border p-4"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-text">{item.name}</span>
-                        {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
+                    <div key={item._id} className="flex flex-col gap-2 rounded-lg border border-border p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-text">{item.name}</span>
+                          {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
+                        </div>
+                        <span className="shrink-0 font-semibold text-text">
+                          {restaurant.currency} {item.price.toFixed(2)}
+                        </span>
                       </div>
-                      <span className="shrink-0 font-semibold text-text">
-                        {restaurant.currency} {item.price.toFixed(2)}
-                      </span>
+                      {item.modifierGroups.length > 0 && (
+                        <div className="flex flex-col gap-1 border-t border-border pt-2">
+                          {item.modifierGroups.map((group) => (
+                            <div key={group.name} className="text-xs text-text-muted">
+                              <span className="font-medium text-text">{group.name}</span>
+                              {group.min > 0 && <span> (required)</span>}
+                              {": "}
+                              {group.options
+                                .map((option) =>
+                                  option.priceDelta > 0
+                                    ? `${option.name} (+${restaurant.currency} ${option.priceDelta.toFixed(2)})`
+                                    : option.name,
+                                )
+                                .join(", ")}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>

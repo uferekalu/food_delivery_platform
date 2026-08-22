@@ -18,13 +18,16 @@ is only the summary.
 ## Brand
 
 Primary color: **burgundy**. Secondary/surface: **white/neutral**. Full token scale in
-`frontend/src/styles/tokens.ts` once FDP-2 lands — never hardcode brand colors in components.
+`frontend/src/styles/tokens.css` (source of truth) and `frontend/src/styles/tokens.ts` (typed
+accessors) — never hardcode brand colors in components.
 
 ## Non-negotiable rules
 
 1. **Never push directly to `main`/`master`.** Every change goes on
-   `feature/FDP-<number>-<short-description>`, pushed, then handed to the repo owner as a PR
-   to review and merge. Next ticket number is tracked at the top of `docs/ROADMAP.md`.
+   `feature/FDP-<number>-<short-description>`, pushed, then opened as a PR against `main`. As
+   of 2026-08-17, Claude merges these PRs itself (squash, delete branch) rather than leaving
+   them for manual review — see `docs/ENGINEERING_RULES.md` for the full standing instruction
+   and why. Next ticket number is tracked at the top of `docs/ROADMAP.md`.
 2. **No secrets committed.** Ever. Real values live in local `.env` (gitignored) or in
    Vercel/Render project settings. Document required vars in `.env.example`.
 3. **No hardcoded design values in the frontend.** Colors/spacing/type/radius come from
@@ -39,8 +42,8 @@ Primary color: **burgundy**. Secondary/surface: **white/neutral**. Full token sc
 ## Repo structure
 
 ```
-backend/     NestJS API — see backend/CLAUDE.md once scaffolded (FDP-3)
-frontend/    Next.js app — see frontend/CLAUDE.md once scaffolded (FDP-2)
+backend/     NestJS API — see backend/CLAUDE.md
+frontend/    Next.js app — see frontend/CLAUDE.md
 docs/        Product guide, architecture, roadmap, engineering rules
 .claude/     Project skills (e.g. new-feature-branch)
 ```
