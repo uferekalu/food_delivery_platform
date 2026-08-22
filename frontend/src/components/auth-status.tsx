@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useLogoutMutation } from "@/lib/redux/services/auth-api";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
 
 export interface AuthStatusProps {
   /** "stacked" is used inside the mobile nav menu — full-width, vertically stacked controls. */
@@ -42,10 +43,17 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
         >
           My orders
         </NextLink>
-        <span className={cn("truncate text-sm text-text-muted", stacked && "py-1")}>
-          Hi, {user.name}
-          {!user.isEmailVerified && <span className="ml-1 text-warning">(unverified)</span>}
-        </span>
+        <NextLink
+          href="/account"
+          onClick={onNavigate}
+          className={cn("flex min-w-0 items-center gap-2 text-sm text-text-muted hover:text-text", stacked && "py-1")}
+        >
+          <Avatar src={user.avatarUrl} name={user.name} size="sm" />
+          <span className="truncate">
+            {user.name}
+            {!user.isEmailVerified && <span className="ml-1 text-warning">(unverified)</span>}
+          </span>
+        </NextLink>
         <Button
           variant="ghost"
           size="sm"

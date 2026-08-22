@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Pagination } from "@/components/ui/pagination";
 import { Alert } from "@/components/ui/alert";
+import { FavoriteButton } from "@/components/favorite-button";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 
 export default function RestaurantsPage() {
@@ -48,10 +49,11 @@ export default function RestaurantsPage() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data.items.map((restaurant) => (
-              <NextLink key={restaurant._id} href={`/restaurants/${restaurant.slug}`}>
-                <Card className="h-full transition-colors duration-150 hover:border-border-strong">
+              <Card key={restaurant._id} className="relative h-full transition-colors duration-150 hover:border-border-strong">
+                <FavoriteButton restaurantId={restaurant._id} className="absolute top-3 right-3 z-10" />
+                <NextLink href={`/restaurants/${restaurant.slug}`} className="block h-full">
                   <CardHeader>
-                    <CardTitle>{restaurant.name}</CardTitle>
+                    <CardTitle className="pr-10">{restaurant.name}</CardTitle>
                     <CardDescription>
                       {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)}
                     </CardDescription>
@@ -66,8 +68,8 @@ export default function RestaurantsPage() {
                       </Badge>
                     ))}
                   </CardContent>
-                </Card>
-              </NextLink>
+                </NextLink>
+              </Card>
             ))}
           </div>
           <Pagination page={page} totalPages={data.totalPages} onChange={setPage} className="self-center" />

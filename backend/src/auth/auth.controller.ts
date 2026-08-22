@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -19,6 +20,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AccessTokenPayload } from './interfaces/jwt-payload.interface';
@@ -97,6 +99,7 @@ export class AuthController {
       name: user.name,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
+      avatarUrl: user.avatarUrl,
     };
   }
 
@@ -129,6 +132,20 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Patch('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @CurrentUser() currentUser: AccessTokenPayload,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    await this.authService.changePassword(
+      currentUser.sub,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   private readRefreshCookie(req: Request): string {

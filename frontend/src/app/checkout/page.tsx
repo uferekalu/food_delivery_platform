@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { RadioGroup, RadioOption } from "@/components/ui/radio-group";
+import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,6 +22,7 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetCartQuery } from "@/lib/redux/services/cart-api";
 import { useCreateOrderMutation } from "@/lib/redux/services/orders-api";
 import { useValidatePromoCodeMutation } from "@/lib/redux/services/promo-codes-api";
+import { useListAddressesQuery } from "@/lib/redux/services/account-api";
 import { getErrorMessage } from "@/lib/redux/error";
 
 // Mirrors backend/src/orders/orders.service.ts's DELIVERY_FEE_RATE/SERVICE_FEE_RATE — a
@@ -69,6 +71,7 @@ function CheckoutForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: cart, isLoading: isLoadingCart } = useGetCartQuery();
+  const { data: savedAddresses } = useListAddressesQuery();
   const [createOrder, { isLoading: isPlacingOrder }] = useCreateOrderMutation();
   const [validatePromoCode, { isLoading: isValidatingPromo }] = useValidatePromoCodeMutation();
 
@@ -88,6 +91,16 @@ function CheckoutForm() {
     defaultValues: { timing: "asap" },
   });
   const timing = watch("timing");
+
+  function fillFromSavedAddress(addressId: string) {
+    const saved = savedAddresses?.find((a) => a._id === addressId);
+    if (!saved) return;
+    setValue("line1", saved.address.line1, { shouldValidate: true });
+    setValue("line2", saved.address.line2 ?? "");
+    setValue("city", saved.address.city, { shouldValidate: true });
+    setValue("state", saved.address.state, { shouldValidate: true });
+    setValue("postalCode", saved.address.postalCode ?? "");
+  }
 
   async function applyPromo() {
     const code = promoInput.trim();
@@ -185,6 +198,18 @@ function CheckoutForm() {
             <CardDescription>{cart.restaurantName}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            {savedAddresses && savedAddresses.length > 0 && (
+              <FormField label="Use a saved address" hint="Selecting one fills in the fields below — you can still edit them.">
+                <Select
+                  placeholder="Choose a saved address…"
+                  options={savedAddresses.map((a) => ({
+                    value: a._id,
+                    label: `${a.label}${a.isDefault ? " (Default)" : ""} — ${a.address.line1}`,
+                  }))}
+                  onChange={fillFromSavedAddress}
+                />
+              </FormField>
+            )}
             <FormField label="Address line 1" error={errors.line1?.message} required>
               <Input {...register("line1")} />
             </FormField>

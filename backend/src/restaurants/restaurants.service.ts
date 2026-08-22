@@ -90,6 +90,13 @@ export class RestaurantsService {
     return restaurant;
   }
 
+  /** Bulk lookup for a set of ids (e.g. a user's favorites) — silently drops ids that no
+   * longer resolve to a restaurant rather than throwing, since a favorited restaurant could
+   * have been removed after the fact. */
+  findByIds(ids: string[]): Promise<RestaurantDocument[]> {
+    return this.restaurantModel.find({ _id: { $in: ids } }).exec();
+  }
+
   async update(
     id: string,
     requester: AccessTokenPayload,

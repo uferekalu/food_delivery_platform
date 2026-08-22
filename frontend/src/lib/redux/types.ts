@@ -6,6 +6,7 @@ export interface PublicUser {
   name: string;
   role: UserRole;
   isEmailVerified: boolean;
+  avatarUrl: string | null;
 }
 
 export interface AuthResponse {

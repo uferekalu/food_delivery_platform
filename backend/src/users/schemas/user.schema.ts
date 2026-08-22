@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
+import { SavedAddress, SavedAddressSchema } from './saved-address.schema';
 
 export const USER_ROLES = [
   'customer',
@@ -43,6 +44,15 @@ export class User {
 
   @Prop({ default: false })
   isEmailVerified: boolean;
+
+  @Prop({ type: String, default: null })
+  avatarUrl: string | null;
+
+  @Prop({ type: [SavedAddressSchema], default: [] })
+  savedAddresses: SavedAddress[];
+
+  @Prop({ type: [Types.ObjectId], ref: 'Restaurant', default: [] })
+  favoriteRestaurantIds: Types.ObjectId[];
 }
 
 export type UserDocument = HydratedDocument<User>;
