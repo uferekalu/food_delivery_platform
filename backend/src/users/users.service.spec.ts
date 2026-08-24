@@ -215,4 +215,24 @@ describe('UsersService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('countByRole', () => {
+    it('counts every role, including roles with zero users', async () => {
+      await createUser(); // customer
+      await userModel.create({
+        email: 'owner@example.com',
+        passwordHash: 'irrelevant',
+        name: 'An Owner',
+        role: 'restaurant_owner',
+      });
+
+      const counts = await usersService.countByRole();
+      expect(counts).toEqual({
+        customer: 1,
+        restaurant_owner: 1,
+        rider: 0,
+        admin: 0,
+      });
+    });
+  });
 });

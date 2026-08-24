@@ -89,6 +89,25 @@ export class RestaurantsService {
     return restaurant;
   }
 
+  /** Admin-only queue of restaurants awaiting approval — oldest first, same "process in received
+   * order" rationale as the restaurant/rider order queues (docs/ROADMAP.md FDP-20). */
+  findPendingApproval(): Promise<RestaurantDocument[]> {
+    return this.restaurantModel
+      .find({ isApproved: false })
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  /** Feeds the admin analytics overview — how many restaurants are live vs. still awaiting
+   * approval. */
+  async countByApproval(): Promise<{ approved: number; pending: number }> {
+    const [approved, pending] = await Promise.all([
+      this.restaurantModel.countDocuments({ isApproved: true }).exec(),
+      this.restaurantModel.countDocuments({ isApproved: false }).exec(),
+    ]);
+    return { approved, pending };
+  }
+
   findMine(ownerId: string): Promise<RestaurantDocument[]> {
     return this.restaurantModel
       .find({ ownerId })

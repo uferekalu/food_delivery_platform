@@ -36,6 +36,13 @@ export class RestaurantsController {
     return this.restaurantsService.findMine(user.sub);
   }
 
+  // Also declared before `:slug` — same reason as `mine` above.
+  @Roles('admin')
+  @Get('pending')
+  findPendingApproval() {
+    return this.restaurantsService.findPendingApproval();
+  }
+
   @Public()
   @Get(':slug')
   findBySlug(@Param('slug') slug: string) {

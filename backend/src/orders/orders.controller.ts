@@ -33,6 +33,15 @@ export class OrdersController {
     return this.ordersService.findForRestaurant(user, restaurantId);
   }
 
+  // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — admin-only
+  // unrestricted lookup for dispute/refund handling (docs/ROADMAP.md FDP-20), unlike the
+  // ownership-checked `:id` route below.
+  @Roles('admin')
+  @Get('admin/:id')
+  findOneAsAdmin(@Param('id') id: string) {
+    return this.ordersService.adminFindOrThrow(id);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.ordersService.findOne(user.sub, id);

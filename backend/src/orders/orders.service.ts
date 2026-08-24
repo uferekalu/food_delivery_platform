@@ -20,6 +20,7 @@ import { generateOrderNumber } from '../common/utils/order-number';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
+import { ORDER_STATUSES } from './schemas/order-status';
 import type { OrderStatus } from './schemas/order-status';
 import type { PaymentProvider } from '../payments/payment-provider';
 
@@ -326,6 +327,15 @@ export class OrdersService {
       .exec();
   }
 
+  /** Unrestricted lookup for admin tooling (dispute/refund handling, docs/ROADMAP.md FDP-20) —
+   * no ownership check, unlike `findOne`. The caller is responsible for admin-gating (the
+   * `@Roles('admin')` route this backs), not this method. */
+  async adminFindOrThrow(orderId: string): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+    return order;
+  }
+
   /** The restaurant owner's live order queue — orders still awaiting some action from them,
    * oldest first (a queue is processed in the order it was received, not newest-first). */
   async findForRestaurant(
@@ -533,5 +543,67 @@ export class OrdersService {
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyPaymentFailed(order);
     return order;
+  }
+
+  /**
+   * The *only* place `DELIVERED` → `REFUNDED` happens — called exclusively from
+   * `PaymentsService.refundOrder` after the provider adapter has actually reversed the charge
+   * (see `order-state-machine.ts`'s `ORDER_TRANSITIONS`, this edge existed there since FDP-13
+   * but had nothing wired up to actually trigger it until now, docs/ROADMAP.md FDP-20).
+   */
+  async markRefunded(orderId: string): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+
+    order.status = 'REFUNDED';
+    order.paymentStatus = 'refunded';
+    order.statusHistory.push({
+      status: 'REFUNDED',
+      at: new Date(),
+      by: 'admin',
+    });
+    await order.save();
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyOrderStatus(order);
+    return order;
+  }
+
+  /** Platform-wide order stats for the admin analytics overview (docs/ROADMAP.md FDP-20) — one
+   * aggregation covering both the status breakdown and revenue. Revenue is grouped by currency
+   * rather than summed into one number: this platform is genuinely multi-currency (NGN/USD/...
+   * restaurants coexist, docs/ARCHITECTURE.md §4), and summing raw totals across currencies
+   * would produce a meaningless figure. Counts every non-`pending` payment as revenue
+   * (`succeeded` and `refunded` both represent money that was actually collected at some
+   * point) rather than only currently-`succeeded` orders. */
+  async getAnalyticsSummary(): Promise<{
+    totalOrders: number;
+    ordersByStatus: Record<OrderStatus, number>;
+    revenueByCurrency: Record<string, number>;
+  }> {
+    const [totalOrders, statusRows, revenueRows] = await Promise.all([
+      this.orderModel.countDocuments().exec(),
+      this.orderModel
+        .aggregate<{ _id: OrderStatus; count: number }>([
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.orderModel
+        .aggregate<{ _id: string; total: number }>([
+          { $match: { paymentStatus: { $in: ['succeeded', 'refunded'] } } },
+          { $group: { _id: '$currency', total: { $sum: '$total' } } },
+        ])
+        .exec(),
+    ]);
+
+    const ordersByStatus = Object.fromEntries(
+      ORDER_STATUSES.map((status) => [status, 0]),
+    ) as Record<OrderStatus, number>;
+    for (const row of statusRows) ordersByStatus[row._id] = row.count;
+
+    const revenueByCurrency: Record<string, number> = {};
+    for (const row of revenueRows) revenueByCurrency[row._id] = row.total;
+
+    return { totalOrders, ordersByStatus, revenueByCurrency };
   }
 }

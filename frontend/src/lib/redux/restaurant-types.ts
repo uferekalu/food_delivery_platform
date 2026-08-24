@@ -201,6 +201,36 @@ export interface Notification {
   updatedAt: string;
 }
 
+export const DISCOUNT_TYPES = ["percentage", "fixed"] as const;
+export type DiscountType = (typeof DISCOUNT_TYPES)[number];
+
+export interface PromoCode {
+  _id: string;
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount: number | null;
+  restaurantId: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+  usageLimit: number | null;
+  usedCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminAnalytics {
+  orders: {
+    total: number;
+    byStatus: Record<OrderStatus, number>;
+    revenueByCurrency: Record<string, number>;
+  };
+  restaurants: { approved: number; pending: number };
+  riders: { verified: number; pending: number };
+  users: Record<string, number>;
+}
+
 export interface Order {
   _id: string;
   orderNumber: string;

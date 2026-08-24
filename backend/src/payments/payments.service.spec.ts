@@ -18,11 +18,21 @@ describe('PaymentsService', () => {
       | 'findByPaymentRef'
       | 'markPaidFromWebhook'
       | 'markPaymentFailed'
+      | 'adminFindOrThrow'
+      | 'markRefunded'
     >
   >;
   let providerResolver: jest.Mocked<Pick<PaymentProviderResolver, 'resolve'>>;
-  let stripeAdapter: { initiate: jest.Mock; handleWebhook: jest.Mock };
-  let paystackAdapter: { initiate: jest.Mock; handleWebhook: jest.Mock };
+  let stripeAdapter: {
+    initiate: jest.Mock;
+    handleWebhook: jest.Mock;
+    refund: jest.Mock;
+  };
+  let paystackAdapter: {
+    initiate: jest.Mock;
+    handleWebhook: jest.Mock;
+    refund: jest.Mock;
+  };
 
   const user = {
     sub: 'customer-1',
@@ -37,10 +47,20 @@ describe('PaymentsService', () => {
       findByPaymentRef: jest.fn(),
       markPaidFromWebhook: jest.fn(),
       markPaymentFailed: jest.fn(),
+      adminFindOrThrow: jest.fn(),
+      markRefunded: jest.fn(),
     };
     providerResolver = { resolve: jest.fn() };
-    stripeAdapter = { initiate: jest.fn(), handleWebhook: jest.fn() };
-    paystackAdapter = { initiate: jest.fn(), handleWebhook: jest.fn() };
+    stripeAdapter = {
+      initiate: jest.fn(),
+      handleWebhook: jest.fn(),
+      refund: jest.fn(),
+    };
+    paystackAdapter = {
+      initiate: jest.fn(),
+      handleWebhook: jest.fn(),
+      refund: jest.fn(),
+    };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -55,7 +75,11 @@ describe('PaymentsService', () => {
         { provide: PaystackAdapter, useValue: paystackAdapter },
         {
           provide: FlutterwaveAdapter,
-          useValue: { initiate: jest.fn(), handleWebhook: jest.fn() },
+          useValue: {
+            initiate: jest.fn(),
+            handleWebhook: jest.fn(),
+            refund: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -225,6 +249,75 @@ describe('PaymentsService', () => {
 
       expect(ordersService.markPaymentFailed).toHaveBeenCalledWith('order-1');
       expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refundOrder', () => {
+    it("refunds via the order's provider adapter and marks the order refunded", async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      };
+      ordersService.adminFindOrThrow.mockResolvedValue(order as never);
+      stripeAdapter.refund.mockResolvedValue(undefined);
+      ordersService.markRefunded.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      const result = await service.refundOrder('order-1');
+
+      expect(stripeAdapter.refund).toHaveBeenCalledWith('cs_test_abc');
+      expect(ordersService.markRefunded).toHaveBeenCalledWith('order-1');
+      expect(result).toEqual({ status: 'REFUNDED' });
+    });
+
+    it('rejects a refund for an order that is not DELIVERED', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        status: 'PREPARING',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      } as never);
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(stripeAdapter.refund).not.toHaveBeenCalled();
+    });
+
+    it('rejects a refund for an order whose payment never succeeded', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        status: 'DELIVERED',
+        paymentStatus: 'failed',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      } as never);
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(stripeAdapter.refund).not.toHaveBeenCalled();
+    });
+
+    it('wraps a raw adapter refund error as a BadRequestException, and never marks the order refunded', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      } as never);
+      stripeAdapter.refund.mockRejectedValue(
+        new Error('Charge already refunded'),
+      );
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(ordersService.markRefunded).not.toHaveBeenCalled();
     });
   });
 });

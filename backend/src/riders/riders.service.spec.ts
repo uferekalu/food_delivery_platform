@@ -192,4 +192,21 @@ describe('RidersService', () => {
       ridersService.assertVerified(customer._id.toString()),
     ).resolves.toBeDefined();
   });
+
+  describe('countByVerification', () => {
+    it('counts verified and pending riders separately', async () => {
+      const a = await createCustomer();
+      const b = await createCustomer();
+      const riderA = await ridersService.apply(requesterFor(a), {
+        vehicleType: 'bicycle',
+      });
+      await ridersService.apply(requesterFor(b), { vehicleType: 'car' });
+      await ridersService.verify(riderA._id.toString());
+
+      expect(await ridersService.countByVerification()).toEqual({
+        verified: 1,
+        pending: 1,
+      });
+    });
+  });
 });

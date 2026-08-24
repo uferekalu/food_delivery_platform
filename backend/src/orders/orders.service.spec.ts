@@ -683,6 +683,111 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('admin dispute/refund handling (FDP-20)', () => {
+    it('adminFindOrThrow returns an order regardless of who owns it', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+      );
+
+      const found = await ordersService.adminFindOrThrow(order._id.toString());
+      expect(found._id.toString()).toBe(order._id.toString());
+    });
+
+    it('adminFindOrThrow throws NotFoundException for an unknown id', async () => {
+      const restaurant = await createApprovedRestaurant();
+      await expect(
+        ordersService.adminFindOrThrow(restaurant._id.toString()),
+      ).rejects.toThrow('Order not found');
+    });
+
+    it('markRefunded transitions DELIVERED to REFUNDED, records history, and emits a realtime event', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+      );
+
+      const refunded = await ordersService.markRefunded(order._id.toString());
+      expect(refunded.status).toBe('REFUNDED');
+      expect(refunded.paymentStatus).toBe('refunded');
+      expect(refunded.statusHistory.at(-1)).toMatchObject({
+        status: 'REFUNDED',
+        by: 'admin',
+      });
+      expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it('getAnalyticsSummary counts orders by status and sums revenue by currency', async () => {
+      const restaurantNgn = await createApprovedRestaurant('NGN');
+      const restaurantUsd = await createApprovedRestaurant('USD');
+
+      await orderModel.create({
+        orderNumber: 'ORD-A1',
+        customerId: userId,
+        restaurantId: restaurantNgn._id,
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-A2',
+        customerId: userId,
+        restaurantId: restaurantNgn._id,
+        items: [],
+        subtotal: 50,
+        deliveryFee: 5,
+        serviceFee: 2.5,
+        tax: 0,
+        discount: 0,
+        total: 57.5,
+        currency: 'NGN',
+        status: 'PLACED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-A3',
+        customerId: userId,
+        restaurantId: restaurantUsd._id,
+        items: [],
+        subtotal: 20,
+        deliveryFee: 2,
+        serviceFee: 1,
+        tax: 0,
+        discount: 0,
+        total: 23,
+        currency: 'USD',
+        status: 'PENDING_PAYMENT',
+        statusHistory: [],
+        paymentProvider: 'stripe',
+        paymentStatus: 'pending', // not counted as revenue
+        deliveryAddress: validAddress,
+      });
+
+      const summary = await ordersService.getAnalyticsSummary();
+      expect(summary.totalOrders).toBe(3);
+      expect(summary.ordersByStatus.DELIVERED).toBe(1);
+      expect(summary.ordersByStatus.PLACED).toBe(1);
+      expect(summary.ordersByStatus.PENDING_PAYMENT).toBe(1);
+      expect(summary.ordersByStatus.CANCELLED).toBe(0);
+      expect(summary.revenueByCurrency).toEqual({ NGN: 172.5 });
+    });
+  });
+
   describe('rider dispatch (FDP-16)', () => {
     const riderA = 'rider-a-id';
     const riderB = 'rider-b-id';

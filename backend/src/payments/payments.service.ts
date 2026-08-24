@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrdersService } from '../orders/orders.service';
+import type { OrderDocument } from '../orders/schemas/order.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PaymentProviderResolver } from './provider-resolver';
 import type { PaymentProvider } from './payment-provider';
@@ -123,5 +124,43 @@ export class PaymentsService {
     } else {
       await this.ordersService.markPaymentFailed(order._id.toString());
     }
+  }
+
+  /**
+   * Admin-triggered post-delivery refund (docs/ROADMAP.md FDP-20's "dispute/refund handling").
+   * The `DELIVERED` → `REFUNDED` state-machine edge has existed since FDP-13 and every adapter
+   * has implemented `refund()` since FDP-14, but nothing called either until now. Only reachable
+   * for a `DELIVERED` order with a `succeeded` payment — anything else means there's no charge to
+   * reverse (or it was never actually collected).
+   */
+  async refundOrder(orderId: string): Promise<OrderDocument> {
+    const order = await this.ordersService.adminFindOrThrow(orderId);
+    if (order.status !== 'DELIVERED' || order.paymentStatus !== 'succeeded') {
+      throw new BadRequestException(
+        'Only a delivered order with a successful payment can be refunded',
+      );
+    }
+    if (!order.paymentRef) {
+      throw new BadRequestException(
+        'This order has no payment reference to refund',
+      );
+    }
+
+    const adapter = this.getAdapter(order.paymentProvider);
+    try {
+      await adapter.refund(order.paymentRef);
+    } catch (error) {
+      this.logger.error(
+        `${order.paymentProvider} refund failed for order ${orderId}`,
+        error,
+      );
+      const message =
+        error instanceof Error ? error.message : 'Payment provider error';
+      throw new BadRequestException(
+        `Couldn't refund via ${order.paymentProvider}: ${message}`,
+      );
+    }
+
+    return this.ordersService.markRefunded(orderId);
   }
 }

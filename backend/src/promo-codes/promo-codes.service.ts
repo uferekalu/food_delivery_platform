@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PromoCode, PromoCodeDocument } from './schemas/promo-code.schema';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 
 export type PromoCodeValidation =
   | { valid: true; promoCodeId: string; discountAmount: number }
@@ -21,6 +22,16 @@ export class PromoCodesService {
 
   findAll(): Promise<PromoCodeDocument[]> {
     return this.promoCodeModel.find().sort({ createdAt: -1 }).exec();
+  }
+
+  async update(
+    id: string,
+    dto: UpdatePromoCodeDto,
+  ): Promise<PromoCodeDocument> {
+    const promo = await this.promoCodeModel.findById(id).exec();
+    if (!promo) throw new NotFoundException('Promo code not found');
+    Object.assign(promo, dto);
+    return promo.save();
   }
 
   /** Read-only — does not increment `usedCount`. Order creation calls `redeem()` separately,

@@ -5,6 +5,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
   Req,
@@ -14,6 +15,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PaymentsService } from './payments.service';
 import { PaymentProviderResolver } from './provider-resolver';
@@ -45,6 +47,12 @@ export class PaymentsController {
   @Get('providers')
   listProviders(@Query() query: ListProvidersDto) {
     return this.providerResolver.resolve(query.currency);
+  }
+
+  @Roles('admin')
+  @Post(':orderId/refund')
+  refund(@Param('orderId') orderId: string) {
+    return this.paymentsService.refundOrder(orderId);
   }
 
   // Webhook routes: @Public() (providers don't send our access tokens — signature verification

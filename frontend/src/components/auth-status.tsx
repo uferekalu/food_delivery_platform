@@ -45,6 +45,15 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
             Rider dashboard
           </NextLink>
         )}
+        {user.role === "admin" && (
+          <NextLink
+            href="/admin"
+            onClick={onNavigate}
+            className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
+          >
+            Admin dashboard
+          </NextLink>
+        )}
         <NextLink
           href="/orders"
           onClick={onNavigate}
