@@ -38,6 +38,18 @@ export class MailService {
     });
   }
 
+  /** Generic transactional email (order-status updates, etc. — docs/ROADMAP.md FDP-19), as
+   * opposed to the two auth-specific methods above. Same throw-on-failure `send()` underneath;
+   * callers that shouldn't let an email failure block the rest of their flow (e.g.
+   * `NotificationsService`) are responsible for catching it. */
+  async sendNotificationEmail(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
+    await this.send({ to, subject, html });
+  }
+
   private async send(message: {
     to: string;
     subject: string;

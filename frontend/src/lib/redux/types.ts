@@ -7,6 +7,7 @@ export interface PublicUser {
   role: UserRole;
   isEmailVerified: boolean;
   avatarUrl: string | null;
+  phone: string | null;
 }
 
 export interface AuthResponse {

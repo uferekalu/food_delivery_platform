@@ -39,6 +39,7 @@ export interface PublicUser {
   role: string;
   isEmailVerified: boolean;
   avatarUrl: string | null;
+  phone: string | null;
 }
 
 function toPublicUser(user: UserDocument): PublicUser {
@@ -49,6 +50,7 @@ function toPublicUser(user: UserDocument): PublicUser {
     role: user.role,
     isEmailVerified: user.isEmailVerified,
     avatarUrl: user.avatarUrl,
+    phone: user.phone,
   };
 }
 

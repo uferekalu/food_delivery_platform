@@ -6,6 +6,7 @@ import type { Address, Restaurant, SavedAddress } from "../restaurant-types";
 export interface UpdateProfileInput {
   name?: string;
   avatarUrl?: string;
+  phone?: string;
 }
 
 export interface SavedAddressInput {

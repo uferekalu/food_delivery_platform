@@ -38,6 +38,7 @@ export class UsersController {
       role: updated.role,
       isEmailVerified: updated.isEmailVerified,
       avatarUrl: updated.avatarUrl,
+      phone: updated.phone,
     };
   }
 

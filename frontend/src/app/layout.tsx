@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AuthStatus } from "@/components/auth-status";
 import { MobileNav } from "@/components/mobile-nav";
 import { CartDrawer } from "@/components/cart-drawer";
+import { NotificationBell } from "@/components/notification-bell";
 import { Logo } from "@/components/logo";
 import { Footer } from "@/components/footer";
 import { StoreProvider } from "@/lib/redux/store-provider";
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 Restaurants
               </NextLink>
               <div className="flex items-center gap-2">
+                <NotificationBell />
                 <CartDrawer />
                 <div className="hidden items-center gap-3 sm:flex">
                   <AuthStatus />

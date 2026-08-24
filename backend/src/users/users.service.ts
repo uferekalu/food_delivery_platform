@@ -72,6 +72,7 @@ export class UsersService {
     const user = await this.findByIdOrThrow(id);
     if (dto.name !== undefined) user.name = dto.name;
     if (dto.avatarUrl !== undefined) user.avatarUrl = dto.avatarUrl;
+    if (dto.phone !== undefined) user.phone = dto.phone;
     return user.save();
   }
 

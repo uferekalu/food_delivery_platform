@@ -18,6 +18,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
 import { RidersModule } from './riders/riders.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     DeliveryZonesModule,
     RidersModule,
     ReviewsModule,
+    NotificationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -77,7 +77,9 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
   (Cloudinary), rating
 - **Review** — targetType (`restaurant|rider`), targetId, orderId, authorId, rating, comment,
   images[]
-- **Notification** — userId, type, title, body, isRead, channel (`email|inapp`), metadata
+- **Notification** (FDP-19) — userId, type, title, body, isRead, channels[] (`inapp` always +
+  `email`/`sms` appended when that side channel was actually attempted — one row per
+  notification event, not one row per channel), metadata
 - **DeliveryZone** — restaurantId, polygon/radius, baseFee, perKmFee
 - **PromoCode** (FDP-11) — code (unique, uppercase), discountType (`percentage|fixed`),
   discountValue, minOrderAmount?, maxDiscountAmount? (caps a percentage discount), restaurantId?
@@ -218,10 +220,12 @@ do (e.g. a range picker, or a calendar with availability shading).
 
 ## 9. Realtime
 
-Single Socket.IO gateway (`backend/src/realtime/`) with rooms per order (`order:<id>`) and per
-restaurant (`restaurant:<id>`). Events: order status changes, rider location updates,
-restaurant new-order notification. Frontend connects via a shared `useSocket` hook; the
-customer order-tracking page and restaurant dashboard both subscribe to their relevant rooms.
+Single Socket.IO gateway (`backend/src/realtime/`) with rooms per order (`order:<id>`), per
+restaurant (`restaurant:<id>`), and per user (`user:<id>` — every authenticated connection
+joins its own automatically, FDP-19). Events: order status changes, rider location updates,
+restaurant new-order notification, `notification:new` (a fresh in-app notification, pushed live
+to the bell UI). Frontend connects via a shared `useSocket` hook; the customer order-tracking
+page and restaurant dashboard both subscribe to their relevant rooms.
 
 ## 10. Live map tracking
 

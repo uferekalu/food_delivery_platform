@@ -183,6 +183,24 @@ export interface Review {
   updatedAt: string;
 }
 
+export const NOTIFICATION_CHANNELS = ["inapp", "email", "sms"] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
+export type NotificationType = "order_placed" | "order_status" | "new_order" | "payment_failed";
+
+export interface Notification {
+  _id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  isRead: boolean;
+  channels: NotificationChannel[];
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Order {
   _id: string;
   orderNumber: string;

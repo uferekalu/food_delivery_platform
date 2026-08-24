@@ -10,6 +10,7 @@ import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   DeliveryZone,
   DeliveryZoneDocument,
@@ -81,6 +82,12 @@ describe('OrdersService', () => {
         {
           provide: RealtimeGateway,
           useValue: { emitOrderStatusChanged: jest.fn() },
+        },
+        {
+          // Notification delivery (FDP-19) is fire-and-forget from OrdersService — a resolved
+          // mock is enough to keep it from surfacing as an unhandled rejection in these tests.
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
