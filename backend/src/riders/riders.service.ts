@@ -73,6 +73,15 @@ export class RidersService {
     return this.riderModel.find().sort({ createdAt: -1 }).exec();
   }
 
+  /** Feeds the admin analytics overview (docs/ROADMAP.md FDP-20). */
+  async countByVerification(): Promise<{ verified: number; pending: number }> {
+    const [verified, pending] = await Promise.all([
+      this.riderModel.countDocuments({ isVerified: true }).exec(),
+      this.riderModel.countDocuments({ isVerified: false }).exec(),
+    ]);
+    return { verified, pending };
+  }
+
   async verify(riderId: string): Promise<RiderDocument> {
     const rider = await this.riderModel.findById(riderId).exec();
     if (!rider) throw new NotFoundException('Rider not found');

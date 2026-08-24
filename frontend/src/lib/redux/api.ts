@@ -96,6 +96,8 @@ export const api = createApi({
     "Rider",
     "Review",
     "Notification",
+    "PromoCode",
+    "AdminAnalytics",
   ],
   endpoints: () => ({}),
 });

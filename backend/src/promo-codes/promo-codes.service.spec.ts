@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
+import { NotFoundException } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { PromoCodesService } from './promo-codes.service';
@@ -176,5 +177,47 @@ describe('PromoCodesService', () => {
     await service.validate('READONLY', restaurantId, 50);
     const stored = await promoCodeModel.findById(promo._id).exec();
     expect(stored?.usedCount).toBe(0);
+  });
+
+  describe('update', () => {
+    it('deactivates a code — a since-deactivated code then fails validate()', async () => {
+      const promo = await service.create({
+        code: 'DEACTIVATE',
+        discountType: 'fixed',
+        discountValue: 5,
+      });
+
+      const updated = await service.update(promo._id.toString(), {
+        isActive: false,
+      });
+      expect(updated.isActive).toBe(false);
+
+      const result = await service.validate('DEACTIVATE', restaurantId, 50);
+      expect(result).toEqual({
+        valid: false,
+        reason: 'This promo code is no longer active',
+      });
+    });
+
+    it('leaves fields not present in the DTO untouched', async () => {
+      const promo = await service.create({
+        code: 'PARTIAL',
+        discountType: 'fixed',
+        discountValue: 5,
+        usageLimit: 10,
+      });
+
+      const updated = await service.update(promo._id.toString(), {
+        discountValue: 8,
+      });
+      expect(updated.discountValue).toBe(8);
+      expect(updated.usageLimit).toBe(10);
+    });
+
+    it('throws NotFoundException for an unknown id', async () => {
+      await expect(
+        service.update('507f1f77bcf86cd799439099', { isActive: false }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 });

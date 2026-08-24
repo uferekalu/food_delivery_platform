@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PromoCodesService } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 import { ValidatePromoCodeDto } from './dto/validate-promo-code.dto';
 
 @ApiTags('promo-codes')
@@ -20,8 +21,6 @@ export class PromoCodesController {
     );
   }
 
-  // Admin-only creation, API-only for now — same bootstrap pattern as restaurant approval
-  // before FDP-5's owner dashboard existed. A management UI is FDP-18 (admin-dashboard).
   @Roles('admin')
   @Post()
   create(@Body() dto: CreatePromoCodeDto) {
@@ -32,5 +31,11 @@ export class PromoCodesController {
   @Get()
   findAll() {
     return this.promoCodesService.findAll();
+  }
+
+  @Roles('admin')
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdatePromoCodeDto) {
+    return this.promoCodesService.update(id, dto);
   }
 }

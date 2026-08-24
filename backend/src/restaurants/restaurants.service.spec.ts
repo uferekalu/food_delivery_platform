@@ -259,4 +259,28 @@ describe('RestaurantsService', () => {
       expect(approved.isApproved).toBe(true);
     });
   });
+
+  describe('findPendingApproval / countByApproval', () => {
+    it('lists only unapproved restaurants, oldest first, and counts both buckets', async () => {
+      const first = await service.create('owner-id', baseDto);
+      const second = await service.create('owner-id', {
+        ...baseDto,
+        name: 'Second Place',
+      });
+      await service.approve(second._id.toString());
+      const third = await service.create('owner-id', {
+        ...baseDto,
+        name: 'Third Place',
+      });
+
+      const pending = await service.findPendingApproval();
+      expect(pending.map((r) => r._id.toString())).toEqual([
+        first._id.toString(),
+        third._id.toString(),
+      ]);
+
+      const counts = await service.countByApproval();
+      expect(counts).toEqual({ approved: 1, pending: 2 });
+    });
+  });
 });

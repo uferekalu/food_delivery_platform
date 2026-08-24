@@ -84,7 +84,16 @@ export const restaurantsApi = api.injectEndpoints({
         { type: "Restaurant", id },
         { type: "Restaurant", id: "LIST" },
         { type: "MyRestaurants", id },
+        { type: "Restaurant", id: "PENDING" },
       ],
+    }),
+
+    listPendingRestaurants: builder.query<Restaurant[], void>({
+      query: () => "/restaurants/pending",
+      providesTags: (result) =>
+        result
+          ? [...result.map((r) => ({ type: "Restaurant" as const, id: r._id })), { type: "Restaurant" as const, id: "PENDING" }]
+          : [{ type: "Restaurant", id: "PENDING" }],
     }),
   }),
 });
@@ -97,4 +106,5 @@ export const {
   useUpdateRestaurantMutation,
   useToggleRestaurantOpenMutation,
   useApproveRestaurantMutation,
+  useListPendingRestaurantsQuery,
 } = restaurantsApi;

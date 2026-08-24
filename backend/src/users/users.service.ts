@@ -3,7 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
-import { User, UserDocument, UserRole } from './schemas/user.schema';
+import {
+  USER_ROLES,
+  User,
+  UserDocument,
+  UserRole,
+} from './schemas/user.schema';
 import { SavedAddress } from './schemas/saved-address.schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateSavedAddressDto } from './dto/create-saved-address.dto';
@@ -56,6 +61,21 @@ export class UsersService {
 
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.userModel.updateOne({ _id: id }, { passwordHash }).exec();
+  }
+
+  /** Feeds the admin analytics overview (docs/ROADMAP.md FDP-20) — how the user base breaks
+   * down by role. */
+  async countByRole(): Promise<Record<UserRole, number>> {
+    const rows = await this.userModel
+      .aggregate<{ _id: UserRole; count: number }>([
+        { $group: { _id: '$role', count: { $sum: 1 } } },
+      ])
+      .exec();
+    const counts = Object.fromEntries(
+      USER_ROLES.map((role) => [role, 0]),
+    ) as Record<UserRole, number>;
+    for (const row of rows) counts[row._id] = row.count;
+    return counts;
   }
 
   async updateRole(id: string, role: UserRole): Promise<UserDocument | null> {
