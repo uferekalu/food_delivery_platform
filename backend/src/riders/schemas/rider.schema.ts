@@ -29,6 +29,9 @@ export class Rider {
 
   @Prop({ type: Number, default: 0, min: 0, max: 5 })
   rating: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  reviewCount: number;
 }
 
 export type RiderDocument = HydratedDocument<Rider>;

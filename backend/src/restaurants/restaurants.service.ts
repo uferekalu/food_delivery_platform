@@ -136,6 +136,19 @@ export class RestaurantsService {
     return restaurant.save();
   }
 
+  /** Called by ReviewsService after a review is created/changed — recomputed from scratch each
+   * time rather than incrementally updated, since review volume here is low enough that a full
+   * aggregate is simpler and can't drift out of sync (docs/ROADMAP.md FDP-18). */
+  async updateRatingStats(
+    restaurantId: string,
+    avgRating: number,
+    reviewCount: number,
+  ): Promise<void> {
+    await this.restaurantModel
+      .updateOne({ _id: restaurantId }, { avgRating, reviewCount })
+      .exec();
+  }
+
   /** Throws unless the requester owns this restaurant or is a platform admin. */
   assertOwnerOrAdmin(
     restaurant: RestaurantDocument,

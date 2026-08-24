@@ -162,6 +162,23 @@ export interface Rider {
   isOnline: boolean;
   isVerified: boolean;
   rating: number;
+  reviewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const REVIEW_TARGET_TYPES = ["restaurant", "rider"] as const;
+export type ReviewTargetType = (typeof REVIEW_TARGET_TYPES)[number];
+
+export interface Review {
+  _id: string;
+  targetType: ReviewTargetType;
+  targetId: string;
+  orderId: string;
+  authorId: { _id: string; name: string; avatarUrl: string | null };
+  rating: number;
+  comment: string;
+  images: string[];
   createdAt: string;
   updatedAt: string;
 }

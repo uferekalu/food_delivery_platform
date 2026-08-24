@@ -11,8 +11,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { LiveDeliveryMap, type LatLng } from "@/components/live-delivery-map";
+import { ReviewForm } from "@/components/review-form";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
+import { useGetReviewEligibilityQuery } from "@/lib/redux/services/reviews-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
@@ -62,6 +64,22 @@ function formatStatus(status: OrderStatus): string {
     .split("_")
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function OrderReviews({ order }: { order: Order }) {
+  const { data: eligibility, isLoading } = useGetReviewEligibilityQuery(order._id);
+
+  if (isLoading || !eligibility) return null;
+  if (!eligibility.restaurant && !eligibility.rider) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {eligibility.restaurant && (
+        <ReviewForm orderId={order._id} targetType="restaurant" title="Rate this restaurant" />
+      )}
+      {eligibility.rider && <ReviewForm orderId={order._id} targetType="rider" title="Rate your rider" />}
+    </div>
+  );
 }
 
 function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: LatLng | null }) {
@@ -189,6 +207,8 @@ function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: L
           </p>
         </CardContent>
       </Card>
+
+      {order.status === "DELIVERED" && <OrderReviews order={order} />}
     </div>
   );
 }

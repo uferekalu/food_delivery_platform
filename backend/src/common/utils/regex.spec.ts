@@ -18,6 +18,10 @@ describe('escapeRegExp', () => {
     // The escaped string, used as a RegExp source, matches only the literal text — not a
     // catastrophic-backtracking pattern.
     expect(new RegExp(escaped).test('(a+)+')).toBe(true);
-    expect(new RegExp(escaped).test('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!')).toBe(false);
+    expect(
+      new RegExp(escaped).test(
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!',
+      ),
+    ).toBe(false);
   });
 });

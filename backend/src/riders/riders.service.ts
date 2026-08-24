@@ -80,6 +80,17 @@ export class RidersService {
     return rider.save();
   }
 
+  /** Called by ReviewsService after a review is created/changed — recomputed from scratch each
+   * time, same rationale as RestaurantsService.updateRatingStats (docs/ROADMAP.md FDP-18).
+   * Keyed by `userId` (Order.riderId's own convention), not the Rider document's own `_id`. */
+  async updateRatingStats(
+    userId: string,
+    rating: number,
+    reviewCount: number,
+  ): Promise<void> {
+    await this.riderModel.updateOne({ userId }, { rating, reviewCount }).exec();
+  }
+
   /** Throws unless the rider is verified — the gate on self-assigning to an order, not on
    * merely viewing the queue or toggling online (see RidersController). */
   async assertVerified(userId: string): Promise<RiderDocument> {

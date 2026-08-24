@@ -10,6 +10,7 @@ import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ItemDetailModal } from "@/components/item-detail-modal";
 import { FavoriteButton } from "@/components/favorite-button";
+import { ReviewsList } from "@/components/reviews-list";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
@@ -131,6 +132,11 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
           onClose={() => setActiveItem(null)}
         />
       )}
+
+      <div className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold text-text">Reviews</h2>
+        <ReviewsList targetType="restaurant" targetId={restaurant._id} />
+      </div>
     </Container>
   );
 }
