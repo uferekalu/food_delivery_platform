@@ -260,6 +260,123 @@ describe('RestaurantsService', () => {
     });
   });
 
+  describe('discovery filters and sort (FDP-21)', () => {
+    async function createApprovedWith(overrides: {
+      name: string;
+      avgRating?: number;
+      priceLevel?: number;
+      estimatedDeliveryMinutes?: number | null;
+    }) {
+      const created = await service.create('507f1f77bcf86cd799439011', {
+        ...baseDto,
+        name: overrides.name,
+      });
+      await restaurantModel
+        .updateOne(
+          { _id: created._id },
+          {
+            isApproved: true,
+            avgRating: overrides.avgRating ?? 0,
+            ...(overrides.priceLevel !== undefined
+              ? { priceLevel: overrides.priceLevel }
+              : {}),
+            ...(overrides.estimatedDeliveryMinutes !== undefined
+              ? { estimatedDeliveryMinutes: overrides.estimatedDeliveryMinutes }
+              : {}),
+          },
+        )
+        .exec();
+      return created;
+    }
+
+    it('minRating excludes restaurants below the threshold', async () => {
+      await createApprovedWith({ name: 'Low Rated', avgRating: 2 });
+      await createApprovedWith({ name: 'High Rated', avgRating: 4.5 });
+
+      const result = await service.findAllApproved({
+        minRating: 4,
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['High Rated']);
+    });
+
+    it('maxPriceLevel excludes restaurants above the threshold', async () => {
+      await createApprovedWith({ name: 'Cheap', priceLevel: 1 });
+      await createApprovedWith({ name: 'Expensive', priceLevel: 4 });
+
+      const result = await service.findAllApproved({
+        maxPriceLevel: 2,
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['Cheap']);
+    });
+
+    it('maxDeliveryMinutes excludes restaurants above the threshold and those with no estimate at all', async () => {
+      await createApprovedWith({ name: 'Fast', estimatedDeliveryMinutes: 20 });
+      await createApprovedWith({ name: 'Slow', estimatedDeliveryMinutes: 90 });
+      await createApprovedWith({
+        name: 'No Estimate',
+        estimatedDeliveryMinutes: null,
+      });
+
+      const result = await service.findAllApproved({
+        maxDeliveryMinutes: 30,
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['Fast']);
+    });
+
+    it('sort=rating orders highest avgRating first', async () => {
+      await createApprovedWith({ name: 'Mid', avgRating: 3 });
+      await createApprovedWith({ name: 'Top', avgRating: 5 });
+      await createApprovedWith({ name: 'Bottom', avgRating: 1 });
+
+      const result = await service.findAllApproved({
+        sort: 'rating',
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['Top', 'Mid', 'Bottom']);
+    });
+
+    it('sort=price_asc orders cheapest first', async () => {
+      await createApprovedWith({ name: 'Pricey', priceLevel: 4 });
+      await createApprovedWith({ name: 'Budget', priceLevel: 1 });
+
+      const result = await service.findAllApproved({
+        sort: 'price_asc',
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['Budget', 'Pricey']);
+    });
+
+    it('sort=delivery_time excludes restaurants with no estimate and orders fastest first', async () => {
+      await createApprovedWith({
+        name: 'No Estimate',
+        estimatedDeliveryMinutes: null,
+      });
+      await createApprovedWith({
+        name: 'Slower',
+        estimatedDeliveryMinutes: 50,
+      });
+      await createApprovedWith({
+        name: 'Faster',
+        estimatedDeliveryMinutes: 15,
+      });
+
+      const result = await service.findAllApproved({
+        sort: 'delivery_time',
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((r) => r.name)).toEqual(['Faster', 'Slower']);
+    });
+  });
+
   describe('findPendingApproval / countByApproval', () => {
     it('lists only unapproved restaurants, oldest first, and counts both buckets', async () => {
       const first = await service.create('owner-id', baseDto);

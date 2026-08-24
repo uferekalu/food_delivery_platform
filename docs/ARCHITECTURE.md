@@ -57,7 +57,8 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
 - **Address** — label, line1/2, city, state, country, postalCode, lat/lng, isDefault
 - **Restaurant** — ownerId, name, slug, description, logoUrl, coverUrl, address+geo,
   cuisineTypes[], **currency** (ISO 4217 — source of truth for order currency), country,
-  openingHours[], isOpen, isApproved, avgRating
+  openingHours[], isOpen, isApproved, avgRating, priceLevel (1-4, `$`..`$$$$`, FDP-21),
+  estimatedDeliveryMinutes (static owner-set estimate, not a live ETA, FDP-21)
 - **MenuCategory** — restaurantId, name, sortOrder
 - **MenuItem** — restaurantId, categoryId, name, description, price, imageUrl, isAvailable,
   modifierGroups[]

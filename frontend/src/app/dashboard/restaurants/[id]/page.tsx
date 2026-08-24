@@ -44,6 +44,8 @@ function EditRestaurantForm({ id }: { id: string }) {
           postalCode: restaurant.address.postalCode,
           lat: restaurant.address.lat,
           lng: restaurant.address.lng,
+          priceLevel: String(restaurant.priceLevel) as "1" | "2" | "3" | "4",
+          estimatedDeliveryMinutes: restaurant.estimatedDeliveryMinutes ?? undefined,
         }}
         defaultOpeningHours={restaurant.openingHours}
         defaultLogoUrl={restaurant.logoUrl}

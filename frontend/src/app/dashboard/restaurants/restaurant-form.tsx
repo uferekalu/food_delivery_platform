@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -14,6 +15,13 @@ import type { OpeningHour } from "@/lib/redux/restaurant-types";
 import type { RestaurantInput } from "@/lib/redux/services/restaurants-api";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const PRICE_LEVEL_OPTIONS = [
+  { value: "1", label: "$ — Budget" },
+  { value: "2", label: "$$ — Moderate" },
+  { value: "3", label: "$$$ — Pricey" },
+  { value: "4", label: "$$$$ — High-end" },
+];
 
 const schema = z.object({
   name: z.string().min(2, "Too short").max(100),
@@ -33,6 +41,11 @@ const schema = z.object({
   lng: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().min(-180, "Must be between -180 and 180").max(180).optional(),
+  ),
+  priceLevel: z.enum(["1", "2", "3", "4"]),
+  estimatedDeliveryMinutes: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0).optional(),
   ),
 });
 type FormInput = z.input<typeof schema>;
@@ -68,9 +81,13 @@ export function RestaurantForm({
 }: RestaurantFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormInput, unknown, FormValues>({ resolver: zodResolver(schema), defaultValues });
+  } = useForm<FormInput, unknown, FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { priceLevel: "2", ...defaultValues },
+  });
 
   const [hours, setHours] = useState<OpeningHour[]>(
     defaultOpeningHours && defaultOpeningHours.length === 7 ? defaultOpeningHours : defaultHours(),
@@ -102,6 +119,8 @@ export function RestaurantForm({
         lng: values.lng,
       },
       openingHours: hours,
+      priceLevel: Number(values.priceLevel),
+      estimatedDeliveryMinutes: values.estimatedDeliveryMinutes,
       ...(logoUrl ? { logoUrl } : {}),
       ...(coverUrl ? { coverUrl } : {}),
     });
@@ -135,6 +154,25 @@ export function RestaurantForm({
         </FormField>
         <FormField label="Country" error={errors.country?.message} required>
           <Input {...register("country")} />
+        </FormField>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField label="Price level" error={errors.priceLevel?.message} required>
+          <Controller
+            control={control}
+            name="priceLevel"
+            render={({ field }) => (
+              <Select options={PRICE_LEVEL_OPTIONS} value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </FormField>
+        <FormField
+          label="Estimated delivery time"
+          hint="Optional, in minutes — shown to customers browsing"
+          error={errors.estimatedDeliveryMinutes?.message}
+        >
+          <Input type="number" min="0" step="1" {...register("estimatedDeliveryMinutes")} />
         </FormField>
       </div>
 

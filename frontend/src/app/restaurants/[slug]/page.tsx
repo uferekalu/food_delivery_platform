@@ -52,7 +52,8 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
         </div>
         <p className="text-text-muted">
           {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)} ({restaurant.reviewCount}{" "}
-          reviews)
+          reviews) • {"$".repeat(restaurant.priceLevel)}
+          {restaurant.estimatedDeliveryMinutes ? ` • ~${restaurant.estimatedDeliveryMinutes} min` : ""}
         </p>
         {restaurant.description && <p className="max-w-2xl text-text">{restaurant.description}</p>}
         <p className="text-sm text-text-muted">

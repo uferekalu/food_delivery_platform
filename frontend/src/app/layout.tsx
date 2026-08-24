@@ -21,13 +21,28 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const DEFAULT_DESCRIPTION =
+  "Order from local restaurants and track your delivery live, from checkout to your door.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Food Delivery Platform",
     template: "%s | Food Delivery Platform",
   },
-  description:
-    "Technology-driven food ordering and delivery platform connecting customers with restaurants and reliable delivery.",
+  description: DEFAULT_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Food Delivery Platform",
+    title: "Food Delivery Platform",
+    description: DEFAULT_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: "Food Delivery Platform",
+    description: DEFAULT_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

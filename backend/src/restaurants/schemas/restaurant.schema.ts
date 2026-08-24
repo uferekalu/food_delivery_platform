@@ -59,6 +59,16 @@ export class Restaurant {
 
   @Prop({ type: Number, default: 0 })
   reviewCount: number;
+
+  // 1-4 ($ .. $$$$), owner-set at creation — the simplest useful "how expensive is this place"
+  // signal without aggregating live menu item prices (docs/ROADMAP.md FDP-21's discovery filters).
+  @Prop({ type: Number, default: 2, min: 1, max: 4 })
+  priceLevel: number;
+
+  // A static owner-set estimate, not a computed live ETA (that would need real routing/traffic
+  // data, out of scope) — still useful for the "under 30 min" style filter FDP-21 calls for.
+  @Prop({ type: Number, default: null, min: 0 })
+  estimatedDeliveryMinutes: number | null;
 }
 
 export type RestaurantDocument = HydratedDocument<Restaurant>;
@@ -66,4 +76,10 @@ export const RestaurantSchema = SchemaFactory.createForClass(Restaurant);
 // No text index — RestaurantsService.findAllApproved does a case-insensitive $regex substring
 // match instead of $text (word-tokenized $text search couldn't match a partial word like "fd"
 // against "FDP15 Test Kitchen"), so a text index here would just be unused write overhead.
-// docs/ROADMAP.md FDP-21 is where real search-relevance/performance infra would replace this.
+// Compound indexes below cover the common filter+sort combinations the discovery page uses
+// (docs/ROADMAP.md FDP-21) — every public query filters on `isApproved` first, so it leads
+// every compound index here.
+RestaurantSchema.index({ isApproved: 1, avgRating: -1 });
+RestaurantSchema.index({ isApproved: 1, priceLevel: 1 });
+RestaurantSchema.index({ isApproved: 1, estimatedDeliveryMinutes: 1 });
+RestaurantSchema.index({ isApproved: 1, createdAt: -1 });

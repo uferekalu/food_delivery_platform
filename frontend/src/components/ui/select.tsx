@@ -28,6 +28,7 @@ export interface SelectProps {
   id?: string;
   className?: string;
   "aria-describedby"?: string;
+  "aria-label"?: string;
 }
 
 export function Select({
@@ -40,6 +41,7 @@ export function Select({
   id,
   className,
   "aria-describedby": describedByProp,
+  "aria-label": ariaLabel,
 }: SelectProps) {
   const field = useFormFieldContext();
   const selectId = id ?? field?.id;
@@ -167,6 +169,7 @@ export function Select({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-describedby={describedBy}
+        aria-label={ariaLabel}
         onClick={() => (open ? closeList() : openList())}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-md border border-border-strong bg-surface px-3 text-sm text-text",
