@@ -51,6 +51,7 @@ describe('Restaurants + Menu (e2e)', () => {
       .useValue({
         sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
         sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+        sendNotificationEmail: jest.fn().mockResolvedValue(undefined),
       })
       .compile();
 

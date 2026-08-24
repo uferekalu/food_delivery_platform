@@ -16,8 +16,10 @@ import { useUpdateProfileMutation } from "@/lib/redux/services/account-api";
 import { useChangePasswordMutation } from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
 
+const PHONE_RULE = /^\+?[1-9]\d{6,14}$/;
 const profileSchema = z.object({
   name: z.string().min(2, "Enter your full name").max(100),
+  phone: z.union([z.literal(""), z.string().regex(PHONE_RULE, "Enter a valid phone number, digits only")]),
 });
 type ProfileValues = z.infer<typeof profileSchema>;
 
@@ -50,13 +52,14 @@ function ProfileForm() {
     formState: { errors },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { name: user?.name ?? "" },
+    defaultValues: { name: user?.name ?? "", phone: user?.phone ?? "" },
   });
 
   async function submit(values: ProfileValues) {
     try {
       await updateProfile({
         name: values.name,
+        ...(values.phone ? { phone: values.phone } : {}),
         ...(avatarUrl && avatarUrl !== user?.avatarUrl ? { avatarUrl } : {}),
       }).unwrap();
       toast({ title: "Profile updated", variant: "success" });
@@ -78,6 +81,9 @@ function ProfileForm() {
           <ImageUpload label="Photo" folder="avatars" value={avatarUrl} onChange={setAvatarUrl} />
           <FormField label="Full name" error={errors.name?.message} required>
             <Input {...register("name")} />
+          </FormField>
+          <FormField label="Phone" error={errors.phone?.message} hint="Used for SMS delivery updates">
+            <Input type="tel" placeholder="+15551234567" {...register("phone")} />
           </FormField>
           <FormField label="Email">
             <div className="flex items-center gap-2">

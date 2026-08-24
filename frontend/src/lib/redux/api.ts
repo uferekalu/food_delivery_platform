@@ -95,6 +95,7 @@ export const api = createApi({
     "DeliveryZone",
     "Rider",
     "Review",
+    "Notification",
   ],
   endpoints: () => ({}),
 });

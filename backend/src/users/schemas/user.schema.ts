@@ -49,6 +49,12 @@ export class User {
   @Prop({ type: String, default: null })
   avatarUrl: string | null;
 
+  // E.164-ish (optional leading `+`, digits only) — the only channel SMS notifications
+  // (docs/ROADMAP.md FDP-19) can actually reach; null until the user supplies one, since
+  // registration never required a phone number.
+  @Prop({ type: String, default: null, trim: true })
+  phone: string | null;
+
   @Prop({ type: [SavedAddressSchema], default: [] })
   savedAddresses: SavedAddress[];
 

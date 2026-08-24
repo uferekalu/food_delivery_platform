@@ -14,6 +14,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { RidersService } from '../riders/riders.service';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   Order,
   OrderDocument,
@@ -91,6 +92,10 @@ describe('ReviewsService', () => {
         {
           provide: RealtimeGateway,
           useValue: { emitOrderStatusChanged: jest.fn() },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

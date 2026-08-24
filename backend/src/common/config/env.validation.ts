@@ -27,4 +27,12 @@ export const envValidationSchema = Joi.object({
   PAYSTACK_SECRET_KEY: Joi.string().required(),
   FLUTTERWAVE_SECRET_KEY: Joi.string().required(),
   FLUTTERWAVE_WEBHOOK_HASH: Joi.string().required(),
+
+  // Termii (SMS notifications, docs/ROADMAP.md FDP-19) — deliberately optional. No real Termii
+  // account exists for this project yet; SmsService degrades to a no-op log when these are
+  // unset, the same graceful-degradation pattern as NEXT_PUBLIC_MAPBOX_TOKEN (FDP-17).
+  TERMII_API_KEY: Joi.string().optional(),
+  TERMII_BASE_URL: Joi.string().uri().optional(),
+  TERMII_SENDER_ID: Joi.string().optional(),
+  TERMII_CHANNEL: Joi.string().optional(),
 });

@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -19,4 +20,15 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsUrl()
   avatarUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'E.164-ish phone number, used for SMS notifications',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[1-9]\d{6,14}$/, {
+    message:
+      'Enter a valid phone number, digits only (an optional leading + is fine)',
+  })
+  phone?: string;
 }

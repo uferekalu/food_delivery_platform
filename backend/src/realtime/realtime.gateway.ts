@@ -28,6 +28,10 @@ function restaurantRoom(restaurantId: string): string {
   return `restaurant:${restaurantId}`;
 }
 
+function userRoom(userId: string): string {
+  return `user:${userId}`;
+}
+
 /** Statuses where a rider's live position is actually meaningful to broadcast — matches the
  * frontend rider dashboard's own ACTIVE_RIDER_STATUSES (docs/ROADMAP.md FDP-16/17). */
 const ACTIVE_DELIVERY_STATUSES: OrderStatus[] = [
@@ -96,6 +100,10 @@ export class RealtimeGateway implements OnGatewayConnection {
         { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET') },
       );
       client.data.user = payload;
+      // Every authenticated connection joins its own user room unconditionally — unlike
+      // `order:subscribe`/`restaurant:subscribe`, there's no separate ownership check needed
+      // here, since a user always owns their own notification stream.
+      await client.join(userRoom(payload.sub));
     } catch {
       client.disconnect(true);
     }
@@ -187,5 +195,12 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server
       .to(restaurantRoom(order.restaurantId.toString()))
       .emit('restaurant:orderUpdated', order);
+  }
+
+  /** Called by `NotificationsService` right after persisting a new in-app notification
+   * (docs/ROADMAP.md FDP-19), so a connected client's bell updates live instead of only on the
+   * next `listNotifications`/`unreadCount` poll. */
+  emitNotification(userId: string, notification: unknown): void {
+    this.server.to(userRoom(userId)).emit('notification:new', notification);
   }
 }

@@ -100,6 +100,7 @@ export class AuthController {
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       avatarUrl: user.avatarUrl,
+      phone: user.phone,
     };
   }
 

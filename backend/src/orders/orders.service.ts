@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -13,6 +14,7 @@ import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
 import { Order, OrderDocument } from './schemas/order.schema';
@@ -20,6 +22,64 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
 import type { OrderStatus } from './schemas/order-status';
 import type { PaymentProvider } from '../payments/payment-provider';
+
+// Customer-facing copy for each status a notification is sent for — every entry here also
+// gets an in-app row + email; only OUT_FOR_DELIVERY/DELIVERED additionally go out over SMS
+// (docs/ROADMAP.md FDP-19), since those are the two moments customers most want to know about
+// even without opening the app. Statuses with no entry (none currently) simply don't notify.
+const ORDER_STATUS_MESSAGES: Partial<
+  Record<OrderStatus, { title: string; body: (order: OrderDocument) => string }>
+> = {
+  PLACED: {
+    title: 'Order confirmed',
+    body: (order) =>
+      `Your order ${order.orderNumber} has been confirmed and sent to the restaurant.`,
+  },
+  ACCEPTED_BY_RESTAURANT: {
+    title: 'Order accepted',
+    body: (order) =>
+      `Order ${order.orderNumber} has been accepted and will be prepared shortly.`,
+  },
+  PREPARING: {
+    title: 'Order being prepared',
+    body: (order) =>
+      `The restaurant is preparing your order ${order.orderNumber}.`,
+  },
+  READY_FOR_PICKUP: {
+    title: 'Order ready for pickup',
+    body: (order) =>
+      `Your order ${order.orderNumber} is ready and waiting for a rider.`,
+  },
+  ASSIGNED_TO_RIDER: {
+    title: 'Rider assigned',
+    body: (order) =>
+      `A rider has been assigned to deliver order ${order.orderNumber}.`,
+  },
+  PICKED_UP: {
+    title: 'Order picked up',
+    body: (order) =>
+      `Your order ${order.orderNumber} has been picked up and is on its way.`,
+  },
+  OUT_FOR_DELIVERY: {
+    title: 'Out for delivery',
+    body: (order) => `Your order ${order.orderNumber} is out for delivery.`,
+  },
+  DELIVERED: {
+    title: 'Order delivered',
+    body: (order) =>
+      `Your order ${order.orderNumber} has been delivered. Enjoy!`,
+  },
+  CANCELLED: {
+    title: 'Order cancelled',
+    body: (order) => `Your order ${order.orderNumber} has been cancelled.`,
+  },
+  REFUNDED: {
+    title: 'Order refunded',
+    body: (order) => `Your order ${order.orderNumber} has been refunded.`,
+  },
+};
+
+const SMS_NOTIFIED_STATUSES: OrderStatus[] = ['OUT_FOR_DELIVERY', 'DELIVERED'];
 
 // Statuses a restaurant owner still needs to act on — what their "live order queue" shows.
 // Excludes PENDING_PAYMENT (not actionable until FDP-14's webhook moves it to PLACED) and every
@@ -42,6 +102,8 @@ function round2(value: number): number {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(MenuItem.name)
@@ -52,7 +114,80 @@ export class OrdersService {
     private readonly paymentProviderResolver: PaymentProviderResolver,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly deliveryZonesService: DeliveryZonesService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Fire-and-forget: notification delivery (in-app write + best-effort email/SMS) never blocks
+   * or fails an order transition that has already been committed and broadcast. */
+  private notifyOrderStatus(order: OrderDocument): void {
+    const message = ORDER_STATUS_MESSAGES[order.status];
+    if (!message) return;
+    const body = message.body(order);
+
+    this.notificationsService
+      .notify({
+        userId: order.customerId.toString(),
+        type: order.status === 'PLACED' ? 'order_placed' : 'order_status',
+        title: message.title,
+        body,
+        metadata: { orderId: order._id.toString(), status: order.status },
+        email: {
+          subject: `${message.title} — ${order.orderNumber}`,
+          html: `<p>${body}</p>`,
+        },
+        sms: SMS_NOTIFIED_STATUSES.includes(order.status) ? body : undefined,
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Order status notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
+
+  private notifyNewOrderToOwner(order: OrderDocument): void {
+    this.restaurantsService
+      .findByIdOrThrow(order.restaurantId.toString())
+      .then((restaurant) => {
+        const body = `New order ${order.orderNumber} for ${order.currency} ${order.total.toFixed(2)} just came in.`;
+        return this.notificationsService.notify({
+          userId: restaurant.ownerId.toString(),
+          type: 'new_order',
+          title: 'New order received',
+          body,
+          metadata: { orderId: order._id.toString() },
+          email: {
+            subject: `New order — ${order.orderNumber}`,
+            html: `<p>${body}</p>`,
+          },
+        });
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `New-order notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
+
+  private notifyPaymentFailed(order: OrderDocument): void {
+    const body = `We couldn't process payment for order ${order.orderNumber}. Please try again or use a different payment method.`;
+    this.notificationsService
+      .notify({
+        userId: order.customerId.toString(),
+        type: 'payment_failed',
+        title: 'Payment failed',
+        body,
+        metadata: { orderId: order._id.toString() },
+        email: {
+          subject: `Payment failed — ${order.orderNumber}`,
+          html: `<p>${body}</p>`,
+        },
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Payment-failed notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
 
   async createOrder(
     userId: string,
@@ -238,6 +373,7 @@ export class OrdersService {
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyOrderStatus(order);
     return order;
   }
 
@@ -289,6 +425,7 @@ export class OrdersService {
     }
 
     this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyOrderStatus(order);
     return order;
   }
 
@@ -323,6 +460,7 @@ export class OrdersService {
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyOrderStatus(order);
     return order;
   }
 
@@ -375,6 +513,8 @@ export class OrdersService {
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyOrderStatus(order);
+    this.notifyNewOrderToOwner(order);
     return order;
   }
 
@@ -391,6 +531,7 @@ export class OrdersService {
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
+    this.notifyPaymentFailed(order);
     return order;
   }
 }
