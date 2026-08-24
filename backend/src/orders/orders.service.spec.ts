@@ -675,4 +675,200 @@ describe('OrdersService', () => {
       expect(updated?.paymentStatus).toBe('succeeded');
     });
   });
+
+  describe('rider dispatch (FDP-16)', () => {
+    const riderA = 'rider-a-id';
+    const riderB = 'rider-b-id';
+
+    it('findUnassignedForRiders returns only unassigned READY_FOR_PICKUP orders, oldest first', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const ready1 = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+      await createOrderAtStatus(restaurant._id.toString(), 'PREPARING'); // not ready yet
+      const assigned = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+      await orderModel
+        .updateOne({ _id: assigned._id }, { riderId: riderA })
+        .exec(); // already claimed — shouldn't show up
+      const ready2 = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      const queue = await ordersService.findUnassignedForRiders();
+      expect(queue.map((o) => o._id.toString())).toEqual([
+        ready1._id.toString(),
+        ready2._id.toString(),
+      ]);
+    });
+
+    it('assignToRider claims an unassigned order, transitions it, and emits a realtime event', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      const claimed = await ordersService.assignToRider(
+        riderA,
+        order._id.toString(),
+      );
+
+      expect(claimed.riderId?.toString()).toBe(riderA);
+      expect(claimed.status).toBe('ASSIGNED_TO_RIDER');
+      expect(claimed.statusHistory.at(-1)).toMatchObject({
+        status: 'ASSIGNED_TO_RIDER',
+        by: riderA,
+      });
+      expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it('assignToRider rejects a second rider claiming an already-assigned order', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      await ordersService.assignToRider(riderA, order._id.toString());
+
+      await expect(
+        ordersService.assignToRider(riderB, order._id.toString()),
+      ).rejects.toThrow(BadRequestException);
+
+      // The failed second claim must not have disturbed rider A's assignment.
+      const stillMine = await ordersService.findForRider(riderA);
+      expect(
+        stillMine.find((o) => o._id.toString() === order._id.toString()),
+      ).toBeDefined();
+    });
+
+    it('assignToRider rejects an order that is not READY_FOR_PICKUP', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PREPARING',
+      );
+
+      await expect(
+        ordersService.assignToRider(riderA, order._id.toString()),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('assignToRider throws NotFoundException for an unknown order id', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const missingId = restaurant._id.toString();
+      await expect(
+        ordersService.assignToRider(riderA, missingId),
+      ).rejects.toThrow('Order not found');
+    });
+
+    describe('updateStatusByRider', () => {
+      it('walks ASSIGNED_TO_RIDER → PICKED_UP → OUT_FOR_DELIVERY → DELIVERED for the assigned rider', async () => {
+        const restaurant = await createApprovedRestaurant();
+        const order = await createOrderAtStatus(
+          restaurant._id.toString(),
+          'ASSIGNED_TO_RIDER',
+        );
+        await orderModel
+          .updateOne({ _id: order._id }, { riderId: riderA })
+          .exec();
+
+        const pickedUp = await ordersService.updateStatusByRider(
+          riderA,
+          order._id.toString(),
+          'PICKED_UP',
+        );
+        expect(pickedUp.status).toBe('PICKED_UP');
+
+        const outForDelivery = await ordersService.updateStatusByRider(
+          riderA,
+          order._id.toString(),
+          'OUT_FOR_DELIVERY',
+        );
+        expect(outForDelivery.status).toBe('OUT_FOR_DELIVERY');
+
+        const delivered = await ordersService.updateStatusByRider(
+          riderA,
+          order._id.toString(),
+          'DELIVERED',
+        );
+        expect(delivered.status).toBe('DELIVERED');
+        expect(delivered.statusHistory).toHaveLength(4); // seeded + 3 transitions
+      });
+
+      it('rejects a rider who is not assigned to the order', async () => {
+        const restaurant = await createApprovedRestaurant();
+        const order = await createOrderAtStatus(
+          restaurant._id.toString(),
+          'ASSIGNED_TO_RIDER',
+        );
+        await orderModel
+          .updateOne({ _id: order._id }, { riderId: riderA })
+          .exec();
+
+        await expect(
+          ordersService.updateStatusByRider(
+            riderB,
+            order._id.toString(),
+            'PICKED_UP',
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('rejects a transition not allowed by the rider state machine', async () => {
+        const restaurant = await createApprovedRestaurant();
+        const order = await createOrderAtStatus(
+          restaurant._id.toString(),
+          'ASSIGNED_TO_RIDER',
+        );
+        await orderModel
+          .updateOne({ _id: order._id }, { riderId: riderA })
+          .exec();
+
+        await expect(
+          ordersService.updateStatusByRider(
+            riderA,
+            order._id.toString(),
+            'DELIVERED', // skipping PICKED_UP/OUT_FOR_DELIVERY
+          ),
+        ).rejects.toThrow(BadRequestException);
+      });
+    });
+
+    it("findForRider returns only that rider's orders, newest first", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const first = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel
+        .updateOne({ _id: first._id }, { riderId: riderA })
+        .exec();
+      const second = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+      );
+      await orderModel
+        .updateOne({ _id: second._id }, { riderId: riderA })
+        .exec();
+      const someoneElses = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel
+        .updateOne({ _id: someoneElses._id }, { riderId: riderB })
+        .exec();
+
+      const mine = await ordersService.findForRider(riderA);
+      expect(mine.map((o) => o._id.toString())).toEqual([
+        second._id.toString(),
+        first._id.toString(),
+      ]);
+    });
+  });
 });

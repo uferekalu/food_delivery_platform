@@ -17,7 +17,7 @@ import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interfac
 import { generateOrderNumber } from '../common/utils/order-number';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { canOwnerTransition } from './order-state-machine';
+import { canOwnerTransition, canRiderTransition } from './order-state-machine';
 import type { OrderStatus } from './schemas/order-status';
 import type { PaymentProvider } from '../payments/payment-provider';
 
@@ -239,6 +239,102 @@ export class OrdersService {
 
     this.realtimeGateway.emitOrderStatusChanged(order);
     return order;
+  }
+
+  /** The platform-wide rider queue (docs/ROADMAP.md FDP-16) — not restaurant-scoped, since a
+   * rider can pick up from any restaurant. Oldest first, same "process in received order"
+   * rationale as `findForRestaurant`. */
+  findUnassignedForRiders(): Promise<OrderDocument[]> {
+    return this.orderModel
+      .find({ status: 'READY_FOR_PICKUP', riderId: null })
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  /**
+   * A rider claiming an unassigned order — sets `riderId` and transitions
+   * `READY_FOR_PICKUP` → `ASSIGNED_TO_RIDER` in one atomic update, filtered on the order still
+   * being unassigned. Two riders tapping "Accept" on the same order at the same moment is a
+   * real race (unlike the single-owner queue actions above); only the update that actually
+   * matches `riderId: null` wins, so the loser gets a clear "already assigned" error instead of
+   * silently overwriting the winner's claim.
+   */
+  async assignToRider(
+    riderUserId: string,
+    orderId: string,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel
+      .findOneAndUpdate(
+        { _id: orderId, status: 'READY_FOR_PICKUP', riderId: null },
+        {
+          $set: { riderId: riderUserId, status: 'ASSIGNED_TO_RIDER' },
+          $push: {
+            statusHistory: {
+              status: 'ASSIGNED_TO_RIDER',
+              at: new Date(),
+              by: riderUserId,
+            },
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+
+    if (!order) {
+      const exists = await this.orderModel.exists({ _id: orderId }).exec();
+      if (!exists) throw new NotFoundException('Order not found');
+      throw new BadRequestException(
+        'This order was already picked up by another rider, or is no longer ready for pickup',
+      );
+    }
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    return order;
+  }
+
+  /** A rider's picked-up/out-for-delivery/delivered progress updates (docs/ROADMAP.md FDP-16) —
+   * see order-state-machine.ts's RIDER_TRIGGERABLE_TRANSITIONS for exactly what this allows. */
+  async updateStatusByRider(
+    riderUserId: string,
+    orderId: string,
+    targetStatus: OrderStatus,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+
+    if (order.riderId?.toString() !== riderUserId) {
+      throw new ForbiddenException(
+        'You are not the rider assigned to this order',
+      );
+    }
+
+    if (!canRiderTransition(order.status, targetStatus)) {
+      throw new BadRequestException(
+        `Cannot move an order from ${order.status} to ${targetStatus}`,
+      );
+    }
+
+    order.status = targetStatus;
+    order.statusHistory.push({
+      status: targetStatus,
+      at: new Date(),
+      by: riderUserId,
+    });
+    await order.save();
+
+    this.realtimeGateway.emitOrderStatusChanged(order);
+    return order;
+  }
+
+  /** A rider's own delivery history — every order ever assigned to them, newest first. Doubles
+   * as the earnings source: the frontend sums `deliveryFee` over the `DELIVERED` ones rather
+   * than this service tracking a separate payout/commission model, which nothing in
+   * docs/ROADMAP.md FDP-16 calls for. */
+  findForRider(riderUserId: string): Promise<OrderDocument[]> {
+    return this.orderModel
+      .find({ riderId: riderUserId })
+      .sort({ createdAt: -1 })
+      .exec();
   }
 
   /** Records which provider/reference an in-flight payment attempt is using — called right

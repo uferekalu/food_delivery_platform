@@ -93,6 +93,7 @@ export const api = createApi({
     "SavedAddress",
     "Favorite",
     "DeliveryZone",
+    "Rider",
   ],
   endpoints: () => ({}),
 });

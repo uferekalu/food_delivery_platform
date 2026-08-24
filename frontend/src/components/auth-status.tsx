@@ -36,6 +36,15 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
             My restaurants
           </NextLink>
         )}
+        {user.role === "rider" && (
+          <NextLink
+            href="/rider"
+            onClick={onNavigate}
+            className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
+          >
+            Rider dashboard
+          </NextLink>
+        )}
         <NextLink
           href="/orders"
           onClick={onNavigate}

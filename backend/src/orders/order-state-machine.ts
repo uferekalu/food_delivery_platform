@@ -5,9 +5,10 @@ import type { OrderStatus } from './schemas/order-status';
  * deliberately excluded from `OWNER_TRIGGERABLE_TRANSITIONS` below — that one transition is
  * exclusively driven by a verified payment webhook (FDP-14, "this is what actually moves an
  * order out of PENDING_PAYMENT" per docs/ROADMAP.md), never by an authenticated user action.
- * `ASSIGNED_TO_RIDER`/`PICKED_UP`/`OUT_FOR_DELIVERY` transitions belong to a future rider-facing
- * ticket — they're valid graph edges (so the customer-facing stepper can reason about ordering)
- * but have no triggering endpoint yet.
+ * `READY_FOR_PICKUP` → `ASSIGNED_TO_RIDER` is a claim (`OrdersService.assignToRider`), not a
+ * plain transition — it also sets `riderId`, so it isn't in `RIDER_TRIGGERABLE_TRANSITIONS`
+ * below either. `ASSIGNED_TO_RIDER`/`PICKED_UP`/`OUT_FOR_DELIVERY` are rider-triggered
+ * (`docs/ROADMAP.md` FDP-16).
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -44,6 +45,28 @@ export const OWNER_TRIGGERABLE_TRANSITIONS: Record<OrderStatus, OrderStatus[]> =
     REFUNDED: [],
   };
 
+/**
+ * The subset of transitions the order's assigned rider can trigger directly
+ * (`RidersController`/`OrdersService.updateStatusByRider`, `docs/ROADMAP.md` FDP-16). Excludes
+ * `READY_FOR_PICKUP` → `ASSIGNED_TO_RIDER` (that's the claim/self-assign action, which also has
+ * to set `riderId` — see `OrdersService.assignToRider`) and `DELIVERED` → `REFUNDED` (a
+ * post-delivery dispute, not something the rider decides).
+ */
+export const RIDER_TRIGGERABLE_TRANSITIONS: Record<OrderStatus, OrderStatus[]> =
+  {
+    PENDING_PAYMENT: [],
+    PLACED: [],
+    ACCEPTED_BY_RESTAURANT: [],
+    PREPARING: [],
+    READY_FOR_PICKUP: [],
+    ASSIGNED_TO_RIDER: ['PICKED_UP'],
+    PICKED_UP: ['OUT_FOR_DELIVERY'],
+    OUT_FOR_DELIVERY: ['DELIVERED'],
+    DELIVERED: [],
+    CANCELLED: [],
+    REFUNDED: [],
+  };
+
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_TRANSITIONS[from].includes(to);
 }
@@ -53,6 +76,13 @@ export function canOwnerTransition(
   to: OrderStatus,
 ): boolean {
   return OWNER_TRIGGERABLE_TRANSITIONS[from].includes(to);
+}
+
+export function canRiderTransition(
+  from: OrderStatus,
+  to: OrderStatus,
+): boolean {
+  return RIDER_TRIGGERABLE_TRANSITIONS[from].includes(to);
 }
 
 /** Terminal states — nothing can transition out of these except the two graph edges that

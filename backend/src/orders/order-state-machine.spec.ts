@@ -1,5 +1,6 @@
 import {
   canOwnerTransition,
+  canRiderTransition,
   canTransition,
   isTerminal,
   ORDER_TRANSITIONS,
@@ -38,7 +39,7 @@ describe('order-state-machine', () => {
     expect(canOwnerTransition('PREPARING', 'READY_FOR_PICKUP')).toBe(true);
   });
 
-  it('canOwnerTransition never allows rider-stage transitions — no endpoint triggers those yet', () => {
+  it('canOwnerTransition never allows rider-stage transitions — those are rider-only', () => {
     expect(canOwnerTransition('READY_FOR_PICKUP', 'ASSIGNED_TO_RIDER')).toBe(
       false,
     );
@@ -50,6 +51,33 @@ describe('order-state-machine', () => {
     for (const status of ORDER_STATUSES) {
       for (const target of ORDER_TRANSITIONS[status]) {
         if (canOwnerTransition(status, target)) {
+          expect(canTransition(status, target)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('canRiderTransition allows exactly picked-up/out-for-delivery/delivered', () => {
+    expect(canRiderTransition('ASSIGNED_TO_RIDER', 'PICKED_UP')).toBe(true);
+    expect(canRiderTransition('PICKED_UP', 'OUT_FOR_DELIVERY')).toBe(true);
+    expect(canRiderTransition('OUT_FOR_DELIVERY', 'DELIVERED')).toBe(true);
+  });
+
+  it('canRiderTransition never allows the claim step or owner/payment transitions', () => {
+    expect(canRiderTransition('READY_FOR_PICKUP', 'ASSIGNED_TO_RIDER')).toBe(
+      false,
+    ); // that's OrdersService.assignToRider, not a plain transition
+    expect(canRiderTransition('PLACED', 'ACCEPTED_BY_RESTAURANT')).toBe(
+      false,
+    );
+    expect(canRiderTransition('PENDING_PAYMENT', 'PLACED')).toBe(false);
+    expect(canRiderTransition('DELIVERED', 'REFUNDED')).toBe(false);
+  });
+
+  it('every rider-triggerable transition is also a valid graph edge', () => {
+    for (const status of ORDER_STATUSES) {
+      for (const target of ORDER_TRANSITIONS[status]) {
+        if (canRiderTransition(status, target)) {
           expect(canTransition(status, target)).toBe(true);
         }
       }

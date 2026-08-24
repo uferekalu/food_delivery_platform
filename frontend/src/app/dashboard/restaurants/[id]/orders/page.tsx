@@ -88,8 +88,8 @@ function OrderActions({ order }: { order: Order }) {
     );
   }
 
-  // READY_FOR_PICKUP — waiting on rider assignment, a future ticket; nothing left for the
-  // restaurant to do here.
+  // READY_FOR_PICKUP — waiting on rider assignment (docs/ROADMAP.md FDP-16's rider dashboard);
+  // nothing left for the restaurant to do here.
   return <span className="text-sm text-text-muted">Waiting for a rider</span>;
 }
 
