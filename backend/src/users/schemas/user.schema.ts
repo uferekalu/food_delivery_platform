@@ -14,7 +14,8 @@ export type UserRole = (typeof USER_ROLES)[number];
  * Roles a person can pick for themselves at registration — like choosing "customer" vs.
  * "sell on our platform" at signup on any real marketplace. Deliberately excludes:
  * - `admin`: a real privilege-escalation risk, must be seeded/promoted manually
- * - `rider`: will go through its own verification/onboarding flow (FDP-9), not open signup
+ * - `rider`: goes through its own application/verification flow (`POST /riders/apply` +
+ *   admin verify, `docs/ROADMAP.md` FDP-16), not open signup
  */
 export const SELF_REGISTERABLE_ROLES = [
   'customer',

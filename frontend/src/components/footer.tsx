@@ -26,7 +26,7 @@ export function Footer() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 sm:gap-16">
+          <div className="grid grid-cols-3 gap-4 sm:gap-16">
             <nav aria-label="For customers" className="flex flex-col gap-3">
               <h3 className="text-sm font-semibold text-text">For customers</h3>
               <ul className="flex flex-col gap-2">
@@ -54,6 +54,22 @@ export function Footer() {
                 <li>
                   <NextLink href="/login" className="text-sm text-text-muted hover:text-text hover:underline">
                     Restaurant dashboard
+                  </NextLink>
+                </li>
+              </ul>
+            </nav>
+
+            <nav aria-label="For riders" className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-text">For riders</h3>
+              <ul className="flex flex-col gap-2">
+                <li>
+                  <NextLink href="/rider/apply" className="text-sm text-text-muted hover:text-text hover:underline">
+                    Become a rider
+                  </NextLink>
+                </li>
+                <li>
+                  <NextLink href="/login" className="text-sm text-text-muted hover:text-text hover:underline">
+                    Rider dashboard
                   </NextLink>
                 </li>
               </ul>

@@ -152,6 +152,20 @@ export interface StatusHistoryEntry {
   by: string;
 }
 
+export const VEHICLE_TYPES = ["bicycle", "motorcycle", "car", "van"] as const;
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
+
+export interface Rider {
+  _id: string;
+  userId: string;
+  vehicleType: VehicleType;
+  isOnline: boolean;
+  isVerified: boolean;
+  rating: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Order {
   _id: string;
   orderNumber: string;
