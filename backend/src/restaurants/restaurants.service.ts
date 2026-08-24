@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, QueryFilter } from 'mongoose';
 import { slugify } from '../common/utils/slugify';
+import { escapeRegExp } from '../common/utils/regex';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
@@ -43,7 +44,18 @@ export class RestaurantsService {
 
     const filter: QueryFilter<RestaurantDocument> = { isApproved: true };
     if (query.cuisine) filter.cuisineTypes = query.cuisine;
-    if (query.search) filter.$text = { $search: query.search };
+    if (query.search) {
+      // Case-insensitive substring match, not MongoDB's word-tokenized `$text` search (used
+      // here previously) — a customer typing "fd" expects it to match "FDP15 Test Kitchen"
+      // (a partial word), which `$text` never would, since it only matches whole tokens/stems.
+      // A full search-relevance/performance pass is docs/ROADMAP.md FDP-21's job; this is the
+      // straightforward fix for the reported "search returns nothing" bug in the meantime.
+      const pattern = escapeRegExp(query.search.trim());
+      filter.$or = [
+        { name: { $regex: pattern, $options: 'i' } },
+        { cuisineTypes: { $regex: pattern, $options: 'i' } },
+      ];
+    }
 
     const [items, total] = await Promise.all([
       this.restaurantModel

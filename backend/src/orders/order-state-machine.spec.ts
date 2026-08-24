@@ -67,9 +67,7 @@ describe('order-state-machine', () => {
     expect(canRiderTransition('READY_FOR_PICKUP', 'ASSIGNED_TO_RIDER')).toBe(
       false,
     ); // that's OrdersService.assignToRider, not a plain transition
-    expect(canRiderTransition('PLACED', 'ACCEPTED_BY_RESTAURANT')).toBe(
-      false,
-    );
+    expect(canRiderTransition('PLACED', 'ACCEPTED_BY_RESTAURANT')).toBe(false);
     expect(canRiderTransition('PENDING_PAYMENT', 'PLACED')).toBe(false);
     expect(canRiderTransition('DELIVERED', 'REFUNDED')).toBe(false);
   });

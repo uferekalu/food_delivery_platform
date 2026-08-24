@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { RidersService } from './riders.service';

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import NextLink from "next/link";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
@@ -130,6 +130,66 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
   );
 }
 
+/**
+ * Only ever mounted while `activeDeliveries.length > 0` (see below) — this makes React's own
+ * unmount lifecycle the trigger for stopping the browser's GPS watch, instead of a separate
+ * effect that watches a delivery count and calls setState from inside an effect body (which
+ * the React Compiler's `set-state-in-effect` rule flags — see frontend/CLAUDE.md).
+ */
+function LocationSharingToggle() {
+  const socket = useSocket();
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+  }, []);
+
+  function stopSharingLocation() {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setSharingLocation(false);
+  }
+
+  function startSharingLocation() {
+    if (!navigator.geolocation) {
+      setGeoError("Your browser doesn't support location sharing.");
+      return;
+    }
+    setGeoError(null);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        socket?.emit("rider:locationUpdate", {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => setGeoError("Couldn't get your location — check your browser's location permission."),
+      { enableHighAccuracy: true },
+    );
+    setSharingLocation(true);
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-text">Share live location</span>
+        <Switch
+          label="Share live location"
+          checked={sharingLocation}
+          onChange={(checked) => (checked ? startSharingLocation() : stopSharingLocation())}
+        />
+      </div>
+      {geoError && <Alert variant="danger">{geoError}</Alert>}
+    </>
+  );
+}
+
 function RiderDashboard() {
   const { data: rider, isLoading: loadingProfile } = useGetMyRiderProfileQuery();
   const { data: queue, isLoading: loadingQueue, refetch: refetchQueue } = useGetRiderQueueQuery();
@@ -137,6 +197,7 @@ function RiderDashboard() {
   const [toggleOnline, { isLoading: toggling }] = useToggleRiderOnlineMutation();
   const { toast } = useToast();
   const socket = useSocket();
+  const activeDeliveries = (myDeliveries ?? []).filter((o) => ACTIVE_RIDER_STATUSES.includes(o.status));
 
   useEffect(() => {
     if (!socket) return;
@@ -144,8 +205,9 @@ function RiderDashboard() {
       void refetchQueue();
       void refetchDeliveries();
     };
-    // No dedicated rider room yet (live location broadcast is docs/ROADMAP.md FDP-17) — a
-    // generic order-status event is enough to know it's worth refetching.
+    // A generic order-status event is enough to know it's worth refetching — the location
+    // broadcast (docs/ROADMAP.md FDP-17) is purely one-way (rider -> customer), it never needs
+    // to trigger a rider-side refetch.
     socket.on("order:statusChanged", handleUpdate);
     return () => {
       socket.off("order:statusChanged", handleUpdate);
@@ -166,8 +228,6 @@ function RiderDashboard() {
       />
     );
   }
-
-  const activeDeliveries = (myDeliveries ?? []).filter((o) => ACTIVE_RIDER_STATUSES.includes(o.status));
 
   return (
     <div className="flex flex-col gap-6">
@@ -205,7 +265,10 @@ function RiderDashboard() {
 
       {activeDeliveries.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold text-text">Your active deliveries</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-text">Your active deliveries</h2>
+            <LocationSharingToggle />
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeDeliveries.map((order) => (
               <ActiveDeliveryCard key={order._id} order={order} />

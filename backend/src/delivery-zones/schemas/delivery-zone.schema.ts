@@ -7,7 +7,12 @@ import { HydratedDocument, Types } from 'mongoose';
 // not disjoint ranges.
 @Schema({ timestamps: true })
 export class DeliveryZone {
-  @Prop({ type: Types.ObjectId, ref: 'Restaurant', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'Restaurant',
+    required: true,
+    index: true,
+  })
   restaurantId: Types.ObjectId;
 
   @Prop({ type: String, required: true, trim: true, maxlength: 100 })

@@ -107,6 +107,79 @@ describe('RestaurantsService', () => {
       expect(result.total).toBe(1);
       expect(result.items[0].slug).toBe('burgundy-kitchen');
     });
+
+    describe('search', () => {
+      async function createApproved(name: string, cuisineTypes: string[]) {
+        const created = await service.create('507f1f77bcf86cd799439011', {
+          ...baseDto,
+          name,
+          cuisineTypes,
+        });
+        await restaurantModel
+          .updateOne({ _id: created._id }, { isApproved: true })
+          .exec();
+        return created;
+      }
+
+      it('matches a partial word inside the name, not just a whole word', async () => {
+        // The exact bug reported live: typing "fd" against "FDP15 Test Kitchen" returned
+        // nothing under the old MongoDB $text search, since $text only matches whole
+        // tokens/stems, never a substring within one.
+        await createApproved('FDP15 Test Kitchen', ['Test']);
+
+        const result = await service.findAllApproved({
+          search: 'fd',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(1);
+        expect(result.items[0].name).toBe('FDP15 Test Kitchen');
+      });
+
+      it('is case-insensitive', async () => {
+        await createApproved('Burgundy Kitchen', ['Nigerian']);
+
+        const result = await service.findAllApproved({
+          search: 'BURGUNDY',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(1);
+      });
+
+      it('also matches a substring of a cuisine type', async () => {
+        await createApproved('Some Place', ['Nigerian', 'Grill']);
+
+        const result = await service.findAllApproved({
+          search: 'grill',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(1);
+      });
+
+      it('returns nothing for a search that matches no restaurant', async () => {
+        await createApproved('Burgundy Kitchen', ['Nigerian']);
+
+        const result = await service.findAllApproved({
+          search: 'sushi',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(0);
+      });
+
+      it('treats regex metacharacters in the search term as literal text, not a pattern', async () => {
+        await createApproved('Burgundy Kitchen', ['Nigerian']);
+
+        const result = await service.findAllApproved({
+          search: '.*',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(0); // no restaurant literally named/tagged ".*"
+      });
+    });
   });
 
   describe('findBySlug', () => {

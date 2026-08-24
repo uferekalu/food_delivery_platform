@@ -97,7 +97,10 @@ describe('Riders (e2e)', () => {
   // READY_FOR_PICKUP for real means driving the full checkout+payment-webhook+owner-queue
   // pipeline, which FDP-11/13/14's own tests already cover — seeding directly here tests this
   // ticket's actual new surface (queue/assign/status/history) without re-deriving all of that.
-  async function seedReadyForPickupOrder(restaurantId: string, customerId: string) {
+  async function seedReadyForPickupOrder(
+    restaurantId: string,
+    customerId: string,
+  ) {
     return orderModel.create({
       orderNumber: `ORD-TEST-${Math.random().toString(36).slice(2, 8)}`,
       customerId,
@@ -121,7 +124,9 @@ describe('Riders (e2e)', () => {
       total: 11.5,
       currency: 'NGN',
       status: 'READY_FOR_PICKUP',
-      statusHistory: [{ status: 'READY_FOR_PICKUP', at: new Date(), by: customerId }],
+      statusHistory: [
+        { status: 'READY_FOR_PICKUP', at: new Date(), by: customerId },
+      ],
       paymentProvider: 'paystack',
       paymentStatus: 'succeeded',
       deliveryAddress: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
@@ -132,7 +137,10 @@ describe('Riders (e2e)', () => {
     const server = app.getHttpServer();
 
     const applicant = await registerAndLogin('rider-applicant@example.com');
-    const owner = await registerAndLogin('rd-owner@example.com', 'restaurant_owner');
+    const owner = await registerAndLogin(
+      'rd-owner@example.com',
+      'restaurant_owner',
+    );
     const customer = await registerAndLogin('rd-customer@example.com');
     await registerAndLogin('rd-admin@example.com'); // starts as customer, promoted below
 

@@ -7,7 +7,10 @@ import type { PaymentProvider } from './payment-provider';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
 import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
-import type { PaymentAdapter } from './adapters/payment-adapter.interface';
+import type {
+  PaymentAdapter,
+  InitiatePaymentResult,
+} from './adapters/payment-adapter.interface';
 
 @Injectable()
 export class PaymentsService {
@@ -58,7 +61,7 @@ export class PaymentsService {
 
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     const adapter = this.getAdapter(provider);
-    let result;
+    let result: InitiatePaymentResult;
     try {
       result = await adapter.initiate({
         orderId: order._id.toString(),
