@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Rating } from "@/components/ui/rating";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -260,6 +261,18 @@ function RiderDashboard() {
                 )
             }
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-text">Your rating</span>
+          <div className="flex items-center gap-2">
+            <Rating value={rider.rating} label="Your rating" />
+            <span className="text-sm text-text-muted">
+              {rider.rating.toFixed(1)} ({rider.reviewCount} {rider.reviewCount === 1 ? "review" : "reviews"})
+            </span>
+          </div>
         </CardContent>
       </Card>
 
