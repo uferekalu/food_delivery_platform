@@ -1,9 +1,13 @@
 import { api } from "../api";
-import type { Address, OpeningHour, PaginatedResult, Restaurant } from "../restaurant-types";
+import type { Address, OpeningHour, PaginatedResult, Restaurant, RestaurantSort } from "../restaurant-types";
 
 export interface ListRestaurantsParams {
   search?: string;
   cuisine?: string;
+  minRating?: number;
+  maxPriceLevel?: number;
+  maxDeliveryMinutes?: number;
+  sort?: RestaurantSort;
   page?: number;
   limit?: number;
 }
@@ -16,6 +20,8 @@ export interface RestaurantInput {
   country: string;
   address: Address;
   openingHours?: OpeningHour[];
+  priceLevel?: number;
+  estimatedDeliveryMinutes?: number;
 }
 
 export interface UpdateRestaurantInput extends Partial<RestaurantInput> {

@@ -44,9 +44,14 @@ export interface Restaurant {
   isApproved: boolean;
   avgRating: number;
   reviewCount: number;
+  priceLevel: number;
+  estimatedDeliveryMinutes: number | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export const RESTAURANT_SORTS = ["newest", "rating", "price_asc", "price_desc", "delivery_time"] as const;
+export type RestaurantSort = (typeof RESTAURANT_SORTS)[number];
 
 export interface PaginatedResult<T> {
   items: T[];

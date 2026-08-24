@@ -12,6 +12,17 @@ import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { ListRestaurantsDto } from './dto/list-restaurants.dto';
+import type { RestaurantSort } from './dto/list-restaurants.dto';
+
+const SORT_SPECS: Record<RestaurantSort, Record<string, 1 | -1>> = {
+  newest: { createdAt: -1 },
+  rating: { avgRating: -1 },
+  price_asc: { priceLevel: 1 },
+  price_desc: { priceLevel: -1 },
+  // Restaurants that never set an estimate (`null`) sort last regardless of direction — nothing
+  // useful to show a customer filtering/sorting by delivery time otherwise.
+  delivery_time: { estimatedDeliveryMinutes: 1 },
+};
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -48,13 +59,31 @@ export class RestaurantsService {
       // Case-insensitive substring match, not MongoDB's word-tokenized `$text` search (used
       // here previously) — a customer typing "fd" expects it to match "FDP15 Test Kitchen"
       // (a partial word), which `$text` never would, since it only matches whole tokens/stems.
-      // A full search-relevance/performance pass is docs/ROADMAP.md FDP-21's job; this is the
-      // straightforward fix for the reported "search returns nothing" bug in the meantime.
       const pattern = escapeRegExp(query.search.trim());
       filter.$or = [
         { name: { $regex: pattern, $options: 'i' } },
         { cuisineTypes: { $regex: pattern, $options: 'i' } },
       ];
+    }
+    if (query.minRating) filter.avgRating = { $gte: query.minRating };
+    if (query.maxPriceLevel) filter.priceLevel = { $lte: query.maxPriceLevel };
+    if (query.maxDeliveryMinutes !== undefined) {
+      // `$lte` alone would also match `null` (MongoDB treats a missing/null field as satisfying
+      // no comparison operator except $exists/$type) — explicitly requiring the field to exist
+      // keeps restaurants that never set an estimate out of a time-bounded search rather than
+      // letting them slip through.
+      filter.estimatedDeliveryMinutes = {
+        $lte: query.maxDeliveryMinutes,
+        $exists: true,
+        $ne: null,
+      };
+    }
+    const sort = SORT_SPECS[query.sort ?? 'newest'];
+    if (query.sort === 'delivery_time' && !filter.estimatedDeliveryMinutes) {
+      // Same reasoning as above: sorting by a field that's null for most restaurants would put
+      // them first (MongoDB sorts null/missing ahead of numbers in ascending order) — excluding
+      // them keeps the sorted list actually meaningful.
+      filter.estimatedDeliveryMinutes = { $exists: true, $ne: null };
     }
 
     const [items, total] = await Promise.all([
@@ -62,7 +91,7 @@ export class RestaurantsService {
         .find(filter)
         .skip((page - 1) * limit)
         .limit(limit)
-        .sort({ createdAt: -1 })
+        .sort(sort)
         .exec(),
       this.restaurantModel.countDocuments(filter).exec(),
     ]);

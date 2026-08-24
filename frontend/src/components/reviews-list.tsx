@@ -51,7 +51,7 @@ export function ReviewsList({ targetType, targetId }: ReviewsListProps) {
                 {review.images.map((src) => (
                   // A handful of user-submitted review photos don't warrant next/image's layout machinery.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={src} src={src} alt="" className="size-20 rounded-md object-cover" />
+                  <img key={src} src={src} alt="" loading="lazy" className="size-20 rounded-md object-cover" />
                 ))}
               </div>
             )}
