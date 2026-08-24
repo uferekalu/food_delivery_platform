@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
-import { DeliveryZone, DeliveryZoneSchema } from './schemas/delivery-zone.schema';
+import {
+  DeliveryZone,
+  DeliveryZoneSchema,
+} from './schemas/delivery-zone.schema';
 import { DeliveryZonesService } from './delivery-zones.service';
 import { DeliveryZonesController } from './delivery-zones.controller';
 

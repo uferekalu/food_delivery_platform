@@ -19,10 +19,7 @@ export class RidersController {
   // No @Roles() here — any authenticated non-rider/non-admin can apply; RidersService.apply
   // enforces the rest.
   @Post('apply')
-  apply(
-    @CurrentUser() user: AccessTokenPayload,
-    @Body() dto: ApplyRiderDto,
-  ) {
+  apply(@CurrentUser() user: AccessTokenPayload, @Body() dto: ApplyRiderDto) {
     return this.ridersService.apply(user, dto);
   }
 

@@ -13,11 +13,14 @@ export default function Home() {
           Connecting customers with restaurants and reliable delivery
         </h1>
         <p className="max-w-xl text-lg text-text-muted">
-          This app is under active development. The rest of the product (browsing, ordering,
-          checkout, tracking) lands in upcoming phases — see the project roadmap.
+          Order from local restaurants and track your delivery live, from checkout to your
+          door. Real-time order status, secure payments, and delivery you can follow on a map.
         </p>
-        <div className="flex gap-3">
-          <NextLink href="/design-system" className={buttonVariants({ variant: "primary" })}>
+        <div className="flex flex-wrap gap-3">
+          <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
+            Browse restaurants
+          </NextLink>
+          <NextLink href="/design-system" className={buttonVariants({ variant: "outline" })}>
             View the design system
           </NextLink>
         </div>

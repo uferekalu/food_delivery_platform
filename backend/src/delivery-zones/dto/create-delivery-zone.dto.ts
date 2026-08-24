@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateDeliveryZoneDto {
   @ApiProperty({ example: 'Nearby (0-3km)' })
@@ -8,7 +17,10 @@ export class CreateDeliveryZoneDto {
   @MaxLength(100)
   name: string;
 
-  @ApiProperty({ example: 3, description: 'Upper bound of this ring, in kilometres' })
+  @ApiProperty({
+    example: 3,
+    description: 'Upper bound of this ring, in kilometres',
+  })
   @IsNumber()
   @Min(0)
   @Max(1000)

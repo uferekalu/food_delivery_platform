@@ -16,7 +16,7 @@ import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 export default function RestaurantsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError } = useListRestaurantsQuery({ search: search || undefined, page, limit: 12 });
+  const { data, isLoading, isError } = useListRestaurantsQuery({ search: search || undefined, page, limit: 10 });
 
   return (
     <Container className="flex flex-col gap-6 py-10">

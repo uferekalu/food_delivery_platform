@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import NextLink from "next/link";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +10,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
+import { LiveDeliveryMap, type LatLng } from "@/components/live-delivery-map";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
+
+// The Stepper collapses these into one "Out for delivery" milestone, but the map should still
+// render for all three — a rider's GPS ping is meaningful from the moment they're assigned.
+const ACTIVE_DELIVERY_STATUSES: OrderStatus[] = ["ASSIGNED_TO_RIDER", "PICKED_UP", "OUT_FOR_DELIVERY"];
 
 const TRACKING_STEPS: StepperStep[] = [
   { key: "PLACED", label: "Order placed" },
@@ -59,7 +64,7 @@ function formatStatus(status: OrderStatus): string {
     .join(" ");
 }
 
-function OrderSummary({ order }: { order: Order }) {
+function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: LatLng | null }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
@@ -90,6 +95,17 @@ function OrderSummary({ order }: { order: Order }) {
             <Stepper steps={TRACKING_STEPS} currentIndex={trackingStepIndex(order.status)} />
           </CardContent>
         </Card>
+      )}
+
+      {ACTIVE_DELIVERY_STATUSES.includes(order.status) && (
+        <LiveDeliveryMap
+          riderLocation={riderLocation}
+          destination={
+            order.deliveryAddress.lat != null && order.deliveryAddress.lng != null
+              ? { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }
+              : null
+          }
+        />
       )}
 
       <Card>
@@ -180,6 +196,7 @@ function OrderSummary({ order }: { order: Order }) {
 function OrderDetail({ id }: { id: string }) {
   const { data: order, isLoading, error, refetch } = useGetOrderQuery(id);
   const socket = useSocket();
+  const [riderLocation, setRiderLocation] = useState<LatLng | null>(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -188,9 +205,12 @@ function OrderDetail({ id }: { id: string }) {
     const handleStatusChanged = (updated: Order) => {
       if (updated._id === id) void refetch();
     };
+    const handleRiderLocation = (location: LatLng) => setRiderLocation(location);
     socket.on("order:statusChanged", handleStatusChanged);
+    socket.on("order:riderLocation", handleRiderLocation);
     return () => {
       socket.off("order:statusChanged", handleStatusChanged);
+      socket.off("order:riderLocation", handleRiderLocation);
     };
   }, [socket, id, refetch]);
 
@@ -206,7 +226,7 @@ function OrderDetail({ id }: { id: string }) {
     return <Alert variant="danger">{getErrorMessage(error, "Order not found, or you don't have access to it.")}</Alert>;
   }
 
-  return <OrderSummary order={order} />;
+  return <OrderSummary order={order} riderLocation={riderLocation} />;
 }
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {

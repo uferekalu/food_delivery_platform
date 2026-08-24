@@ -15,15 +15,19 @@ function fakeSocket() {
   };
 }
 
+function fakeOrderQuery(orders: { _id: { toString(): string } }[]) {
+  return { select: () => ({ exec: () => Promise.resolve(orders) }) };
+}
+
 describe('RealtimeGateway', () => {
   let gateway: RealtimeGateway;
   let jwtService: { verifyAsync: jest.Mock };
-  let orderModel: { findById: jest.Mock };
+  let orderModel: { findById: jest.Mock; find: jest.Mock };
   let restaurantModel: { findById: jest.Mock };
 
   beforeEach(async () => {
     jwtService = { verifyAsync: jest.fn() };
-    orderModel = { findById: jest.fn() };
+    orderModel = { findById: jest.fn(), find: jest.fn() };
     restaurantModel = { findById: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -155,6 +159,75 @@ describe('RealtimeGateway', () => {
         restaurantId: 'r-1',
       });
       expect(client.join).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleRiderLocation', () => {
+    it("broadcasts to every one of the rider's active-delivery order rooms", async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'rider-1', role: 'rider' };
+      orderModel.find.mockReturnValue(
+        fakeOrderQuery([
+          { _id: { toString: () => 'order-1' } },
+          { _id: { toString: () => 'order-2' } },
+        ]),
+      );
+
+      await gateway.handleRiderLocation(client as never, {
+        lat: 6.5,
+        lng: 3.4,
+      });
+
+      expect(orderModel.find).toHaveBeenCalledWith({
+        riderId: 'rider-1',
+        status: { $in: ['ASSIGNED_TO_RIDER', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
+      });
+      expect(gateway.server.to).toHaveBeenCalledWith('order:order-1');
+      expect(gateway.server.to).toHaveBeenCalledWith('order:order-2');
+      expect(gateway.server.emit).toHaveBeenCalledWith(
+        'order:riderLocation',
+        expect.objectContaining({ lat: 6.5, lng: 3.4 }),
+      );
+    });
+
+    it('does nothing for a non-rider', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'customer-1', role: 'customer' };
+
+      await gateway.handleRiderLocation(client as never, {
+        lat: 6.5,
+        lng: 3.4,
+      });
+
+      expect(orderModel.find).not.toHaveBeenCalled();
+      expect(gateway.server.emit).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when lat/lng are missing or malformed', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'rider-1', role: 'rider' };
+
+      await gateway.handleRiderLocation(client as never, {});
+      await gateway.handleRiderLocation(client as never, {
+        lat: 'oops' as never,
+        lng: 3.4,
+      });
+
+      expect(orderModel.find).not.toHaveBeenCalled();
+    });
+
+    it('queries but never emits when the rider has no active deliveries', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'rider-1', role: 'rider' };
+      orderModel.find.mockReturnValue(fakeOrderQuery([]));
+
+      await gateway.handleRiderLocation(client as never, {
+        lat: 6.5,
+        lng: 3.4,
+      });
+
+      expect(orderModel.find).toHaveBeenCalled();
+      expect(gateway.server.emit).not.toHaveBeenCalled();
     });
   });
 

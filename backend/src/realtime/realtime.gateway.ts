@@ -14,6 +14,7 @@ import { Model } from 'mongoose';
 import type { Server, Socket } from 'socket.io';
 import { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
+import type { OrderStatus } from '../orders/schemas/order-status';
 import {
   Restaurant,
   RestaurantDocument,
@@ -26,6 +27,14 @@ function orderRoom(orderId: string): string {
 function restaurantRoom(restaurantId: string): string {
   return `restaurant:${restaurantId}`;
 }
+
+/** Statuses where a rider's live position is actually meaningful to broadcast — matches the
+ * frontend rider dashboard's own ACTIVE_RIDER_STATUSES (docs/ROADMAP.md FDP-16/17). */
+const ACTIVE_DELIVERY_STATUSES: OrderStatus[] = [
+  'ASSIGNED_TO_RIDER',
+  'PICKED_UP',
+  'OUT_FOR_DELIVERY',
+];
 
 /**
  * Reads the connected user off the socket rather than the request — `@nestjs/websockets`
@@ -138,6 +147,36 @@ export class RealtimeGateway implements OnGatewayConnection {
     }
 
     await client.join(restaurantRoom(restaurantId));
+  }
+
+  /**
+   * A rider's live GPS ping (docs/ROADMAP.md FDP-17) — deliberately not persisted anywhere
+   * (no `Rider.currentLocation` field), purely relayed to whichever order rooms currently need
+   * it. The client only sends `{lat, lng}`; the server looks up *all* of that rider's
+   * in-flight orders itself rather than trusting a client-supplied orderId, so a rider with
+   * more than one active delivery updates every room in one ping.
+   */
+  @SubscribeMessage('rider:locationUpdate')
+  async handleRiderLocation(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { lat?: number; lng?: number },
+  ): Promise<void> {
+    const user = client.data.user;
+    if (!user || user.role !== 'rider') return;
+    if (typeof body?.lat !== 'number' || typeof body?.lng !== 'number') return;
+
+    const activeOrders = await this.orderModel
+      .find({ riderId: user.sub, status: { $in: ACTIVE_DELIVERY_STATUSES } })
+      .select('_id')
+      .exec();
+    if (activeOrders.length === 0) return;
+
+    const payload = { lat: body.lat, lng: body.lng, at: new Date() };
+    for (const order of activeOrders) {
+      this.server
+        .to(orderRoom(order._id.toString()))
+        .emit('order:riderLocation', payload);
+    }
   }
 
   /** Called by `OrdersService` after every successful status transition. */

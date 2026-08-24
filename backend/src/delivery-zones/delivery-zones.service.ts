@@ -6,7 +6,10 @@ import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schem
 import type { Address } from '../common/schemas/address.schema';
 import { haversineDistanceKm } from '../common/utils/geo';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
-import { DeliveryZone, DeliveryZoneDocument } from './schemas/delivery-zone.schema';
+import {
+  DeliveryZone,
+  DeliveryZoneDocument,
+} from './schemas/delivery-zone.schema';
 import { CreateDeliveryZoneDto } from './dto/create-delivery-zone.dto';
 import { UpdateDeliveryZoneDto } from './dto/update-delivery-zone.dto';
 
@@ -105,9 +108,7 @@ export class DeliveryZonesService {
     return round2(subtotal * FALLBACK_DELIVERY_FEE_RATE);
   }
 
-  private coordsOf(
-    address: Address,
-  ): { lat: number; lng: number } | null {
+  private coordsOf(address: Address): { lat: number; lng: number } | null {
     if (address.lat == null || address.lng == null) return null;
     return { lat: address.lat, lng: address.lng };
   }

@@ -63,8 +63,7 @@ export class Restaurant {
 
 export type RestaurantDocument = HydratedDocument<Restaurant>;
 export const RestaurantSchema = SchemaFactory.createForClass(Restaurant);
-RestaurantSchema.index({
-  name: 'text',
-  description: 'text',
-  cuisineTypes: 'text',
-});
+// No text index — RestaurantsService.findAllApproved does a case-insensitive $regex substring
+// match instead of $text (word-tokenized $text search couldn't match a partial word like "fd"
+// against "FDP15 Test Kitchen"), so a text index here would just be unused write overhead.
+// docs/ROADMAP.md FDP-21 is where real search-relevance/performance infra would replace this.
