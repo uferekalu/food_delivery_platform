@@ -1,21 +1,14 @@
 "use client";
 
+import NextLink from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useToast } from "@/components/ui/toast";
-import {
-  useApproveRestaurantMutation,
-  useListPendingRestaurantsQuery,
-} from "@/lib/redux/services/restaurants-api";
-import { getErrorMessage } from "@/lib/redux/error";
+import { useListPendingRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function PendingRestaurantCard({ restaurant }: { restaurant: Restaurant }) {
-  const { toast } = useToast();
-  const [approve, { isLoading }] = useApproveRestaurantMutation();
-
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
@@ -26,21 +19,15 @@ function PendingRestaurantCard({ restaurant }: { restaurant: Restaurant }) {
             {restaurant.address.state}
           </span>
         </div>
-        <Button
-          size="sm"
-          className="self-start"
-          isLoading={isLoading}
-          onClick={() =>
-            void approve(restaurant._id)
-              .unwrap()
-              .then(() => toast({ title: "Restaurant approved", variant: "success" }))
-              .catch((err: unknown) =>
-                toast({ title: "Couldn't approve restaurant", description: getErrorMessage(err), variant: "danger" }),
-              )
-          }
+        {/* No direct "Approve" here — an admin needs to see the restaurant's actual menu
+            before approving it, not just this summary card, or an owner can get approved
+            with no menu items at all. The review page has the approve action. */}
+        <NextLink
+          href={`/admin/restaurants/${restaurant._id}`}
+          className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
         >
-          Approve
-        </Button>
+          Review &amp; approve
+        </NextLink>
       </CardContent>
     </Card>
   );

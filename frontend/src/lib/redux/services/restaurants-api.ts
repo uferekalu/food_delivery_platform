@@ -56,6 +56,13 @@ export const restaurantsApi = api.injectEndpoints({
       providesTags: (result) => (result ? [{ type: "Restaurant", id: result._id }] : []),
     }),
 
+    // Unlike getRestaurantBySlug, this isn't filtered to approved restaurants — it's how an
+    // admin reviews a pending application (incl. its menu) before approving it.
+    getRestaurantByIdForAdmin: builder.query<Restaurant, string>({
+      query: (id) => `/restaurants/admin/${id}`,
+      providesTags: (result) => (result ? [{ type: "Restaurant", id: result._id }] : []),
+    }),
+
     getMyRestaurants: builder.query<Restaurant[], void>({
       query: () => "/restaurants/mine",
       providesTags: (result) =>
@@ -107,6 +114,7 @@ export const restaurantsApi = api.injectEndpoints({
 export const {
   useListRestaurantsQuery,
   useGetRestaurantBySlugQuery,
+  useGetRestaurantByIdForAdminQuery,
   useGetMyRestaurantsQuery,
   useCreateRestaurantMutation,
   useUpdateRestaurantMutation,

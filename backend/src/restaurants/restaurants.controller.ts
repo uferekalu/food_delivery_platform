@@ -43,6 +43,16 @@ export class RestaurantsController {
     return this.restaurantsService.findPendingApproval();
   }
 
+  // Also declared before `:slug` — same reason as `mine` above. `:slug` is public but only ever
+  // resolves an *approved* restaurant (RestaurantsService.findBySlug); an admin reviewing a
+  // pending application needs to see it before it's approved, so this looks up by id instead
+  // and has no approval filter.
+  @Roles('admin')
+  @Get('admin/:id')
+  findByIdForAdmin(@Param('id') id: string) {
+    return this.restaurantsService.findByIdOrThrow(id);
+  }
+
   @Public()
   @Get(':slug')
   findBySlug(@Param('slug') slug: string) {
