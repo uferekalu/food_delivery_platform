@@ -20,8 +20,8 @@ export default function Home() {
           <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
             Browse restaurants
           </NextLink>
-          <NextLink href="/design-system" className={buttonVariants({ variant: "outline" })}>
-            View the design system
+          <NextLink href="/register?role=restaurant_owner" className={buttonVariants({ variant: "outline" })}>
+            Partner with us
           </NextLink>
         </div>
       </Container>

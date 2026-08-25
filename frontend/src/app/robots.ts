@@ -9,7 +9,9 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         // Account/checkout/order-history pages have no SEO value and are behind auth anyway.
-        disallow: ["/account", "/checkout", "/orders", "/dashboard", "/admin", "/rider"],
+        // /design-system is the internal hand-built UI kit showcase (FDP-2) — never customer
+        // content, was only ever meant for the team's own reference.
+        disallow: ["/account", "/checkout", "/orders", "/dashboard", "/admin", "/rider", "/design-system"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
