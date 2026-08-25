@@ -245,12 +245,33 @@ stolen token stops working the moment the legitimate client refreshes). Role-bas
 token's payload.
 
 **Cookie `SameSite` is environment-dependent, not a fixed choice** — this matters because
-frontend (Vercel) and backend (Render) are on different registrable domains in production,
-which makes them cross-site for cookie purposes even though local dev (`localhost:3000` →
-`localhost:4000`) is same-site (site = scheme + eTLD+1; port doesn't count). So: `SameSite=Lax`
-in development, `SameSite=None; Secure` in production — using `Lax`/`Strict` in production
-would silently break the refresh flow entirely, since the browser would just never attach the
-cookie to the cross-site request.
+frontend (Vercel) and backend (Render/Railway) are on different registrable domains in
+production, which makes them cross-site for cookie purposes even though local dev
+(`localhost:3000` → `localhost:4000`) is same-site (site = scheme + eTLD+1; port doesn't count).
+So: `SameSite=Lax` in development, `SameSite=None; Secure` in production — using `Lax`/`Strict`
+in production would silently break the refresh flow entirely, since the browser would just
+never attach the cookie to the cross-site request.
+
+**Browser-facing requests are proxied through the frontend's own origin (FDP-27)** —
+`SameSite=None` alone isn't sufficient: browsers that block **third-party cookies** (Safari, in
+every mode, by default; Chrome/Edge in private/incognito modes) never store or send the refresh
+cookie at all, regardless of `SameSite`, because the backend is a different registrable domain
+than whatever origin the browser is actually on. This shipped as a real bug — a signed-in user
+who did a full reload or back-navigated to a page saw the header revert to "Log in"/"Sign up",
+because the silent session-restore call (`SessionInitializer` → `/auth/refresh`) had no cookie
+to send. Fixed by proxying all browser-facing RTK Query calls through the frontend's own origin:
+`frontend/next.config.ts` rewrites `/api/:path*` to the backend, and
+`frontend/src/lib/redux/api.ts`'s `fetchBaseQuery` uses the relative `baseUrl: "/api"` instead
+of the absolute backend URL. Since the browser only ever talks to the frontend's own origin for
+these calls, the `Set-Cookie` response (relayed through the proxy) is attributed to that origin
+too — first-party, not third-party — so it's stored and sent regardless of the browser's
+third-party cookie policy. The backend's refresh cookie `path` is `/api/auth`, not `/auth`, to
+match this browser-visible path (`backend/src/auth/auth.controller.ts`).
+This only applies to REST calls; server-side fetches (e.g. `restaurants/[slug]/layout.tsx`,
+`sitemap.ts`) and the Socket.IO connection (`frontend/src/lib/socket.ts`, authenticated via the
+access token at handshake, not the cookie) still talk to the backend's absolute URL directly —
+proxying doesn't apply to either (server-side fetches aren't browser requests Next.js can route,
+and Socket.IO's own transport isn't backed by this HTTP rewrite).
 
 Email verification and password reset use short-lived, purpose-scoped JWTs (not general
 access/refresh tokens) delivered by email via **Resend**. Login is allowed before email
