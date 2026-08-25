@@ -91,7 +91,7 @@ function ModifierGroupRow({
         <Input placeholder="Group name (e.g. Size)" className="flex-1" {...register(`modifierGroups.${groupIndex}.name`)} />
         <IconButton label="Remove group" size="sm" variant="ghost" onClick={onRemoveGroup} icon={<TrashIcon />} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Min selections">
           <Input type="number" min="0" {...register(`modifierGroups.${groupIndex}.min`)} />
         </FormField>

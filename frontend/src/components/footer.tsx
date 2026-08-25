@@ -84,7 +84,7 @@ export function Footer() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 sm:gap-16">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-16">
             <FooterNav label="For customers" links={customerLinks} />
             <FooterNav label="For restaurants" links={restaurantLinks} />
             <FooterNav label="For riders" links={riderLinks} />

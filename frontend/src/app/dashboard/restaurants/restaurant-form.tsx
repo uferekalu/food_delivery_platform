@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { OpeningHour } from "@/lib/redux/restaurant-types";
 import type { RestaurantInput } from "@/lib/redux/services/restaurants-api";
+import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, currencyForCountry } from "@/lib/countries";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -83,6 +84,7 @@ export function RestaurantForm({
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -149,11 +151,42 @@ export function RestaurantForm({
       </FormField>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField label="Currency" hint="ISO code, e.g. NGN" error={errors.currency?.message} required>
-          <Input {...register("currency")} maxLength={3} className="uppercase" />
-        </FormField>
         <FormField label="Country" error={errors.country?.message} required>
-          <Input {...register("country")} />
+          <Controller
+            control={control}
+            name="country"
+            render={({ field }) => (
+              <Select
+                options={COUNTRY_OPTIONS}
+                value={field.value}
+                onChange={(value) => {
+                  field.onChange(value);
+                  const suggested = currencyForCountry(value);
+                  if (suggested) setValue("currency", suggested, { shouldValidate: true });
+                }}
+                placeholder="Select a country…"
+              />
+            )}
+          />
+        </FormField>
+        <FormField
+          label="Currency"
+          hint="Auto-filled from country — change if this restaurant charges in a different currency"
+          error={errors.currency?.message}
+          required
+        >
+          <Controller
+            control={control}
+            name="currency"
+            render={({ field }) => (
+              <Select
+                options={CURRENCY_OPTIONS}
+                value={field.value}
+                onChange={field.onChange}
+                placeholder="Select a currency…"
+              />
+            )}
+          />
         </FormField>
       </div>
 
