@@ -35,4 +35,8 @@ export const envValidationSchema = Joi.object({
   TERMII_BASE_URL: Joi.string().uri().optional(),
   TERMII_SENDER_ID: Joi.string().optional(),
   TERMII_CHANNEL: Joi.string().optional(),
+
+  // Sentry (docs/ROADMAP.md FDP-22) — optional, same graceful-degradation pattern as Termii
+  // above: no error tracking happens until a real DSN is set in Render's env vars.
+  SENTRY_DSN: Joi.string().uri().optional(),
 });

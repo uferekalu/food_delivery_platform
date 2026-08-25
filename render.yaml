@@ -1,6 +1,7 @@
-# Render Blueprint for the backend API. Structure only — secret values (MONGODB_URI,
-# CORS_ORIGINS, and anything added by later phases such as Cloudinary/JWT/payment provider
-# keys) are set in the Render dashboard, never committed here.
+# Render Blueprint for the backend API. Structure only — every `sync: false` value is set in
+# the Render dashboard, never committed here. Keep this list in sync with
+# backend/src/common/config/env.validation.ts and backend/.env.example whenever a required env
+# var is added — the app won't boot at all if Joi validation fails on a missing required var.
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
@@ -19,4 +20,48 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: JWT_EMAIL_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_WEBHOOK_HASH
+        sync: false
+      # Termii and Sentry are optional (docs/ROADMAP.md FDP-19/FDP-22) — SMS/error-tracking
+      # simply stay off until these are actually filled in in the dashboard.
+      - key: TERMII_API_KEY
+        sync: false
+      - key: TERMII_BASE_URL
+        sync: false
+      - key: TERMII_SENDER_ID
+        sync: false
+      - key: TERMII_CHANNEL
+        sync: false
+      - key: SENTRY_DSN
         sync: false
