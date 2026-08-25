@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Length,
   Max,
   MaxLength,
@@ -36,6 +37,16 @@ export class CreateRestaurantDto {
   @ArrayMaxSize(10)
   @IsString({ each: true })
   cuisineTypes: string[];
+
+  @ApiPropertyOptional({ description: 'Set when the owner uploads a logo before submitting' })
+  @IsOptional()
+  @IsUrl()
+  logoUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Set when the owner uploads a cover photo before submitting' })
+  @IsOptional()
+  @IsUrl()
+  coverUrl?: string;
 
   @ApiProperty({ example: 'NGN', description: 'ISO 4217 currency code' })
   @IsString()
