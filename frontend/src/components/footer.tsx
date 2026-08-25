@@ -1,15 +1,73 @@
+"use client";
+
 import NextLink from "next/link";
 import { Logo } from "./logo";
 import { Container } from "@/components/ui/container";
+import { useAppSelector } from "@/lib/redux/hooks";
 
-const CUSTOMER_LINKS = [
-  { href: "/restaurants", label: "Browse restaurants" },
-  { href: "/register", label: "Create an account" },
-  { href: "/login", label: "Log in" },
-];
+interface FooterLink {
+  href: string;
+  label: string;
+}
+
+function FooterNav({ label, links }: { label: string; links: FooterLink[] }) {
+  return (
+    <nav aria-label={label} className="flex flex-col gap-3">
+      <h3 className="text-sm font-semibold text-text">{label}</h3>
+      <ul className="flex flex-col gap-2">
+        {links.map((link) => (
+          <li key={link.href}>
+            <NextLink href={link.href} className="text-sm text-text-muted hover:text-text hover:underline">
+              {link.label}
+            </NextLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
 
 export function Footer() {
+  const { user, status } = useAppSelector((state) => state.auth);
+  const authenticated = status === "authenticated" && !!user;
   const year = new Date().getFullYear();
+
+  // Signed-in visitors never see "Create an account" / "Log in" again — those are dead ends for
+  // someone already past that step. Each column instead points at the account's own next step:
+  // an owner's actual dashboard rather than a link back through /login, same for riders. This
+  // mirrors AuthStatus's role-aware links in the header, which the footer had drifted out of
+  // sync with (only the header was ever updated as roles/routes were added).
+  const customerLinks: FooterLink[] = authenticated
+    ? [
+        { href: "/restaurants", label: "Browse restaurants" },
+        { href: "/orders", label: "My orders" },
+        { href: "/account", label: "My account" },
+      ]
+    : [
+        { href: "/restaurants", label: "Browse restaurants" },
+        { href: "/register", label: "Create an account" },
+        { href: "/login", label: "Log in" },
+      ];
+
+  const restaurantLinks: FooterLink[] =
+    authenticated && user.role === "restaurant_owner"
+      ? [{ href: "/dashboard/restaurants", label: "My restaurants" }]
+      : authenticated
+        ? [{ href: "/register?role=restaurant_owner", label: "Partner with us" }]
+        : [
+            { href: "/register?role=restaurant_owner", label: "Partner with us" },
+            { href: "/login", label: "Log in" },
+          ];
+
+  const riderLinks: FooterLink[] =
+    authenticated && user.role === "rider"
+      ? [{ href: "/rider", label: "Rider dashboard" }]
+      : authenticated
+        ? [{ href: "/rider/apply", label: "Become a rider" }]
+        : [
+            { href: "/rider/apply", label: "Become a rider" },
+            { href: "/login", label: "Log in" },
+          ];
 
   return (
     <footer className="border-t border-border bg-surface-subtle">
@@ -27,53 +85,9 @@ export function Footer() {
           </div>
 
           <div className="grid grid-cols-3 gap-4 sm:gap-16">
-            <nav aria-label="For customers" className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold text-text">For customers</h3>
-              <ul className="flex flex-col gap-2">
-                {CUSTOMER_LINKS.map((link) => (
-                  <li key={link.href}>
-                    <NextLink href={link.href} className="text-sm text-text-muted hover:text-text hover:underline">
-                      {link.label}
-                    </NextLink>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-
-            <nav aria-label="For restaurants" className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold text-text">For restaurants</h3>
-              <ul className="flex flex-col gap-2">
-                <li>
-                  <NextLink
-                    href="/register?role=restaurant_owner"
-                    className="text-sm text-text-muted hover:text-text hover:underline"
-                  >
-                    Partner with us
-                  </NextLink>
-                </li>
-                <li>
-                  <NextLink href="/login" className="text-sm text-text-muted hover:text-text hover:underline">
-                    Restaurant dashboard
-                  </NextLink>
-                </li>
-              </ul>
-            </nav>
-
-            <nav aria-label="For riders" className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold text-text">For riders</h3>
-              <ul className="flex flex-col gap-2">
-                <li>
-                  <NextLink href="/rider/apply" className="text-sm text-text-muted hover:text-text hover:underline">
-                    Become a rider
-                  </NextLink>
-                </li>
-                <li>
-                  <NextLink href="/login" className="text-sm text-text-muted hover:text-text hover:underline">
-                    Rider dashboard
-                  </NextLink>
-                </li>
-              </ul>
-            </nav>
+            <FooterNav label="For customers" links={customerLinks} />
+            <FooterNav label="For restaurants" links={restaurantLinks} />
+            <FooterNav label="For riders" links={riderLinks} />
           </div>
         </div>
 
