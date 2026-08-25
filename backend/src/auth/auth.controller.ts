@@ -26,7 +26,11 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import type { AccessTokenPayload } from './interfaces/jwt-payload.interface';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
-const REFRESH_COOKIE_PATH = '/auth';
+// The frontend proxies browser requests through its own /api/:path* rewrite (see
+// docs/ARCHITECTURE.md §11 and frontend/next.config.ts) so this cookie is first-party rather
+// than third-party — the path must match the browser-visible request path, not the backend's
+// own route path, or the browser won't attach the cookie to /api/auth/refresh calls.
+const REFRESH_COOKIE_PATH = '/api/auth';
 
 @ApiTags('auth')
 @Controller('auth')

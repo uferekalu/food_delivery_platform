@@ -18,7 +18,10 @@ function requestUrl(args: string | FetchArgs): string {
 }
 
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+  // Relative, not the absolute backend URL — routed through this app's own /api/:path* rewrite
+  // (next.config.ts) so the refresh cookie is first-party from the browser's point of view. See
+  // docs/ARCHITECTURE.md §11.
+  baseUrl: "/api",
   // Sends/receives the httpOnly refresh_token cookie — see docs/ARCHITECTURE.md §11.
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
