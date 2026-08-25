@@ -1,8 +1,22 @@
+"use client";
+
 import { Container } from "@/components/ui/container";
 import { buttonVariants } from "@/components/ui/button";
 import NextLink from "next/link";
+import { useAppSelector } from "@/lib/redux/hooks";
 
 export default function Home() {
+  const { user, status } = useAppSelector((state) => state.auth);
+  const authenticated = status === "authenticated" && !!user;
+
+  // Someone who already owns a restaurant has nothing to gain from the "become a partner"
+  // signup flow — point them at their own dashboard instead. Mirrors Footer's restaurantLinks
+  // logic (FDP-25); every other authenticated role still sees the partner upsell, same as there.
+  const partnerCta =
+    authenticated && user.role === "restaurant_owner"
+      ? { href: "/dashboard/restaurants", label: "My restaurants" }
+      : { href: "/register?role=restaurant_owner", label: "Partner with us" };
+
   return (
     <div className="flex flex-1 items-center bg-surface-subtle">
       <Container className="flex flex-col items-start gap-6 py-24">
@@ -20,8 +34,8 @@ export default function Home() {
           <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
             Browse restaurants
           </NextLink>
-          <NextLink href="/register?role=restaurant_owner" className={buttonVariants({ variant: "outline" })}>
-            Partner with us
+          <NextLink href={partnerCta.href} className={buttonVariants({ variant: "outline" })}>
+            {partnerCta.label}
           </NextLink>
         </div>
       </Container>
