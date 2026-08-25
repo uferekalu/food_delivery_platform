@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/node';
 import type { Request, Response } from 'express';
 
 interface ErrorBody {
@@ -46,6 +47,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(
         exception instanceof Error ? exception.stack : exception,
       );
+      // A no-op when SENTRY_DSN isn't configured (docs/ROADMAP.md FDP-22) — Sentry.init() is
+      // never called in that case (see main.ts), and captureException on an uninitialized SDK
+      // is a documented safe no-op, not an error.
+      Sentry.captureException(exception);
     }
 
     const body: ErrorBody = {
