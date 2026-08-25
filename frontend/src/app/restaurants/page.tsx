@@ -50,6 +50,15 @@ function priceLevelLabel(level: number): string {
   return "$".repeat(level);
 }
 
+function PlateIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" className="size-12">
+      <circle cx="24" cy="24" r="19" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="24" cy="24" r="11" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 export default function RestaurantsPage() {
   const [searchInput, setSearchInput] = useState("");
   const search = useDebouncedValue(searchInput, 350);
@@ -76,6 +85,14 @@ export default function RestaurantsPage() {
     };
   }
 
+  const hasActiveFilters = Boolean(search || minRating || maxPriceLevel || maxDeliveryMinutes);
+  // Once we know the platform has zero restaurants at all (not just zero matches for the
+  // current search/filters), the search box and filter dropdowns have nothing to act on —
+  // showing them next to "no restaurants found" reads as broken, not just empty. Keep them
+  // visible during the initial load (we don't know which case it is yet) and whenever a
+  // search/filter actually produced the empty result, so clearing it is still possible.
+  const platformIsEmpty = !isLoading && !isError && data?.total === 0 && !hasActiveFilters;
+
   return (
     <Container className="flex flex-col gap-6 py-10">
       <div className="flex flex-col gap-2">
@@ -83,45 +100,47 @@ export default function RestaurantsPage() {
         <p className="text-text-muted">Order from restaurants near you.</p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <Input
-          type="search"
-          placeholder="Search restaurants…"
-          value={searchInput}
-          onChange={(e) => {
-            setSearchInput(e.target.value);
-            setPage(1);
-          }}
-          className="max-w-sm"
-          aria-label="Search restaurants"
-        />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:max-w-2xl">
-          <Select
-            aria-label="Minimum rating"
-            options={RATING_OPTIONS}
-            value={minRating}
-            onChange={resetToFirstPage(setMinRating)}
+      {!platformIsEmpty && (
+        <div className="flex flex-col gap-3">
+          <Input
+            type="search"
+            placeholder="Search restaurants…"
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setPage(1);
+            }}
+            className="max-w-sm"
+            aria-label="Search restaurants"
           />
-          <Select
-            aria-label="Maximum price"
-            options={PRICE_OPTIONS}
-            value={maxPriceLevel}
-            onChange={resetToFirstPage(setMaxPriceLevel)}
-          />
-          <Select
-            aria-label="Maximum delivery time"
-            options={DELIVERY_TIME_OPTIONS}
-            value={maxDeliveryMinutes}
-            onChange={resetToFirstPage(setMaxDeliveryMinutes)}
-          />
-          <Select
-            aria-label="Sort by"
-            options={SORT_OPTIONS}
-            value={sort}
-            onChange={resetToFirstPage((v: string) => setSort(v as RestaurantSort))}
-          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:max-w-2xl">
+            <Select
+              aria-label="Minimum rating"
+              options={RATING_OPTIONS}
+              value={minRating}
+              onChange={resetToFirstPage(setMinRating)}
+            />
+            <Select
+              aria-label="Maximum price"
+              options={PRICE_OPTIONS}
+              value={maxPriceLevel}
+              onChange={resetToFirstPage(setMaxPriceLevel)}
+            />
+            <Select
+              aria-label="Maximum delivery time"
+              options={DELIVERY_TIME_OPTIONS}
+              value={maxDeliveryMinutes}
+              onChange={resetToFirstPage(setMaxDeliveryMinutes)}
+            />
+            <Select
+              aria-label="Sort by"
+              options={SORT_OPTIONS}
+              value={sort}
+              onChange={resetToFirstPage((v: string) => setSort(v as RestaurantSort))}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {isError && <Alert variant="danger">Couldn&apos;t load restaurants — try again shortly.</Alert>}
 
@@ -162,10 +181,17 @@ export default function RestaurantsPage() {
           </div>
           <Pagination page={page} totalPages={data.totalPages} onChange={setPage} className="self-center" />
         </>
+      ) : platformIsEmpty ? (
+        <EmptyState
+          icon={<PlateIcon />}
+          title="No restaurants yet"
+          description="We're just getting started — check back soon as new restaurants join the platform."
+          className="py-20"
+        />
       ) : (
         <EmptyState
           title="No restaurants found"
-          description={search ? "Try a different search or filters." : "Check back soon — new restaurants are added regularly."}
+          description="Try a different search or filters."
         />
       )}
     </Container>
