@@ -1,17 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import NextLink from "next/link";
 import { Container } from "@/components/ui/container";
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Pagination } from "@/components/ui/pagination";
 import { Alert } from "@/components/ui/alert";
-import { FavoriteButton } from "@/components/favorite-button";
+import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import type { RestaurantSort } from "@/lib/redux/restaurant-types";
@@ -45,19 +42,6 @@ const DELIVERY_TIME_OPTIONS: SelectOption[] = [
   { value: "45", label: "Under 45 min" },
   { value: "60", label: "Under 60 min" },
 ];
-
-function priceLevelLabel(level: number): string {
-  return "$".repeat(level);
-}
-
-function PlateIcon({ className = "size-12" }: { className?: string }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" className={className}>
-      <circle cx="24" cy="24" r="19" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="24" cy="24" r="11" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
 
 export default function RestaurantsPage() {
   const [searchInput, setSearchInput] = useState("");
@@ -154,51 +138,7 @@ export default function RestaurantsPage() {
         <>
           <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${isFetching ? "opacity-60" : ""}`}>
             {data.items.map((restaurant) => (
-              <Card
-                key={restaurant._id}
-                className="relative h-full overflow-hidden transition-colors duration-150 hover:border-border-strong"
-              >
-                <FavoriteButton restaurantId={restaurant._id} className="absolute top-3 right-3 z-10" />
-                <NextLink href={`/restaurants/${restaurant.slug}`} className="block h-full">
-                  <div className="relative h-36 w-full bg-secondary">
-                    {restaurant.coverUrl ? (
-                      // A restaurant browse-grid photo doesn't warrant next/image's layout machinery here.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={restaurant.coverUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-text-muted">
-                        <PlateIcon className="size-10" />
-                      </div>
-                    )}
-                    {restaurant.logoUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={restaurant.logoUrl}
-                        alt=""
-                        className="absolute -bottom-5 left-4 size-12 rounded-full border-2 border-surface object-cover shadow-sm"
-                      />
-                    )}
-                  </div>
-                  <CardHeader className={restaurant.logoUrl ? "pt-8" : undefined}>
-                    <CardTitle>{restaurant.name}</CardTitle>
-                    <CardDescription>
-                      {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)} •{" "}
-                      {priceLevelLabel(restaurant.priceLevel)}
-                      {restaurant.estimatedDeliveryMinutes ? ` • ~${restaurant.estimatedDeliveryMinutes} min` : ""}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap items-center gap-2">
-                    <Badge variant={restaurant.isOpen ? "success" : "neutral"}>
-                      {restaurant.isOpen ? "Open" : "Closed"}
-                    </Badge>
-                    {restaurant.cuisineTypes.slice(0, 3).map((cuisine) => (
-                      <Badge key={cuisine} variant="primary">
-                        {cuisine}
-                      </Badge>
-                    ))}
-                  </CardContent>
-                </NextLink>
-              </Card>
+              <RestaurantCard key={restaurant._id} restaurant={restaurant} />
             ))}
           </div>
           <Pagination page={page} totalPages={data.totalPages} onChange={setPage} className="self-center" />
