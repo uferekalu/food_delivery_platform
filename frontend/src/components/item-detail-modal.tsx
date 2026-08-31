@@ -163,6 +163,11 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
   return (
     <Modal open={open} onClose={onClose} title={item.name} description={item.description || undefined} size="md">
       <div className="flex flex-col gap-5">
+        {item.imageUrl && (
+          // A menu item photo doesn't warrant next/image's layout machinery here.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt="" className="-mt-1 h-40 w-full rounded-md object-cover" />
+        )}
         {item.modifierGroups.map((group) => (
           <ModifierGroupFields
             key={group.name}

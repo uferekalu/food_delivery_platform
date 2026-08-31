@@ -11,13 +11,12 @@ export interface CreateItemInput {
   name: string;
   description?: string;
   price: number;
+  imageUrl?: string;
   sortOrder?: number;
   modifierGroups?: ModifierGroup[];
 }
 
-export interface UpdateItemInput extends Partial<CreateItemInput> {
-  imageUrl?: string;
-}
+export type UpdateItemInput = Partial<CreateItemInput>;
 
 export const menuApi = api.injectEndpoints({
   endpoints: (builder) => ({
