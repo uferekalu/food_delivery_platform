@@ -19,6 +19,8 @@ export interface CreateUserInput {
   passwordHash: string;
   name: string;
   role?: UserRole;
+  phone?: string;
+  isPhoneVerified?: boolean;
 }
 
 @Injectable()
@@ -34,6 +36,16 @@ export class UsersService {
 
   findByEmail(email: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ email: email.toLowerCase().trim() }).exec();
+  }
+
+  findByPhone(phone: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({ phone: phone.trim() }).exec();
+  }
+
+  async markPhoneVerified(id: string, phone: string): Promise<void> {
+    await this.userModel
+      .updateOne({ _id: id }, { phone, isPhoneVerified: true })
+      .exec();
   }
 
   /** Includes `passwordHash`, which is excluded from queries by default (`select: false`). */

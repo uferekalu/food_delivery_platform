@@ -9,7 +9,7 @@ import {
 } from './schemas/notification.schema';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
-import { SmsService } from './sms.service';
+import { SmsModule } from './sms.module';
 
 @Module({
   imports: [
@@ -19,9 +19,10 @@ import { SmsService } from './sms.service';
     UsersModule,
     MailModule,
     RealtimeModule,
+    SmsModule,
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsService, SmsService],
+  providers: [NotificationsService],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

@@ -38,7 +38,9 @@ export class CreateMenuItemDto {
   @Min(0)
   price: number;
 
-  @ApiPropertyOptional({ description: 'Set when the owner uploads a photo before submitting' })
+  @ApiPropertyOptional({
+    description: 'Set when the owner uploads a photo before submitting',
+  })
   @IsOptional()
   @IsUrl()
   imageUrl?: string;

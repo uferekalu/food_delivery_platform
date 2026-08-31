@@ -51,9 +51,16 @@ export class User {
 
   // E.164-ish (optional leading `+`, digits only) — the only channel SMS notifications
   // (docs/ROADMAP.md FDP-19) can actually reach; null until the user supplies one, since
-  // registration never required a phone number.
-  @Prop({ type: String, default: null, trim: true })
+  // registration never required a phone number. `sparse` (not a plain `unique`) so any number
+  // of users can each have `phone: null` without colliding on the unique index — only actual
+  // phone values need to be distinct.
+  @Prop({ type: String, default: null, trim: true, unique: true, sparse: true })
   phone: string | null;
+
+  // Proven by completing the OTP-over-SMS flow (docs/ROADMAP.md FDP-41), independently of
+  // isEmailVerified — a user can have one, both, or neither verified.
+  @Prop({ default: false })
+  isPhoneVerified: boolean;
 
   @Prop({ type: [SavedAddressSchema], default: [] })
   savedAddresses: SavedAddress[];

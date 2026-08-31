@@ -9,11 +9,13 @@ import { Model } from 'mongoose';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../notifications/sms.service';
 import {
   RefreshToken,
   RefreshTokenDocument,
   RefreshTokenSchema,
 } from './schemas/refresh-token.schema';
+import { PhoneOtp, PhoneOtpDocument, PhoneOtpSchema } from './schemas/phone-otp.schema';
 import { User, UserDocument, UserSchema } from '../users/schemas/user.schema';
 import * as bcrypt from 'bcryptjs';
 
@@ -27,8 +29,10 @@ describe('AuthService', () => {
   let authService: AuthService;
   let usersService: jest.Mocked<UsersService>;
   let mailService: jest.Mocked<MailService>;
+  let smsService: jest.Mocked<SmsService>;
   let userModel: Model<UserDocument>;
   let refreshTokenModel: Model<RefreshTokenDocument>;
+  let phoneOtpModel: Model<PhoneOtpDocument>;
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
@@ -56,6 +60,7 @@ describe('AuthService', () => {
         MongooseModule.forFeature([
           { name: RefreshToken.name, schema: RefreshTokenSchema },
           { name: User.name, schema: UserSchema },
+          { name: PhoneOtp.name, schema: PhoneOtpSchema },
         ]),
       ],
       providers: [
@@ -67,6 +72,7 @@ describe('AuthService', () => {
             findByEmailWithPassword: jest.fn(),
             findById: jest.fn(),
             findByIdWithPassword: jest.fn(),
+            findByPhone: jest.fn(),
             create: jest.fn(),
             markEmailVerified: jest.fn(),
             updatePasswordHash: jest.fn(),
@@ -84,19 +90,28 @@ describe('AuthService', () => {
             sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: SmsService,
+          useValue: {
+            send: jest.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile();
 
     authService = moduleRef.get(AuthService);
     usersService = moduleRef.get(UsersService);
     mailService = moduleRef.get(MailService);
+    smsService = moduleRef.get(SmsService);
     userModel = moduleRef.get(getModelToken(User.name));
     refreshTokenModel = moduleRef.get(getModelToken(RefreshToken.name));
+    phoneOtpModel = moduleRef.get(getModelToken(PhoneOtp.name));
   }, 60_000); // headroom for the 60s mongod launchTimeout above, not just module compile
 
   afterEach(async () => {
     await refreshTokenModel.deleteMany({}).exec();
     await userModel.deleteMany({}).exec();
+    await phoneOtpModel.deleteMany({}).exec();
     jest.clearAllMocks();
   });
 
@@ -315,6 +330,133 @@ describe('AuthService', () => {
       await expect(authService.refresh(tokens.refreshToken)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('phone OTP', () => {
+    function sentCode(): string {
+      const message = smsService.send.mock.calls.at(-1)?.[1] ?? '';
+      const match = /code is (\d{6})/.exec(message);
+      if (!match) throw new Error('No OTP code found in the last SMS send');
+      return match[1];
+    }
+
+    it('signup: verifying the sent code returns a phoneVerificationToken usable by register()', async () => {
+      await authService.sendPhoneCode('+2348012345678', 'signup');
+      const code = sentCode();
+
+      const result = await authService.verifyPhoneCode(
+        '+2348012345678',
+        code,
+        'signup',
+      );
+      expect(result.purpose).toBe('signup');
+      if (result.purpose !== 'signup') return;
+
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.findByPhone.mockResolvedValue(null);
+      usersService.create.mockImplementation((input) =>
+        userModel.create({ ...input, role: 'customer' }),
+      );
+
+      const { user } = await authService.register({
+        email: 'phone-signup@example.com',
+        password: 'Str0ngPass!',
+        name: 'Phone Signup',
+        phone: '+2348012345678',
+        phoneVerificationToken: result.phoneVerificationToken,
+      });
+
+      expect(user.phone).toBe('+2348012345678');
+      expect(user.isPhoneVerified).toBe(true);
+    });
+
+    it('register() rejects a phone with no verification token', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      await expect(
+        authService.register({
+          email: 'unverified-phone@example.com',
+          password: 'Str0ngPass!',
+          name: 'No Token',
+          phone: '+2348099999999',
+        }),
+      ).rejects.toThrow('phoneVerificationToken is required when phone is provided');
+    });
+
+    it('register() rejects a verification token minted for a different phone', async () => {
+      await authService.sendPhoneCode('+2348011111111', 'signup');
+      const code = sentCode();
+      const result = await authService.verifyPhoneCode(
+        '+2348011111111',
+        code,
+        'signup',
+      );
+      if (result.purpose !== 'signup') throw new Error('expected signup result');
+
+      usersService.findByEmail.mockResolvedValue(null);
+
+      await expect(
+        authService.register({
+          email: 'mismatched-phone@example.com',
+          password: 'Str0ngPass!',
+          name: 'Mismatch',
+          phone: '+2348022222222', // different from the verified phone above
+          phoneVerificationToken: result.phoneVerificationToken,
+        }),
+      ).rejects.toThrow('Invalid or expired phone verification');
+    });
+
+    it('rejects the wrong code and eventually locks out after too many attempts', async () => {
+      await authService.sendPhoneCode('+2348033333333', 'signup');
+
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          authService.verifyPhoneCode('+2348033333333', '000000', 'signup'),
+        ).rejects.toThrow('Invalid or expired code');
+      }
+      // The 6th attempt is blocked for being over the limit, not for a wrong code — a
+      // different message, asserted here so the two failure modes don't get conflated.
+      await expect(
+        authService.verifyPhoneCode('+2348033333333', '000000', 'signup'),
+      ).rejects.toThrow('Too many attempts — request a new code');
+    });
+
+    it('login: does not text a phone with no verified account, but responds the same either way', async () => {
+      usersService.findByPhone.mockResolvedValue(null);
+      await authService.sendPhoneCode('+2348044444444', 'login');
+      expect(smsService.send).not.toHaveBeenCalled();
+    });
+
+    it('login: verifying the code for a phone-verified user logs them in', async () => {
+      const user = await createUser('irrelevant-hash');
+      user.phone = '+2348055555555';
+      user.isPhoneVerified = true;
+      await user.save();
+      usersService.findByPhone.mockResolvedValue(user);
+
+      await authService.sendPhoneCode('+2348055555555', 'login');
+      const code = sentCode();
+
+      const result = await authService.verifyPhoneCode(
+        '+2348055555555',
+        code,
+        'login',
+      );
+      expect(result.purpose).toBe('login');
+      if (result.purpose !== 'login') return;
+      expect(result.user.phone).toBe('+2348055555555');
+      expect(result.tokens.accessToken).toEqual(expect.any(String));
+    });
+
+    it('a consumed code cannot be replayed', async () => {
+      await authService.sendPhoneCode('+2348066666666', 'signup');
+      const code = sentCode();
+
+      await authService.verifyPhoneCode('+2348066666666', code, 'signup');
+      await expect(
+        authService.verifyPhoneCode('+2348066666666', code, 'signup'),
+      ).rejects.toThrow('Invalid or expired code');
     });
   });
 });

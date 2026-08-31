@@ -32,7 +32,9 @@ Glovo, Chowdeck) — built for global reach with first-class support for African
 ## 4. Core feature set ("everything a modern platform requires")
 
 ### Customer-facing
-- Auth: email/password signup+login, email verification, password reset, session management
+- Auth: email/password signup+login, email verification, password reset, session management.
+  Phone number is optional at signup, verified via an SMS OTP (FDP-41) — once verified, it also
+  works as a passwordless login method on its own
 - Location-aware restaurant discovery (search, filter by cuisine/price/rating/delivery time, sort)
 - Restaurant storefront: menu with categories, item detail, modifiers/options, availability
 - Cart (one active restaurant per cart — standard food-delivery UX to keep delivery logistics sane)

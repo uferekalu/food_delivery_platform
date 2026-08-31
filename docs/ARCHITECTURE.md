@@ -318,6 +318,29 @@ skipping `await mutex.waitForUnlock()` specifically when the outgoing request's 
 `/auth/refresh` itself; a plain `mutex.acquire()`/`release()` around a call has to exempt that
 call's own request this way whenever the call routes back through the same `baseQuery`.
 
+**Phone number sign-up/login via SMS OTP (FDP-41).** Email/password stays the account's primary
+identity — this deliberately does *not* make email optional or phone-only signup possible, since
+email is assumed to exist everywhere else in the system (receipts, password reset, admin lists).
+Phone is a verified, optional supplement:
+
+- `POST /auth/phone/send-code` (`{ phone, purpose: 'signup' | 'login' }`) generates a 6-digit
+  code, stores it hashed (sha256, same as refresh tokens — a slow bcrypt hash buys nothing extra
+  once the code is already rate-limited, expires in 5 min, and locks out after 5 wrong
+  attempts), and sends it via the existing Termii `SmsService` (FDP-19). `purpose: 'login'`
+  never reveals whether a matching verified account exists — no account, no text, but the same
+  generic response either way (same reasoning as `forgotPassword`).
+- `POST /auth/phone/verify-code` checks the code. For `purpose: 'signup'`, there's no user yet,
+  so it returns a short-lived (`10m`) `phoneVerificationToken` (JWT, `JWT_EMAIL_SECRET`) instead
+  — `POST /auth/register` requires this token alongside a matching `phone` to actually attach it
+  to the new account; a bare `phone` with no valid token is rejected outright, never silently
+  trusted. For `purpose: 'login'`, proving phone ownership via OTP *is* the credential —
+  passwordless, logs the caller straight in with real session tokens, same as email/password
+  login.
+- `SmsService` moved out of `NotificationsModule` into its own `SmsModule`
+  (`backend/src/notifications/sms.module.ts`) so `AuthModule` can use it without pulling in
+  `NotificationsModule` → `RealtimeModule` → `AuthModule`, which would otherwise be a circular
+  module dependency.
+
 ## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in

@@ -14,3 +14,13 @@ export interface EmailTokenPayload {
    * no longer matches and the token is rejected even though it hasn't expired yet. */
   pwdFingerprint?: string;
 }
+
+/**
+ * Proves a phone number was just verified via OTP (docs/ROADMAP.md FDP-41), carried from
+ * `POST /auth/phone/verify-code` (purpose: 'signup') into `POST /auth/register` — there's no
+ * user record yet at that point, so unlike EmailTokenPayload this has no `sub`.
+ */
+export interface PhoneSignupTokenPayload {
+  phone: string;
+  purpose: 'verify-phone-signup';
+}

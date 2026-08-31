@@ -14,9 +14,119 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { RadioGroup, RadioOption } from "@/components/ui/radio-group";
-import { useRegisterMutation } from "@/lib/redux/services/auth-api";
+import { Badge } from "@/components/ui/badge";
+import {
+  useRegisterMutation,
+  useSendPhoneCodeMutation,
+  useVerifyPhoneCodeMutation,
+} from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { SelfRegisterableRole } from "@/lib/constants/roles";
+
+interface VerifiedPhone {
+  phone: string;
+  token: string;
+}
+
+/**
+ * Self-contained phone verification widget for signup (docs/ROADMAP.md FDP-41) — send a code,
+ * enter it, and on success this hands the parent a `phoneVerificationToken` proving the phone
+ * was actually checked via OTP, not just typed in. The parent carries that token into the final
+ * `register()` call; nothing here creates an account by itself.
+ */
+function PhoneVerificationField({
+  verified,
+  onVerified,
+  onClear,
+}: {
+  verified: VerifiedPhone | null;
+  onVerified: (value: VerifiedPhone) => void;
+  onClear: () => void;
+}) {
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sendCode, { isLoading: isSending }] = useSendPhoneCodeMutation();
+  const [verifyCode, { isLoading: isVerifying }] = useVerifyPhoneCodeMutation();
+
+  if (verified) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-border p-3">
+        <Badge variant="success">Verified</Badge>
+        <span className="flex-1 text-sm text-text">{verified.phone}</span>
+        <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+          Change
+        </Button>
+      </div>
+    );
+  }
+
+  async function handleSendCode() {
+    setError(null);
+    try {
+      await sendCode({ phone, purpose: "signup" }).unwrap();
+      setCodeSent(true);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't send a code to that number"));
+    }
+  }
+
+  async function handleVerifyCode() {
+    setError(null);
+    try {
+      const result = await verifyCode({ phone, code, purpose: "signup" }).unwrap();
+      if (!result.loggedIn) onVerified({ phone, token: result.phoneVerificationToken });
+    } catch (err) {
+      setError(getErrorMessage(err, "That code didn't match"));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {error && (
+        <p className="text-sm text-danger" role="alert">
+          {error}
+        </p>
+      )}
+      {!codeSent ? (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input
+              type="tel"
+              placeholder="+2348012345678"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              aria-label="Phone number"
+            />
+          </div>
+          <Button type="button" variant="outline" isLoading={isSending} onClick={() => void handleSendCode()}>
+            Send code
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              aria-label="Verification code"
+            />
+          </div>
+          <Button type="button" variant="outline" isLoading={isVerifying} onClick={() => void handleVerifyCode()}>
+            Verify
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setCodeSent(false)}>
+            Back
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
 
@@ -76,6 +186,7 @@ function RegisterForm() {
   const [role, setRole] = useState<SelfRegisterableRole>(
     searchParams.get("role") === "restaurant_owner" ? "restaurant_owner" : "customer",
   );
+  const [verifiedPhone, setVerifiedPhone] = useState<VerifiedPhone | null>(null);
   const {
     register,
     handleSubmit,
@@ -87,7 +198,13 @@ function RegisterForm() {
     try {
       // The backend's ValidationPipe uses forbidNonWhitelisted — confirmPassword is a
       // client-only field, sending it would get the whole request rejected as 400.
-      await registerUser({ name: values.name, email: values.email, password: values.password, role }).unwrap();
+      await registerUser({
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        role,
+        ...(verifiedPhone ? { phone: verifiedPhone.phone, phoneVerificationToken: verifiedPhone.token } : {}),
+      }).unwrap();
       toast({
         title: "Account created",
         description:
@@ -131,6 +248,13 @@ function RegisterForm() {
           </FormField>
           <FormField label="Confirm password" error={errors.confirmPassword?.message} required>
             <Input type="password" autoComplete="new-password" {...register("confirmPassword")} />
+          </FormField>
+          <FormField label="Phone number (optional)" hint="Verify it now to log in with your phone later.">
+            <PhoneVerificationField
+              verified={verifiedPhone}
+              onVerified={setVerifiedPhone}
+              onClear={() => setVerifiedPhone(null)}
+            />
           </FormField>
           <Button type="submit" isLoading={isLoading}>
             Create account
