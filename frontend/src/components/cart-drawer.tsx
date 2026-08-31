@@ -42,7 +42,17 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
   const lineTotal = (item.price + modifiersTotal) * item.qty;
 
   return (
-    <div className="flex flex-col gap-1 border-b border-border pb-3">
+    <div className="flex gap-3 border-b border-border pb-3">
+      {item.imageUrl ? (
+        // A small cart-drawer thumbnail doesn't warrant next/image's layout machinery.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.imageUrl} alt="" className="size-14 shrink-0 rounded-md object-cover" />
+      ) : (
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-md bg-secondary text-text-muted">
+          <CartIcon />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col gap-1">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <span className="text-sm font-medium text-text">{item.name}</span>
@@ -115,6 +125,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
         <span className="text-sm font-medium text-text">
           {currency} {lineTotal.toFixed(2)}
         </span>
+      </div>
       </div>
     </div>
   );

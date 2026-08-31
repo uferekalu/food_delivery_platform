@@ -23,6 +23,9 @@ export class CartItem {
   @Prop({ type: Number, required: true, min: 0 })
   price: number;
 
+  @Prop({ type: String, default: null })
+  imageUrl: string | null;
+
   @Prop({ type: Number, required: true, min: 1, max: 20 })
   qty: number;
 

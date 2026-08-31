@@ -133,16 +133,25 @@ function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: L
         <CardContent className="flex flex-col gap-3">
           {order.items.map((item, index) => (
             <div key={`${item.menuItemId}-${index}`} className="flex items-start justify-between gap-3 text-sm">
-              <div className="flex flex-col">
-                <span className="text-text">
-                  {item.qty}× {item.name}
-                </span>
-                {item.selectedModifiers.length > 0 && (
-                  <span className="text-xs text-text-muted">
-                    {item.selectedModifiers.map((m) => m.optionName).join(", ")}
-                  </span>
+              <div className="flex items-start gap-3">
+                {item.imageUrl ? (
+                  // A small order-item thumbnail doesn't warrant next/image's layout machinery.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.imageUrl} alt="" className="size-12 shrink-0 rounded-md object-cover" />
+                ) : (
+                  <div className="size-12 shrink-0 rounded-md bg-secondary" />
                 )}
-                {item.notes && <span className="text-xs text-text-muted italic">&quot;{item.notes}&quot;</span>}
+                <div className="flex flex-col">
+                  <span className="text-text">
+                    {item.qty}× {item.name}
+                  </span>
+                  {item.selectedModifiers.length > 0 && (
+                    <span className="text-xs text-text-muted">
+                      {item.selectedModifiers.map((m) => m.optionName).join(", ")}
+                    </span>
+                  )}
+                  {item.notes && <span className="text-xs text-text-muted italic">&quot;{item.notes}&quot;</span>}
+                </div>
               </div>
               <span className="text-text-muted">
                 {order.currency} {((item.price + item.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0)) * item.qty).toFixed(2)}
