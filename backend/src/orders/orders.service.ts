@@ -279,6 +279,7 @@ export class OrdersService {
         menuItemId: item.menuItemId,
         name: item.name,
         price: item.price,
+        imageUrl: item.imageUrl,
         qty: item.qty,
         selectedModifiers: item.selectedModifiers,
         notes: item.notes,

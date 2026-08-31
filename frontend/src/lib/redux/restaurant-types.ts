@@ -105,6 +105,7 @@ export interface CartItem {
   menuItemId: string;
   name: string;
   price: number;
+  imageUrl: string | null;
   qty: number;
   selectedModifiers: SelectedModifier[];
   notes: string;
@@ -146,6 +147,7 @@ export interface OrderItem {
   menuItemId: string;
   name: string;
   price: number;
+  imageUrl: string | null;
   qty: number;
   selectedModifiers: SelectedModifier[];
   notes: string;

@@ -103,6 +103,7 @@ export class CartService {
         menuItemId: menuItem._id,
         name: menuItem.name,
         price: menuItem.price,
+        imageUrl: menuItem.imageUrl,
         qty,
         selectedModifiers: resolvedModifiers,
         notes: newLineNotes,

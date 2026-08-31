@@ -394,10 +394,17 @@ function CheckoutForm() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               {cart.items.map((item) => (
-                <div key={item._id} className="flex items-center justify-between text-sm">
-                  <span className="text-text">
+                <div key={item._id} className="flex items-center gap-2 text-sm">
+                  {item.imageUrl ? (
+                    // A small checkout-summary thumbnail doesn't warrant next/image's layout machinery.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.imageUrl} alt="" className="size-9 shrink-0 rounded-md object-cover" />
+                  ) : (
+                    <div className="size-9 shrink-0 rounded-md bg-secondary" />
+                  )}
+                  <span className="flex-1 text-text">
                     {item.qty}× {item.name}
                   </span>
                   <span className="text-text-muted">
