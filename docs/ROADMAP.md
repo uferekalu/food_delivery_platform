@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-39**
+**Next available ticket number: FDP-40**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -50,12 +50,13 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-35 | `checkout-ux-polish` | Checkout UX to match Glovo's pattern (delivery-option selector, collapsible promo code, cleaner summary) — arranges existing delivery-zone/promo-code functionality, no new backend logic | ✅ Done |
 | FDP-36 | `overlay-elevation-dark-mode` | `Modal`, `Drawer`, `DropdownMenu`, and `Select`'s popup all used `bg-surface` instead of `bg-surface-raised` — in dark mode this is the identical near-black as the page background (`Card`/`Toast` already correctly use `bg-surface-raised`), so every one of these overlays visually blended into whatever was behind it. Found via a real screenshot of the add-to-cart modal in dark mode | ✅ Done |
 | FDP-37 | `admin-create-restaurant-permission` | `POST /restaurants` was `@Roles('restaurant_owner')` only, while every other restaurant mutation (`update`, `toggle-open`, `approve`) already allows `admin` too, and the frontend's "Add a restaurant" page already gates itself on `["restaurant_owner", "admin"]` — an admin hit a real "no permission" error trying to use a page the UI itself said they could use | ✅ Done |
-| FDP-38 | `fix-refresh-token-race-condition` | A real payment: pay via Paystack, get redirected back to `/checkout/callback`, land logged out with a bare "Unauthorized". Root cause: `SessionInitializer`'s proactive on-mount refresh never held `api.ts`'s shared mutex, so a page that *also* fires an authenticated query on mount (this was the first page in the app to do both at once — the homepage's own query is public) raced its own 401-triggered refresh against SessionInitializer's, and two concurrent calls against the single-use rotating refresh token trip reuse-detection and revoke the whole session | 🔄 In progress |
-| FDP-39 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration; WhatsApp OTP as a fast-follow once a Meta-approved WhatsApp Business sender exists | ⏳ Planned |
-| FDP-40 | `google-oauth` | "Continue with Google" — needs a Google Cloud OAuth client ID/secret from the user | ⏳ Planned |
-| FDP-41 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
-| FDP-42 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
-| FDP-43 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
+| FDP-38 | `fix-refresh-token-race-condition` | A real payment: pay via Paystack, get redirected back to `/checkout/callback`, land logged out with a bare "Unauthorized". Root cause: `SessionInitializer`'s proactive on-mount refresh never held `api.ts`'s shared mutex, so a page that *also* fires an authenticated query on mount (this was the first page in the app to do both at once — the homepage's own query is public) raced its own 401-triggered refresh against SessionInitializer's, and two concurrent calls against the single-use rotating refresh token trip reuse-detection and revoke the whole session | ✅ Done |
+| FDP-39 | `fix-refresh-deadlock` | FDP-38's own fix shipped a self-deadlock: `refresh()` routes through the same `baseQueryWithReauth` it was being made to hold the mutex around, so `SessionInitializer` acquired the lock then blocked forever waiting on its own `await mutex.waitForUnlock()` inside that call — hanging every request on every page. Caught by testing the fix locally against the real backend before trusting it, not assumed from reasoning alone. Fixed by skipping the wait specifically when the request *is* `/auth/refresh` itself | ✅ Done |
+| FDP-40 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration; WhatsApp OTP as a fast-follow once a Meta-approved WhatsApp Business sender exists | ⏳ Planned |
+| FDP-41 | `google-oauth` | "Continue with Google" — needs a Google Cloud OAuth client ID/secret from the user | ⏳ Planned |
+| FDP-42 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
+| FDP-43 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
+| FDP-44 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
 
 Phases are sequential but not rigid — if a later phase's work is discovered while doing an
 earlier one, note it here rather than scope-creeping the current branch.
