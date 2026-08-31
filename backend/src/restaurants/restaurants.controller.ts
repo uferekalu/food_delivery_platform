@@ -59,7 +59,7 @@ export class RestaurantsController {
     return this.restaurantsService.findBySlug(slug);
   }
 
-  @Roles('restaurant_owner')
+  @Roles('restaurant_owner', 'admin')
   @Post()
   create(
     @CurrentUser() user: AccessTokenPayload,
