@@ -307,6 +307,17 @@ customer completing a real payment landed back on the site logged out with a bar
 Any future code that calls `/auth/refresh` directly (rather than going through a 401 on the
 shared `api` instance) must acquire this same mutex, or it reintroduces the race.
 
+**That fix itself shipped a self-deadlock, fixed same-day (FDP-39).** `refresh()` is an RTK
+Query mutation on the same `api` instance, so it too goes through `baseQueryWithReauth` — which
+opens with `await mutex.waitForUnlock()`. Once `SessionInitializer` held the mutex around its own
+`refresh()` call, that call's own request hit this same line and waited on a lock only
+`SessionInitializer` itself could release *after* the call finished: a hard deadlock, hanging
+every request on every page behind it. Caught by actually running the fix locally against the
+real backend before trusting it — not by reasoning about the mutex in the abstract. Fixed by
+skipping `await mutex.waitForUnlock()` specifically when the outgoing request's URL is
+`/auth/refresh` itself; a plain `mutex.acquire()`/`release()` around a call has to exempt that
+call's own request this way whenever the call routes back through the same `baseQuery`.
+
 ## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in

@@ -46,6 +46,12 @@ const rawBaseQuery = fetchBaseQuery({
 // the same single-use rotating refresh token means whichever loses is treated as token reuse,
 // which revokes the whole token family — logging the user out with a real "Unauthorized",
 // exactly what happened returning from a Paystack redirect.
+//
+// IMPORTANT: `/auth/refresh` itself must never `await mutex.waitForUnlock()` below — it goes
+// through this exact same `baseQueryWithReauth`, so if SessionInitializer holds the mutex while
+// its own `refresh()` call is in flight, that call would deadlock waiting on a lock only *it*
+// (via SessionInitializer) can release. This shipped for real, caught by testing the fix before
+// it reached everyone: every request on every page hung forever behind the self-deadlock.
 export const mutex = new Mutex();
 
 /**
@@ -61,7 +67,10 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
   api,
   extraOptions,
 ) => {
-  await mutex.waitForUnlock();
+  // Never wait on the lock for a refresh call itself — see the note on `mutex` above.
+  if (requestUrl(args) !== "/auth/refresh") {
+    await mutex.waitForUnlock();
+  }
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error?.status === 401 && !AUTH_BOOTSTRAP_PATHS.has(requestUrl(args))) {
