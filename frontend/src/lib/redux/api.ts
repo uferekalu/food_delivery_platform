@@ -36,7 +36,17 @@ const rawBaseQuery = fetchBaseQuery({
 // Query's own cookbook docs). Without this, an access token expiring while several widgets are
 // fetching at once would race N separate refreshes against the single-use rotating refresh
 // token (see docs/ARCHITECTURE.md §11), and all but the first would fail.
-const mutex = new Mutex();
+//
+// Exported so SessionInitializer's own on-mount refresh (session-initializer.tsx) can hold this
+// same lock — without that, a page that mounts an authenticated query alongside
+// SessionInitializer (e.g. checkout/callback's useGetOrderQuery) races its own 401-triggered
+// refresh against SessionInitializer's proactive one: `await mutex.waitForUnlock()` below sees
+// the mutex as free (SessionInitializer never touched it), sends an unauthenticated request,
+// gets a 401, and fires a *second* concurrent refresh call. Two simultaneous refreshes against
+// the same single-use rotating refresh token means whichever loses is treated as token reuse,
+// which revokes the whole token family — logging the user out with a real "Unauthorized",
+// exactly what happened returning from a Paystack redirect.
+export const mutex = new Mutex();
 
 /**
  * Access tokens are short-lived (~15 min, docs/ARCHITECTURE.md §11) by design — without this

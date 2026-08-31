@@ -293,6 +293,20 @@ whatever the user happened to be doing. An `async-mutex` lock ensures concurrent
 refresh attempt rather than racing several against the single-use rotating refresh token above.
 Session state is only cleared if the refresh itself fails (refresh token genuinely gone/reused).
 
+**`SessionInitializer`'s on-mount refresh shares the same mutex (FDP-38).** `SessionInitializer`
+(`frontend/src/components/session-initializer.tsx`) proactively calls `/auth/refresh` once on
+mount, independent of any 401 — needed because a page with no authenticated queries at all (e.g.
+the homepage, whose only query is `@Public()`) would otherwise never trigger the 401-based reauth
+above, leaving `status` stuck at `"idle"` forever. This proactive call must acquire `api.ts`'s
+exported `mutex` for its duration. Before this fix it didn't, so a page that mounts an
+authenticated query *at the same time* (the first one in the app to do so: `checkout/callback`'s
+`useGetOrderQuery`, reached right after a Paystack redirect) raced its own 401-triggered refresh
+against `SessionInitializer`'s — two concurrent calls reading the same single-use rotating
+refresh token, one of which trips reuse-detection and revokes the whole session. Real symptom: a
+customer completing a real payment landed back on the site logged out with a bare "Unauthorized".
+Any future code that calls `/auth/refresh` directly (rather than going through a 401 on the
+shared `api` instance) must acquire this same mutex, or it reintroduces the race.
+
 ## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in
