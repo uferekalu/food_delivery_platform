@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-30**
+**Next available ticket number: FDP-31**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -35,6 +35,24 @@ Update the number above every time a new ticket branch is created (the
 | FDP-20 | `admin-dashboard` | Admin approval workflows, dispute/refund handling, platform analytics, **promo code management UI** (creation is API-only from FDP-11 onward, same bootstrap pattern as restaurant approval before FDP-5's owner dashboard existed) | ✅ Done |
 | FDP-21 | `search-performance-seo` | Search/filtering (cuisine/price/rating/delivery-time/sort — the backend DTO only supports text search + cuisine today), performance passes, SEO | ✅ Done |
 | FDP-22 | `deployment-cicd` | Vercel + Render deploy configs, GitHub Actions CI/CD, final security review, **error-tracking hook (Sentry-ready)** — listed in `PRODUCT_GUIDE.md`'s Observability requirements but had no owning ticket until the FDP-9 audit added one; paired with deployment since that's when a real Sentry DSN gets wired into Vercel/Render env vars. **PWA manifest/installability confirmed OUT of scope by the user (2026-08-24)** — was a candidate addition pending confirmation; not built | ✅ Done |
+
+FDP-23–29 were live-production bugfixes found through real usage after the FDP-22 deploy, not
+new phases (see git history). FDP-30 onward is the "Glovo parity" initiative — a client review
+compared the live app against glovoapp.com and asked for a phased plan to close the gap; the
+full plan (stages, effort, external blockers, decisions made) lives in the roadmap artifact
+shared 2026-08-28, summarized here as each ticket lands.
+
+| FDP-30 | `menu-item-photos` | Image upload on the owner's menu-item form (reusing the existing `ImageUpload`/Cloudinary pipeline) + display on storefront item cards. The schema/type already supported `imageUrl`; only the UI was missing | 🔄 In progress |
+| FDP-31 | `restaurant-card-images` | Restaurant logo/cover photo on the browse-restaurants grid, currently text-and-badges only | ⏳ Planned |
+| FDP-32 | `homepage-sections` | Homepage rebuilt into Glovo-style sections: address-first hero, "Top restaurants near you", "Anything delivered" category tiles, "Let's do it together" | ⏳ Planned |
+| FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-40 | ⏳ Planned |
+| FDP-34 | `countries-careers-pages` | "Countries we deliver" (generated from real restaurant `country` data) + a Careers holding page | ⏳ Planned |
+| FDP-35 | `checkout-ux-polish` | Checkout UX to match Glovo's pattern (delivery-option selector, collapsible promo code, cleaner summary) — arranges existing delivery-zone/promo-code functionality, no new backend logic | ⏳ Planned |
+| FDP-36 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration; WhatsApp OTP as a fast-follow once a Meta-approved WhatsApp Business sender exists | ⏳ Planned |
+| FDP-37 | `google-oauth` | "Continue with Google" — needs a Google Cloud OAuth client ID/secret from the user | ⏳ Planned |
+| FDP-38 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
+| FDP-39 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
+| FDP-40 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
 
 Phases are sequential but not rigid — if a later phase's work is discovered while doing an
 earlier one, note it here rather than scope-creeping the current branch.

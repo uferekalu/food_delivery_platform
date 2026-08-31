@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,6 +54,16 @@ const itemSchema = z.object({
 });
 type ItemFormInput = z.input<typeof itemSchema>;
 type ItemFormValues = z.output<typeof itemSchema>;
+
+function PhotoIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5">
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="8.5" cy="10" r="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 16l5-5 3 3 3-3 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function TrashIcon() {
   return (
@@ -149,6 +160,7 @@ function ItemFormModal({
   const [updateItem, { isLoading: isUpdating }] = useUpdateItemMutation();
   const { toast } = useToast();
   const isEditing = Boolean(item);
+  const [imageUrl, setImageUrl] = useState<string | undefined>(item?.imageUrl ?? undefined);
   // z.coerce.number() means the form's *input* shape (numeric fields: unknown, before
   // coercion) differs from its *output* shape (numeric fields: number, after) — the
   // resolver's third generic tells useForm/handleSubmit which one the submit callback
@@ -174,9 +186,9 @@ function ItemFormModal({
   const submit = async (values: ItemFormValues) => {
     try {
       if (isEditing && item) {
-        await updateItem({ restaurantId, itemId: item._id, body: values }).unwrap();
+        await updateItem({ restaurantId, itemId: item._id, body: { ...values, imageUrl } }).unwrap();
       } else {
-        await createItem({ restaurantId, body: { categoryId, ...values } }).unwrap();
+        await createItem({ restaurantId, body: { categoryId, ...values, imageUrl } }).unwrap();
       }
       reset();
       onClose();
@@ -207,6 +219,13 @@ function ItemFormModal({
       }
     >
       <form id="item-form" onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-4" noValidate>
+        <ImageUpload
+          label="Photo"
+          folder="menu-items"
+          value={imageUrl}
+          onChange={setImageUrl}
+          hint="Customers are far more likely to order an item they can see."
+        />
         <FormField label="Name" error={errors.name?.message} required>
           <Input {...register("name")} />
         </FormField>
@@ -299,14 +318,29 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                     key={item._id}
                     className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
                   >
-                    <div className="flex flex-col gap-1">
-                      <span className="font-medium text-text">{item.name}</span>
-                      <span className="text-sm text-text-muted">{item.price.toFixed(2)}</span>
-                      {item.modifierGroups.length > 0 && (
-                        <Badge variant="neutral" className="w-fit">
-                          {item.modifierGroups.length} modifier group{item.modifierGroups.length === 1 ? "" : "s"}
-                        </Badge>
+                    <div className="flex items-center gap-3">
+                      {item.imageUrl ? (
+                        // A small dashboard thumbnail doesn't warrant next/image's layout machinery.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          className="size-12 shrink-0 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-12 shrink-0 items-center justify-center rounded-md bg-secondary text-text-muted">
+                          <PhotoIcon />
+                        </div>
                       )}
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-text">{item.name}</span>
+                        <span className="text-sm text-text-muted">{item.price.toFixed(2)}</span>
+                        {item.modifierGroups.length > 0 && (
+                          <Badge variant="neutral" className="w-fit">
+                            {item.modifierGroups.length} modifier group{item.modifierGroups.length === 1 ? "" : "s"}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Switch
