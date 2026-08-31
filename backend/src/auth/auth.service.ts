@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -8,23 +9,29 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, randomInt, createHash } from 'crypto';
 import { Model } from 'mongoose';
 import type { StringValue } from 'ms';
 import { UsersService } from '../users/users.service';
 import { UserDocument } from '../users/schemas/user.schema';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../notifications/sms.service';
 import {
   RefreshToken,
   RefreshTokenDocument,
 } from './schemas/refresh-token.schema';
+import { PhoneOtp, PhoneOtpDocument } from './schemas/phone-otp.schema';
+import type { PhoneOtpPurpose } from './schemas/phone-otp.schema';
 import {
   AccessTokenPayload,
   EmailTokenPayload,
+  PhoneSignupTokenPayload,
 } from './interfaces/jwt-payload.interface';
 import { RegisterDto } from './dto/register.dto';
 
 const BCRYPT_SALT_ROUNDS = 12;
+const PHONE_OTP_TTL_MS = 5 * 60 * 1000;
+const PHONE_OTP_MAX_ATTEMPTS = 5;
 
 export interface AuthTokens {
   accessToken: string;
@@ -40,6 +47,7 @@ export interface PublicUser {
   isEmailVerified: boolean;
   avatarUrl: string | null;
   phone: string | null;
+  isPhoneVerified: boolean;
 }
 
 function toPublicUser(user: UserDocument): PublicUser {
@@ -51,6 +59,7 @@ function toPublicUser(user: UserDocument): PublicUser {
     isEmailVerified: user.isEmailVerified,
     avatarUrl: user.avatarUrl,
     phone: user.phone,
+    isPhoneVerified: user.isPhoneVerified,
   };
 }
 
@@ -69,10 +78,13 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     @InjectModel(RefreshToken.name)
     private readonly refreshTokenModel: Model<RefreshTokenDocument>,
+    @InjectModel(PhoneOtp.name)
+    private readonly phoneOtpModel: Model<PhoneOtpDocument>,
   ) {}
 
   async register(
@@ -83,12 +95,25 @@ export class AuthService {
       throw new ConflictException('An account with this email already exists');
     }
 
+    const verifiedPhone = dto.phone
+      ? this.consumePhoneSignupToken(dto.phone, dto.phoneVerificationToken)
+      : undefined;
+    if (verifiedPhone) {
+      const existingPhone = await this.usersService.findByPhone(verifiedPhone);
+      if (existingPhone) {
+        throw new ConflictException(
+          'An account with this phone number already exists',
+        );
+      }
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_SALT_ROUNDS);
     const user = await this.usersService.create({
       email: dto.email,
       passwordHash,
       name: dto.name,
       role: dto.role,
+      ...(verifiedPhone ? { phone: verifiedPhone, isPhoneVerified: true } : {}),
     });
 
     // Deliberately not awaited: registration shouldn't be coupled to a third-party email
@@ -116,6 +141,102 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), tokens };
+  }
+
+  /**
+   * Sends (or silently no-ops) a 6-digit OTP over SMS. Never reveals whether a matching account
+   * exists — same "don't leak account state" reasoning as forgotPassword(): for `purpose:
+   * 'login'`, a phone with no verified account just doesn't get a text, but the caller sees the
+   * same generic response either way.
+   */
+  async sendPhoneCode(phone: string, purpose: PhoneOtpPurpose): Promise<void> {
+    if (purpose === 'login') {
+      const user = await this.usersService.findByPhone(phone);
+      if (!user || !user.isPhoneVerified) return;
+    }
+
+    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+
+    // Only one live code per phone+purpose at a time — an old, still-unexpired code left active
+    // would otherwise also validate, doubling the effective attempt budget against it.
+    await this.phoneOtpModel
+      .deleteMany({ phone, purpose, consumedAt: null })
+      .exec();
+    await this.phoneOtpModel.create({
+      phone,
+      purpose,
+      codeHash: hashToken(code),
+      expiresAt: new Date(Date.now() + PHONE_OTP_TTL_MS),
+    });
+
+    const sent = await this.smsService.send(
+      phone,
+      `Your Food Delivery Platform verification code is ${code}. It expires in 5 minutes.`,
+    );
+    if (!sent) {
+      this.logger.warn(
+        `Phone OTP to ${phone} (purpose: ${purpose}) was not sent — SMS provider unavailable or unconfigured`,
+      );
+    }
+  }
+
+  /**
+   * `purpose: 'login'` logs the caller straight in (passwordless — proving phone ownership via
+   * OTP is the credential) and returns real session tokens. `purpose: 'signup'` has no user to
+   * log into yet, so it returns a short-lived proof-of-verification token instead, which
+   * `register()` above requires alongside a matching `phone` to actually attach it to the new
+   * account — this is what stops someone from claiming a phone they were never sent a code for.
+   */
+  async verifyPhoneCode(
+    phone: string,
+    code: string,
+    purpose: PhoneOtpPurpose,
+  ): Promise<
+    | { purpose: 'signup'; phoneVerificationToken: string }
+    | { purpose: 'login'; user: PublicUser; tokens: AuthTokens }
+  > {
+    const otp = await this.phoneOtpModel
+      .findOne({ phone, purpose, consumedAt: null })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!otp || otp.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired code');
+    }
+    if (otp.attempts >= PHONE_OTP_MAX_ATTEMPTS) {
+      throw new UnauthorizedException('Too many attempts — request a new code');
+    }
+    if (otp.codeHash !== hashToken(code)) {
+      otp.attempts += 1;
+      await otp.save();
+      throw new UnauthorizedException('Invalid or expired code');
+    }
+
+    otp.consumedAt = new Date();
+    await otp.save();
+
+    if (purpose === 'login') {
+      const user = await this.usersService.findByPhone(phone);
+      if (!user || !user.isPhoneVerified) {
+        throw new UnauthorizedException(
+          'No account found with this phone number',
+        );
+      }
+      const tokens = await this.issueTokens(user);
+      return { purpose: 'login', user: toPublicUser(user), tokens };
+    }
+
+    const phoneVerificationToken = this.jwtService.sign(
+      {
+        phone,
+        purpose: 'verify-phone-signup',
+      } satisfies PhoneSignupTokenPayload,
+      {
+        secret: this.config.getOrThrow<string>('JWT_EMAIL_SECRET'),
+        expiresIn: '10m',
+      },
+    );
+    return { purpose: 'signup', phoneVerificationToken };
   }
 
   async refresh(
@@ -273,6 +394,35 @@ export class AuthService {
     const user = await this.usersService.findById(id);
     if (!user) return null;
     return this.usersService.findByEmailWithPassword(user.email);
+  }
+
+  /**
+   * `register()` only calls this when `dto.phone` is actually set, so a phone-less signup never
+   * reaches here at all. Once a phone *is* present, a matching, valid `phoneVerificationToken`
+   * is mandatory — a bare phone with no proof of OTP verification must never be silently
+   * trusted, so every failure path (missing token, expired, wrong phone) throws the same way.
+   */
+  private consumePhoneSignupToken(
+    phone: string,
+    rawToken: string | undefined,
+  ): string | undefined {
+    if (!rawToken) {
+      throw new BadRequestException(
+        'phoneVerificationToken is required when phone is provided',
+      );
+    }
+    let payload: PhoneSignupTokenPayload;
+    try {
+      payload = this.jwtService.verify<PhoneSignupTokenPayload>(rawToken, {
+        secret: this.config.getOrThrow<string>('JWT_EMAIL_SECRET'),
+      });
+    } catch {
+      throw new BadRequestException('Invalid or expired phone verification');
+    }
+    if (payload.purpose !== 'verify-phone-signup' || payload.phone !== phone) {
+      throw new BadRequestException('Invalid or expired phone verification');
+    }
+    return payload.phone;
   }
 
   private verifyEmailToken(

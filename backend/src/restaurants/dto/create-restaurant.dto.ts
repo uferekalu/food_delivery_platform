@@ -38,12 +38,16 @@ export class CreateRestaurantDto {
   @IsString({ each: true })
   cuisineTypes: string[];
 
-  @ApiPropertyOptional({ description: 'Set when the owner uploads a logo before submitting' })
+  @ApiPropertyOptional({
+    description: 'Set when the owner uploads a logo before submitting',
+  })
   @IsOptional()
   @IsUrl()
   logoUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Set when the owner uploads a cover photo before submitting' })
+  @ApiPropertyOptional({
+    description: 'Set when the owner uploads a cover photo before submitting',
+  })
   @IsOptional()
   @IsUrl()
   coverUrl?: string;

@@ -41,4 +41,20 @@ export class RegisterDto {
   @IsOptional()
   @IsIn(SELF_REGISTERABLE_ROLES)
   role?: SelfRegisterableRole;
+
+  @ApiPropertyOptional({
+    example: '+2348012345678',
+    description:
+      'Only honored together with a matching phoneVerificationToken from POST /auth/phone/verify-code (purpose: signup) — a bare phone with no proof of OTP verification is ignored, not silently trusted.',
+  })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Proof-of-verification token for `phone`, see `phone` above.',
+  })
+  @IsOptional()
+  @IsString()
+  phoneVerificationToken?: string;
 }

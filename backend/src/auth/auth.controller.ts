@@ -21,6 +21,8 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { SendPhoneCodeDto } from './dto/send-phone-code.dto';
+import { VerifyPhoneCodeDto } from './dto/verify-phone-code.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AccessTokenPayload } from './interfaces/jwt-payload.interface';
@@ -69,6 +71,41 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 300_000 } })
+  @Post('phone/send-code')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async sendPhoneCode(@Body() dto: SendPhoneCodeDto) {
+    await this.authService.sendPhoneCode(dto.phone, dto.purpose);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 300_000 } })
+  @Post('phone/verify-code')
+  @HttpCode(HttpStatus.OK)
+  async verifyPhoneCode(
+    @Body() dto: VerifyPhoneCodeDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyPhoneCode(
+      dto.phone,
+      dto.code,
+      dto.purpose,
+    );
+    if (result.purpose === 'login') {
+      this.setRefreshCookie(res, result.tokens);
+      return {
+        loggedIn: true as const,
+        user: result.user,
+        accessToken: result.tokens.accessToken,
+      };
+    }
+    return {
+      loggedIn: false as const,
+      phoneVerificationToken: result.phoneVerificationToken,
+    };
+  }
+
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -105,6 +142,7 @@ export class AuthController {
       isEmailVerified: user.isEmailVerified,
       avatarUrl: user.avatarUrl,
       phone: user.phone,
+      isPhoneVerified: user.isPhoneVerified,
     };
   }
 

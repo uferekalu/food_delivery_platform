@@ -6,10 +6,12 @@ import { PassportModule } from '@nestjs/passport';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
+import { SmsModule } from '../notifications/sms.module';
 import {
   RefreshToken,
   RefreshTokenSchema,
 } from './schemas/refresh-token.schema';
+import { PhoneOtp, PhoneOtpSchema } from './schemas/phone-otp.schema';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
@@ -20,9 +22,11 @@ import { RolesGuard } from './guards/roles.guard';
   imports: [
     UsersModule,
     MailModule,
+    SmsModule,
     PassportModule,
     MongooseModule.forFeature([
       { name: RefreshToken.name, schema: RefreshTokenSchema },
+      { name: PhoneOtp.name, schema: PhoneOtpSchema },
     ]),
     // Only `secret` is configured here — AuthService always passes explicit `secret` +
     // `expiresIn` per call (access vs. email tokens use different secrets/lifetimes), so this

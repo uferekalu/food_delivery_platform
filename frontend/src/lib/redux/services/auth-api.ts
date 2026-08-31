@@ -9,7 +9,15 @@ export interface RegisterInput {
   password: string;
   name: string;
   role?: SelfRegisterableRole;
+  phone?: string;
+  phoneVerificationToken?: string;
 }
+
+export type PhoneOtpPurpose = "signup" | "login";
+
+export type VerifyPhoneCodeResult =
+  | { loggedIn: false; phoneVerificationToken: string }
+  | { loggedIn: true; user: PublicUser; accessToken: string };
 
 export const authApi = api.injectEndpoints({
   endpoints: (builder) => ({
@@ -36,6 +44,28 @@ export const authApi = api.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           dispatch(setSession(data));
+        } catch {
+          // handled by the caller
+        }
+      },
+    }),
+
+    sendPhoneCode: builder.mutation<void, { phone: string; purpose: PhoneOtpPurpose }>({
+      query: (body) => ({ url: "/auth/phone/send-code", method: "POST", body }),
+    }),
+
+    // Login-purpose success logs the caller in directly (see VerifyPhoneCodeResult) — the
+    // component calling this is responsible for dispatching setSession itself in that case,
+    // same pattern as every other mutation here that can conditionally establish a session.
+    verifyPhoneCode: builder.mutation<
+      VerifyPhoneCodeResult,
+      { phone: string; code: string; purpose: PhoneOtpPurpose }
+    >({
+      query: (body) => ({ url: "/auth/phone/verify-code", method: "POST", body }),
+      onQueryStarted: async (_arg, { dispatch, queryFulfilled }) => {
+        try {
+          const { data } = await queryFulfilled;
+          if (data.loggedIn) dispatch(setSession({ user: data.user, accessToken: data.accessToken }));
         } catch {
           // handled by the caller
         }
@@ -99,6 +129,8 @@ export const authApi = api.injectEndpoints({
 export const {
   useRegisterMutation,
   useLoginMutation,
+  useSendPhoneCodeMutation,
+  useVerifyPhoneCodeMutation,
   useRefreshMutation,
   useLogoutMutation,
   useGetMeQuery,

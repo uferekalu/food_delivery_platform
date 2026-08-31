@@ -8,6 +8,7 @@ export interface PublicUser {
   isEmailVerified: boolean;
   avatarUrl: string | null;
   phone: string | null;
+  isPhoneVerified: boolean;
 }
 
 export interface AuthResponse {
