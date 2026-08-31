@@ -86,7 +86,8 @@ interface CategoryTile {
   icon: React.ReactNode;
   title: string;
   description: string;
-  href?: string;
+  href: string;
+  comingSoon?: boolean;
 }
 
 const CATEGORY_TILES: CategoryTile[] = [
@@ -94,17 +95,21 @@ const CATEGORY_TILES: CategoryTile[] = [
     icon: <StoreIcon />,
     title: "Restaurants",
     description: "Order from local restaurants — starters to dessert, delivered hot.",
-    href: "/restaurants",
+    href: "/categories",
   },
   {
     icon: <BasketIcon />,
     title: "Groceries",
     description: "Everyday essentials from nearby stores.",
+    href: "/categories?tab=groceries",
+    comingSoon: true,
   },
   {
     icon: <PillIcon />,
     title: "Pharmacy & more",
     description: "Health and wellness, delivered.",
+    href: "/categories?tab=pharmacy",
+    comingSoon: true,
   },
 ];
 
@@ -118,7 +123,7 @@ function CategoryCard({ tile }: { tile: CategoryTile }) {
         <span className="font-semibold text-text">{tile.title}</span>
         <span className="text-sm text-text-muted">{tile.description}</span>
       </div>
-      {!tile.href && (
+      {tile.comingSoon && (
         <Badge variant="neutral" className="w-fit">
           Coming soon
         </Badge>
@@ -126,18 +131,11 @@ function CategoryCard({ tile }: { tile: CategoryTile }) {
     </>
   );
 
-  const className = "flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6";
-
-  if (!tile.href) {
-    return (
-      <div className={`${className} opacity-70`} aria-disabled="true">
-        {content}
-      </div>
-    );
-  }
-
   return (
-    <NextLink href={tile.href} className={`${className} transition-colors duration-150 hover:border-border-strong`}>
+    <NextLink
+      href={tile.href}
+      className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6 transition-colors duration-150 hover:border-border-strong"
+    >
       {content}
     </NextLink>
   );
