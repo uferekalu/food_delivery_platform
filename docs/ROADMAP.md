@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-31**
+**Next available ticket number: FDP-32**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -42,8 +42,8 @@ compared the live app against glovoapp.com and asked for a phased plan to close 
 full plan (stages, effort, external blockers, decisions made) lives in the roadmap artifact
 shared 2026-08-28, summarized here as each ticket lands.
 
-| FDP-30 | `menu-item-photos` | Image upload on the owner's menu-item form (reusing the existing `ImageUpload`/Cloudinary pipeline) + display on storefront item cards. The schema/type already supported `imageUrl`; only the UI was missing | 🔄 In progress |
-| FDP-31 | `restaurant-card-images` | Restaurant logo/cover photo on the browse-restaurants grid, currently text-and-badges only | ⏳ Planned |
+| FDP-30 | `menu-item-photos` | Image upload on the owner's menu-item form (reusing the existing `ImageUpload`/Cloudinary pipeline) + display on storefront item cards. The schema/type already supported `imageUrl`; only the UI was missing | ✅ Done |
+| FDP-31 | `restaurant-card-images` | Restaurant logo/cover photo on the browse-restaurants grid, currently text-and-badges only | 🔄 In progress |
 | FDP-32 | `homepage-sections` | Homepage rebuilt into Glovo-style sections: address-first hero, "Top restaurants near you", "Anything delivered" category tiles, "Let's do it together" | ⏳ Planned |
 | FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-40 | ⏳ Planned |
 | FDP-34 | `countries-careers-pages` | "Countries we deliver" (generated from real restaurant `country` data) + a Careers holding page | ⏳ Planned |
