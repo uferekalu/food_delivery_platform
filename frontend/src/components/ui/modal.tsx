@@ -92,7 +92,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           aria-describedby={description ? descriptionId : undefined}
           tabIndex={-1}
           className={cn(
-            "relative z-10 flex max-h-[90vh] w-full flex-col gap-4 rounded-xl bg-surface p-6 shadow-xl outline-none",
+            "relative z-10 flex max-h-[90vh] w-full flex-col gap-4 rounded-xl bg-surface-raised p-6 shadow-xl outline-none",
             sizeClasses[size],
           )}
         >

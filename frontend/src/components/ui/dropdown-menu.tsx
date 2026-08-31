@@ -169,7 +169,7 @@ export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuPr
             onKeyDown={handleKeyDown}
             style={{ position: "absolute", top: rect.top, left: rect.left, zIndex: "var(--z-dropdown)" }}
             className={cn(
-              "min-w-40 overflow-hidden rounded-md border border-border bg-surface py-1 shadow-lg outline-none",
+              "min-w-40 overflow-hidden rounded-md border border-border bg-surface-raised py-1 shadow-lg outline-none",
               align === "end" && "-translate-x-full",
             )}
           >
