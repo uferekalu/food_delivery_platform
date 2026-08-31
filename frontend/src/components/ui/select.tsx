@@ -196,7 +196,7 @@ export function Select({
             aria-labelledby={selectId}
             onKeyDown={handleListKeyDown}
             style={{ position: "absolute", top: rect.top, left: rect.left, width: rect.width, zIndex: "var(--z-dropdown)" }}
-            className="max-h-64 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg outline-none"
+            className="max-h-64 overflow-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg outline-none"
           >
             {options.map((option, index) => (
               <li

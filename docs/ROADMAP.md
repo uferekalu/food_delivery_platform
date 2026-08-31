@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-36**
+**Next available ticket number: FDP-37**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -45,14 +45,15 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-30 | `menu-item-photos` | Image upload on the owner's menu-item form (reusing the existing `ImageUpload`/Cloudinary pipeline) + display on storefront item cards. The schema/type already supported `imageUrl`; only the UI was missing | ✅ Done |
 | FDP-31 | `restaurant-card-images` | Restaurant logo/cover photo on the browse-restaurants grid, currently text-and-badges only | ✅ Done |
 | FDP-32 | `homepage-sections` | Homepage rebuilt into Glovo-style sections: hero, "Top restaurants", "Anything delivered" category tiles, "Countries where we deliver" (generated from real restaurant `country` data), "Let's do it together". The hero's search box is keyword/cuisine search against the existing `/restaurants` endpoint, not a real address/geolocation input — true location-based discovery is the separately-tracked, not-yet-decided "nearby restaurants map" feature, so it isn't faked here. Folds in the Careers holding page and "Countries we deliver" originally scoped as FDP-34, since both are homepage sections the client explicitly asked for | ✅ Done |
-| FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-40 | ✅ Done |
+| FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-41 | ✅ Done |
 | FDP-34 | ~~`countries-careers-pages`~~ | Superseded — folded into FDP-32 | ➖ Merged into FDP-32 |
 | FDP-35 | `checkout-ux-polish` | Checkout UX to match Glovo's pattern (delivery-option selector, collapsible promo code, cleaner summary) — arranges existing delivery-zone/promo-code functionality, no new backend logic | 🔄 In progress |
-| FDP-36 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration; WhatsApp OTP as a fast-follow once a Meta-approved WhatsApp Business sender exists | ⏳ Planned |
-| FDP-37 | `google-oauth` | "Continue with Google" — needs a Google Cloud OAuth client ID/secret from the user | ⏳ Planned |
-| FDP-38 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
-| FDP-39 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
-| FDP-40 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
+| FDP-36 | `overlay-elevation-dark-mode` | `Modal`, `Drawer`, `DropdownMenu`, and `Select`'s popup all used `bg-surface` instead of `bg-surface-raised` — in dark mode this is the identical near-black as the page background (`Card`/`Toast` already correctly use `bg-surface-raised`), so every one of these overlays visually blended into whatever was behind it. Found via a real screenshot of the add-to-cart modal in dark mode | 🔄 In progress |
+| FDP-37 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration; WhatsApp OTP as a fast-follow once a Meta-approved WhatsApp Business sender exists | ⏳ Planned |
+| FDP-38 | `google-oauth` | "Continue with Google" — needs a Google Cloud OAuth client ID/secret from the user | ⏳ Planned |
+| FDP-39 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
+| FDP-40 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
+| FDP-41 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
 
 Phases are sequential but not rigid — if a later phase's work is discovered while doing an
 earlier one, note it here rather than scope-creeping the current branch.

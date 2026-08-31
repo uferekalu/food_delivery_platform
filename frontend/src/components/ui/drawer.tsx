@@ -100,7 +100,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
           aria-labelledby={titleId}
           tabIndex={-1}
           className={cn(
-            "fixed inset-y-0 right-0 z-10 flex w-full max-w-xs flex-col gap-5 bg-surface p-5 shadow-xl outline-none",
+            "fixed inset-y-0 right-0 z-10 flex w-full max-w-xs flex-col gap-5 bg-surface-raised p-5 shadow-xl outline-none",
             "transition-transform duration-200 ease-standard",
             visible ? "translate-x-0" : "translate-x-full",
           )}
