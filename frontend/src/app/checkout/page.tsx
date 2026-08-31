@@ -86,6 +86,7 @@ function CheckoutForm() {
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [showPromoField, setShowPromoField] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | undefined>(undefined);
   // Real distance-based delivery fees (FDP-15) need lat/lng, not the free-text address fields —
@@ -224,14 +225,16 @@ function CheckoutForm() {
   const currency = cart.currency ?? "";
 
   return (
-    <Container className="max-w-2xl py-10">
+    <Container className="max-w-5xl py-10">
       <h1 className="mb-6 text-2xl font-bold text-text">Checkout</h1>
       {submitError && (
         <Alert variant="danger" className="mb-4">
           {submitError}
         </Alert>
       )}
-      <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-5" noValidate>
+      <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} noValidate>
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_380px]">
+          <div className="flex flex-col gap-5">
         <Card>
           <CardHeader>
             <CardTitle>Delivery address</CardTitle>
@@ -284,17 +287,32 @@ function CheckoutForm() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Delivery time</CardTitle>
+            <CardTitle>Delivery options</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <RadioGroup
-              label="Delivery time"
-              value={timing}
-              onChange={(value) => setValue("timing", value as FormValues["timing"], { shouldValidate: true })}
-            >
-              <RadioOption value="asap" label="As soon as possible" />
-              <RadioOption value="scheduled" label="Schedule for later" />
-            </RadioGroup>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(["asap", "scheduled"] as const).map((option) => (
+                <label
+                  key={option}
+                  className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 text-sm transition-colors duration-150 ${
+                    timing === option ? "border-primary bg-primary-subtle" : "border-border hover:border-border-strong"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="delivery-timing"
+                    value={option}
+                    checked={timing === option}
+                    onChange={() => setValue("timing", option, { shouldValidate: true })}
+                    className="sr-only"
+                  />
+                  <span className="font-medium text-text">{option === "asap" ? "Standard" : "Schedule"}</span>
+                  <span className="text-xs text-text-muted">
+                    {option === "asap" ? "As soon as possible" : "Pick a date and time"}
+                  </span>
+                </label>
+              ))}
+            </div>
             {timing === "scheduled" && (
               <FormField label="Delivery date and time" error={errors.scheduledFor?.message} required>
                 <Input
@@ -307,47 +325,12 @@ function CheckoutForm() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Promo code</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {appliedPromo ? (
-              <Alert variant="success" title={`"${appliedPromo.code}" applied`}>
-                <div className="flex items-center justify-between gap-3">
-                  <span>
-                    -{currency} {appliedPromo.discountAmount.toFixed(2)}
-                  </span>
-                  <Button type="button" variant="ghost" size="sm" onClick={removePromo}>
-                    Remove
-                  </Button>
-                </div>
-              </Alert>
-            ) : (
-              <div className="flex items-start gap-2">
-                <div className="flex-1">
-                  <Input
-                    value={promoInput}
-                    onChange={(e) => setPromoInput(e.target.value)}
-                    placeholder="Enter a promo code"
-                    invalid={!!promoError}
-                  />
-                  {promoError && <p className="mt-1 text-sm text-danger">{promoError}</p>}
-                </div>
-                <Button type="button" variant="outline" isLoading={isValidatingPromo} onClick={() => void applyPromo()}>
-                  Apply
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {availableProviders && availableProviders.length > 1 && (
           <Card>
             <CardHeader>
               <CardTitle>Payment method</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
               <RadioGroup
                 label="Payment method"
                 value={selectedProvider ?? availableProviders[0]}
@@ -357,13 +340,58 @@ function CheckoutForm() {
                   <RadioOption key={provider} value={provider} label={PROVIDER_LABELS[provider]} />
                 ))}
               </RadioGroup>
+
+              <div className="border-t border-border pt-3">
+                {appliedPromo ? (
+                  <Alert variant="success" title={`"${appliedPromo.code}" applied`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>
+                        -{currency} {appliedPromo.discountAmount.toFixed(2)}
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" onClick={removePromo}>
+                        Remove
+                      </Button>
+                    </div>
+                  </Alert>
+                ) : showPromoField ? (
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Input
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        placeholder="Enter a promo code"
+                        invalid={!!promoError}
+                        autoFocus
+                      />
+                      {promoError && <p className="mt-1 text-sm text-danger">{promoError}</p>}
+                    </div>
+                    <Button type="button" variant="outline" isLoading={isValidatingPromo} onClick={() => void applyPromo()}>
+                      Apply
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPromoField(true)}
+                    className="flex w-full items-center justify-between text-sm font-medium text-primary hover:underline"
+                  >
+                    Got a promo code?
+                    <span aria-hidden="true">→</span>
+                  </button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
+      </div>
 
+      <div className="flex flex-col gap-4 lg:sticky lg:top-20">
         <Card>
           <CardHeader>
-            <CardTitle>Order summary</CardTitle>
+            <CardTitle>Summary</CardTitle>
+            <CardDescription>
+              {cart.items.length} item{cart.items.length === 1 ? "" : "s"} from {cart.restaurantName}
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
@@ -380,13 +408,21 @@ function CheckoutForm() {
             </div>
             <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
               <div className="flex items-center justify-between text-text-muted">
-                <span>Subtotal</span>
+                <span>Products</span>
                 <span>
                   {currency} {subtotal.toFixed(2)}
                 </span>
               </div>
+              {discount > 0 && (
+                <div className="flex items-center justify-between text-success">
+                  <span>Promotion</span>
+                  <span>
+                    -{currency} {discount.toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between text-text-muted">
-                <span>Delivery fee (est.)</span>
+                <span>Delivery (est.)</span>
                 <span>
                   {currency} {estDeliveryFee.toFixed(2)}
                 </span>
@@ -397,27 +433,20 @@ function CheckoutForm() {
                   {currency} {estServiceFee.toFixed(2)}
                 </span>
               </div>
-              {discount > 0 && (
-                <div className="flex items-center justify-between text-success">
-                  <span>Discount</span>
-                  <span>
-                    -{currency} {discount.toFixed(2)}
-                  </span>
-                </div>
-              )}
               <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold text-text">
-                <span>Estimated total</span>
+                <span>Total</span>
                 <span>
                   {currency} {estTotal.toFixed(2)}
                 </span>
               </div>
             </div>
+            <Button type="submit" isLoading={isPlacingOrder || isStartingPayment} size="lg" className="mt-1">
+              Pay to order
+            </Button>
           </CardContent>
         </Card>
-
-        <Button type="submit" isLoading={isPlacingOrder || isStartingPayment} size="lg">
-          Place order
-        </Button>
+      </div>
+      </div>
       </form>
     </Container>
   );
