@@ -228,7 +228,9 @@ describe('PaystackAdapter', () => {
           }),
       }) as never;
 
-      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      // A live key (not TEST_SECRET, which is a sk_test_ value) — isolates this assertion from
+      // the test-mode "Test Bank" injection covered separately below.
+      const adapter = new PaystackAdapter(configWith('sk_live_something'));
       const banks = await adapter.listBanks();
 
       expect(banks).toEqual([{ name: 'Access Bank', code: '044' }]);
@@ -242,6 +244,39 @@ describe('PaystackAdapter', () => {
 
       const adapter = new PaystackAdapter(configWith(TEST_SECRET));
       await expect(adapter.listBanks()).rejects.toThrow('Service unavailable');
+    });
+
+    it("appends Paystack's sandbox Test Bank (code 001) when running on a test-mode key — Paystack caps real bank resolves at 3/day in test mode, and 001 is the documented way around that", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: [{ name: 'Access Bank', code: '044' }],
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET)); // sk_test_...
+      const banks = await adapter.listBanks();
+
+      expect(banks).toEqual([
+        { name: 'Access Bank', code: '044' },
+        expect.objectContaining({ code: '001' }),
+      ]);
+    });
+
+    it('never appends the Test Bank when running on a live key', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: [{ name: 'Access Bank', code: '044' }],
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith('sk_live_something'));
+      const banks = await adapter.listBanks();
+
+      expect(banks.some((b) => b.code === '001')).toBe(false);
     });
   });
 
