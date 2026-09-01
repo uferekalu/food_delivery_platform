@@ -135,6 +135,7 @@ describe('Restaurants + Menu (e2e)', () => {
         currency: 'NGN',
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
       })
       .expect(201);
     const restaurant = createRes.body as {
@@ -166,26 +167,12 @@ describe('Restaurants + Menu (e2e)', () => {
       .send({ description: 'Home-style Nigerian food' })
       .expect(200);
 
-    // A non-admin cannot approve.
+    // Approval requires a non-empty menu (docs/ROADMAP.md FDP-60) — rejected before one exists,
+    // even for an admin.
     await request(server)
-      .patch(`/restaurants/${restaurantId}/approve`)
-      .set('Authorization', `Bearer ${owner.accessToken}`)
-      .expect(403);
-
-    // Admin approves — now it's publicly visible.
-    await request(server)
-      .patch(`/restaurants/${restaurantId}/approve`)
+      .patch(`/admin/restaurants/${restaurantId}/approve`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .expect(200);
-
-    const listAfter = await request(server).get('/restaurants').expect(200);
-    expect((listAfter.body as { total: number }).total).toBe(1);
-    const detail = await request(server)
-      .get('/restaurants/burgundy-kitchen')
-      .expect(200);
-    expect((detail.body as { description: string }).description).toBe(
-      'Home-style Nigerian food',
-    );
+      .expect(400);
 
     // Menu: owner adds a category and an item.
     const categoryRes = await request(server)
@@ -208,7 +195,8 @@ describe('Restaurants + Menu (e2e)', () => {
       .send({ categoryId, name: 'Should Fail', price: 1 })
       .expect(403);
 
-    // Public menu read shows the category with its item nested.
+    // Public menu read shows the category with its item nested, even before approval — the
+    // restaurant itself just isn't listed/reachable by slug yet.
     const menuRes = await request(server)
       .get(`/restaurants/${restaurantId}/menu`)
       .expect(200);
@@ -220,6 +208,28 @@ describe('Restaurants + Menu (e2e)', () => {
     expect(menu[0].name).toBe('Mains');
     expect(menu[0].items[0].name).toBe('Jollof Rice');
     expect(menu[0].items[0].isAvailable).toBe(true);
+
+    // A non-admin cannot approve.
+    await request(server)
+      .patch(`/admin/restaurants/${restaurantId}/approve`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .expect(403);
+
+    // Admin approves — now that a menu exists, this succeeds — and the restaurant becomes
+    // publicly visible.
+    await request(server)
+      .patch(`/admin/restaurants/${restaurantId}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const listAfter = await request(server).get('/restaurants').expect(200);
+    expect((listAfter.body as { total: number }).total).toBe(1);
+    const detail = await request(server)
+      .get('/restaurants/burgundy-kitchen')
+      .expect(200);
+    expect((detail.body as { description: string }).description).toBe(
+      'Home-style Nigerian food',
+    );
 
     // Delivery zones (FDP-15): owner-only, not public.
     await request(server)

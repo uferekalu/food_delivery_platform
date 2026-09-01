@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { RestaurantsService } from './restaurants.service';
@@ -41,6 +45,7 @@ describe('RestaurantsService', () => {
     currency: 'NGN',
     country: 'Nigeria',
     address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+    complianceDocumentUrl: 'https://example.com/doc.pdf',
   };
 
   beforeAll(async () => {
@@ -322,6 +327,17 @@ describe('RestaurantsService', () => {
       const created = await service.create('owner-id', baseDto);
       const approved = await service.approve(created._id.toString());
       expect(approved.isApproved).toBe(true);
+    });
+
+    it('rejects approval when the restaurant has no compliance document (FDP-60)', async () => {
+      const created = await service.create('owner-id', {
+        ...baseDto,
+        complianceDocumentUrl: undefined as unknown as string,
+      });
+
+      await expect(service.approve(created._id.toString())).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

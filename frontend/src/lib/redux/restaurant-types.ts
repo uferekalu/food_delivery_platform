@@ -42,6 +42,7 @@ export interface Restaurant {
   description: string;
   logoUrl: string | null;
   coverUrl: string | null;
+  complianceDocumentUrl: string | null;
   cuisineTypes: string[];
   currency: string;
   country: string;

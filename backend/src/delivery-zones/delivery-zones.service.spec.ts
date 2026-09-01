@@ -87,6 +87,7 @@ describe('DeliveryZonesService', () => {
       cuisineTypes: ['Nigerian'],
       currency: 'NGN',
       country: 'Nigeria',
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
       address,
     });
   }

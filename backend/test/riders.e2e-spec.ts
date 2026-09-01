@@ -202,6 +202,7 @@ describe('Riders (e2e)', () => {
         currency: 'NGN',
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
       })
       .expect(201);
     const restaurantId = (restaurantRes.body as { _id: string })._id;

@@ -79,6 +79,7 @@ describe('CartService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
     return restaurantsService.approve(restaurant._id.toString());
   }
@@ -265,6 +266,7 @@ describe('CartService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       address: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
     const item = await createItem(restaurant._id.toString());
 

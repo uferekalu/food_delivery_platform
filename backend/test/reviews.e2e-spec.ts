@@ -170,6 +170,7 @@ describe('Reviews (e2e)', () => {
         currency: 'NGN',
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
       })
       .expect(201);
     const restaurantId = (restaurantRes.body as { _id: string })._id;
@@ -268,9 +269,25 @@ describe('Reviews (e2e)', () => {
     expect(listBody.items[0].rating).toBe(5);
 
     // The restaurant's avgRating/reviewCount actually updated (approve it first — the public
-    // detail lookup requires isApproved, same as the listing).
+    // detail lookup requires isApproved, same as the listing). Approval requires a non-empty
+    // menu (docs/ROADMAP.md FDP-60) — this restaurant never got one via seedDeliveredOrder.
+    const categoryRes = await request(server)
+      .post(`/restaurants/${restaurantId}/menu/categories`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ name: 'Mains' })
+      .expect(201);
     await request(server)
-      .patch(`/restaurants/${restaurantId}/approve`)
+      .post(`/restaurants/${restaurantId}/menu/items`)
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({
+        categoryId: (categoryRes.body as { _id: string })._id,
+        name: 'Jollof Rice',
+        price: 12.5,
+      })
+      .expect(201);
+
+    await request(server)
+      .patch(`/admin/restaurants/${restaurantId}/approve`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
     const approvedRestaurant = await request(server)

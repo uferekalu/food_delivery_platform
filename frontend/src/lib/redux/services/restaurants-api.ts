@@ -22,6 +22,9 @@ export interface RestaurantInput {
   openingHours?: OpeningHour[];
   priceLevel?: number;
   estimatedDeliveryMinutes?: number;
+  // Business registration proof (docs/ROADMAP.md FDP-60) — required by the backend at creation,
+  // hence not optional here even though UpdateRestaurantInput below loosens every field.
+  complianceDocumentUrl: string;
 }
 
 export interface UpdateRestaurantInput extends Partial<RestaurantInput> {
@@ -92,7 +95,9 @@ export const restaurantsApi = api.injectEndpoints({
     }),
 
     approveRestaurant: builder.mutation<Restaurant, string>({
-      query: (id) => ({ url: `/restaurants/${id}/approve`, method: "PATCH" }),
+      // Lives under /admin, not /restaurants, since approval requires checking both a
+      // Restaurant-owned invariant and a Menu-owned one (docs/ROADMAP.md FDP-60).
+      query: (id) => ({ url: `/admin/restaurants/${id}/approve`, method: "PATCH" }),
       invalidatesTags: (result, _error, id) => [
         { type: "Restaurant", id },
         { type: "Restaurant", id: "LIST" },

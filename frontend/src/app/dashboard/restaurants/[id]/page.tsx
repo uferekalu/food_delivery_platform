@@ -50,6 +50,7 @@ function EditRestaurantForm({ id }: { id: string }) {
         defaultOpeningHours={restaurant.openingHours}
         defaultLogoUrl={restaurant.logoUrl}
         defaultCoverUrl={restaurant.coverUrl}
+        defaultComplianceDocumentUrl={restaurant.complianceDocumentUrl}
         isSubmitting={saving}
         submitLabel="Save changes"
         onSubmit={async (input) => {

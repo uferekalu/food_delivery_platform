@@ -11,6 +11,8 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { DocumentUpload } from "@/components/ui/document-upload";
+import { Alert } from "@/components/ui/alert";
 import type { OpeningHour } from "@/lib/redux/restaurant-types";
 import type { RestaurantInput } from "@/lib/redux/services/restaurants-api";
 import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, currencyForCountry } from "@/lib/countries";
@@ -66,6 +68,7 @@ export interface RestaurantFormProps {
   defaultOpeningHours?: OpeningHour[];
   defaultLogoUrl?: string | null;
   defaultCoverUrl?: string | null;
+  defaultComplianceDocumentUrl?: string | null;
   isSubmitting: boolean;
   submitLabel: string;
   onSubmit: (input: RestaurantInput & { logoUrl?: string; coverUrl?: string }) => void;
@@ -76,6 +79,7 @@ export function RestaurantForm({
   defaultOpeningHours,
   defaultLogoUrl,
   defaultCoverUrl,
+  defaultComplianceDocumentUrl,
   isSubmitting,
   submitLabel,
   onSubmit,
@@ -96,12 +100,21 @@ export function RestaurantForm({
   );
   const [logoUrl, setLogoUrl] = useState<string | undefined>(defaultLogoUrl ?? undefined);
   const [coverUrl, setCoverUrl] = useState<string | undefined>(defaultCoverUrl ?? undefined);
+  const [complianceDocumentUrl, setComplianceDocumentUrl] = useState<string | undefined>(
+    defaultComplianceDocumentUrl ?? undefined,
+  );
+  const [complianceError, setComplianceError] = useState<string | null>(null);
 
   function updateHour(index: number, patch: Partial<OpeningHour>) {
     setHours((prev) => prev.map((h, i) => (i === index ? { ...h, ...patch } : h)));
   }
 
   const submit = (values: FormValues) => {
+    if (!complianceDocumentUrl) {
+      setComplianceError("Upload a business registration document before submitting");
+      return;
+    }
+    setComplianceError(null);
     onSubmit({
       name: values.name,
       description: values.description,
@@ -123,6 +136,7 @@ export function RestaurantForm({
       openingHours: hours,
       priceLevel: Number(values.priceLevel),
       estimatedDeliveryMinutes: values.estimatedDeliveryMinutes,
+      complianceDocumentUrl,
       ...(logoUrl ? { logoUrl } : {}),
       ...(coverUrl ? { coverUrl } : {}),
     });
@@ -134,6 +148,18 @@ export function RestaurantForm({
         <ImageUpload label="Logo" folder="restaurants" value={logoUrl} onChange={setLogoUrl} />
         <ImageUpload label="Cover photo" folder="restaurants" value={coverUrl} onChange={setCoverUrl} />
       </div>
+
+      {complianceError && <Alert variant="danger">{complianceError}</Alert>}
+      <DocumentUpload
+        label="Business registration document"
+        folder="compliance-documents"
+        value={complianceDocumentUrl}
+        onChange={(url) => {
+          setComplianceDocumentUrl(url);
+          setComplianceError(null);
+        }}
+        hint="Required — e.g. a CAC certificate, business license, or your country's equivalent proof of registration. An admin reviews this before your restaurant appears in the marketplace."
+      />
 
       <FormField label="Restaurant name" error={errors.name?.message} required>
         <Input {...register("name")} />
