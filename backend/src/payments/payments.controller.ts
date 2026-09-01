@@ -55,6 +55,17 @@ export class PaymentsController {
     return this.paymentsService.refundOrder(orderId);
   }
 
+  /** Called by the checkout callback page right after the provider redirects back — an active
+   * nudge alongside the passive webhook, so a customer never gets stuck on "Confirming your
+   * payment…" waiting on a webhook that may never arrive at this deploy. */
+  @Post(':orderId/verify')
+  verify(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentsService.verifyPayment(user.sub, orderId);
+  }
+
   // Webhook routes: @Public() (providers don't send our access tokens — signature verification
   // inside PaymentsService.handleWebhook is the real auth), and read the raw body captured by
   // `rawBody: true` in main.ts rather than the parsed one, since Stripe/Paystack's signature

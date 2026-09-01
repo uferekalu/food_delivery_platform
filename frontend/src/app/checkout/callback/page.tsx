@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useRef } from "react";
 import NextLink from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/container";
@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
+import { useVerifyPaymentMutation } from "@/lib/redux/services/payments-api";
 import { useSocket } from "@/hooks/use-socket";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { Order } from "@/lib/redux/restaurant-types";
@@ -23,6 +24,8 @@ function CallbackContent() {
   const orderId = searchParams.get("orderId");
   const cancelled = searchParams.get("cancelled") === "true";
   const socket = useSocket();
+  const [verifyPayment] = useVerifyPaymentMutation();
+  const verifyAttempted = useRef(false);
 
   // Stopping polling on a failed payment needs last render's data, which isn't available yet
   // at the point pollingInterval is passed to the same hook call producing it — so polling only
@@ -33,6 +36,28 @@ function CallbackContent() {
     pollingInterval: cancelled ? 0 : POLL_INTERVAL_MS,
   });
   const showRetry = cancelled || order?.paymentStatus === "failed";
+
+  // Actively asks the provider directly (PaymentsService.verifyPayment) rather than only ever
+  // waiting on the passive webhook — otherwise a customer landing here after a real payment
+  // could be stuck on "Confirming your payment…" forever if webhook delivery never reaches this
+  // deploy. Skipped for a cancelled return trip (nothing to verify) and only ever attempted once
+  // per mount; "Check again" re-triggers it explicitly.
+  const verifyNow = useCallback(() => {
+    if (!orderId) return;
+    verifyPayment(orderId)
+      .unwrap()
+      .then(() => refetch())
+      .catch(() => {
+        // Swallow — the passive poll/socket path below still covers it, and a transient verify
+        // failure (e.g. the provider's own API briefly erroring) isn't worth surfacing here.
+      });
+  }, [orderId, verifyPayment, refetch]);
+
+  useEffect(() => {
+    if (cancelled || verifyAttempted.current || !orderId) return;
+    verifyAttempted.current = true;
+    verifyNow();
+  }, [cancelled, orderId, verifyNow]);
 
   useEffect(() => {
     if (!socket || !orderId) return;
@@ -80,7 +105,7 @@ function CallbackContent() {
         ) : (
           <>
             <Spinner size="lg" label="Confirming payment" />
-            <Button variant="ghost" size="sm" onClick={() => void refetch()}>
+            <Button variant="ghost" size="sm" onClick={verifyNow}>
               Check again
             </Button>
           </>
