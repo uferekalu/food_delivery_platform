@@ -8,12 +8,13 @@ import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { LiveDeliveryMap, type LatLng } from "@/components/live-delivery-map";
 import { ReviewForm } from "@/components/review-form";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
+import { useVerifyPaymentMutation } from "@/lib/redux/services/payments-api";
 import { useGetReviewEligibilityQuery } from "@/lib/redux/services/reviews-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { useSocket } from "@/hooks/use-socket";
@@ -82,7 +83,43 @@ function OrderReviews({ order }: { order: Order }) {
   );
 }
 
-function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: LatLng | null }) {
+function PendingPaymentAlert({ orderId, refetch }: { orderId: string; refetch: () => void }) {
+  const [verifyPayment, { isLoading }] = useVerifyPaymentMutation();
+
+  function checkNow() {
+    verifyPayment(orderId)
+      .unwrap()
+      .then(() => refetch())
+      .catch(() => {
+        // Swallow — same reasoning as the checkout callback page: a transient check failure
+        // isn't worth surfacing here, the customer can just try again.
+      });
+  }
+
+  return (
+    <Alert variant="warning" title="Payment not yet confirmed">
+      <div className="flex flex-col items-start gap-3">
+        <p>
+          We haven&apos;t confirmed payment for this order yet. If you completed checkout, this is
+          usually just a delay in hearing back from the payment provider.
+        </p>
+        <Button size="sm" variant="outline" onClick={checkNow} isLoading={isLoading}>
+          Check payment status
+        </Button>
+      </div>
+    </Alert>
+  );
+}
+
+function OrderSummary({
+  order,
+  riderLocation,
+  refetch,
+}: {
+  order: Order;
+  riderLocation: LatLng | null;
+  refetch: () => void;
+}) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
@@ -93,11 +130,7 @@ function OrderSummary({ order, riderLocation }: { order: Order; riderLocation: L
         <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{formatStatus(order.status)}</Badge>
       </div>
 
-      {order.status === "PENDING_PAYMENT" && (
-        <Alert variant="info" title="Payment coming soon">
-          Your order has been placed and is waiting on payment integration — nothing has been charged yet.
-        </Alert>
-      )}
+      {order.status === "PENDING_PAYMENT" && <PendingPaymentAlert orderId={order._id} refetch={refetch} />}
 
       {(order.status === "CANCELLED" || order.status === "REFUNDED") && (
         <Alert variant={order.status === "CANCELLED" ? "danger" : "neutral"} title={formatStatus(order.status)}>
@@ -255,7 +288,7 @@ function OrderDetail({ id }: { id: string }) {
     return <Alert variant="danger">{getErrorMessage(error, "Order not found, or you don't have access to it.")}</Alert>;
   }
 
-  return <OrderSummary order={order} riderLocation={riderLocation} />;
+  return <OrderSummary order={order} riderLocation={riderLocation} refetch={refetch} />;
 }
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
