@@ -15,7 +15,11 @@ import {
   RefreshTokenDocument,
   RefreshTokenSchema,
 } from './schemas/refresh-token.schema';
-import { PhoneOtp, PhoneOtpDocument, PhoneOtpSchema } from './schemas/phone-otp.schema';
+import {
+  PhoneOtp,
+  PhoneOtpDocument,
+  PhoneOtpSchema,
+} from './schemas/phone-otp.schema';
 import { User, UserDocument, UserSchema } from '../users/schemas/user.schema';
 import * as bcrypt from 'bcryptjs';
 
@@ -381,7 +385,9 @@ describe('AuthService', () => {
           name: 'No Token',
           phone: '+2348099999999',
         }),
-      ).rejects.toThrow('phoneVerificationToken is required when phone is provided');
+      ).rejects.toThrow(
+        'phoneVerificationToken is required when phone is provided',
+      );
     });
 
     it('register() rejects a verification token minted for a different phone', async () => {
@@ -392,7 +398,8 @@ describe('AuthService', () => {
         code,
         'signup',
       );
-      if (result.purpose !== 'signup') throw new Error('expected signup result');
+      if (result.purpose !== 'signup')
+        throw new Error('expected signup result');
 
       usersService.findByEmail.mockResolvedValue(null);
 

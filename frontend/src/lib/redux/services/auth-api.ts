@@ -72,6 +72,23 @@ export const authApi = api.injectEndpoints({
       },
     }),
 
+    // Redeems the one-time code from GET /auth/google/callback's redirect to
+    // /login/oauth-callback?code=... — this call goes through the frontend's own /api/*
+    // rewrite, so it's the point where the refresh cookie actually becomes first-party (see
+    // docs/ARCHITECTURE.md §11's OAuthExchangeTokenPayload note for why the callback itself
+    // can't set it directly).
+    exchangeOAuthCode: builder.mutation<AuthResponse, { code: string }>({
+      query: (body) => ({ url: "/auth/oauth/exchange", method: "POST", body }),
+      onQueryStarted: async (_arg, { dispatch, queryFulfilled }) => {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setSession(data));
+        } catch {
+          // handled by the caller
+        }
+      },
+    }),
+
     /** Silently re-establishes a session from the httpOnly refresh cookie — used on app load. */
     refresh: builder.mutation<AuthResponse, void>({
       query: () => ({ url: "/auth/refresh", method: "POST" }),
@@ -131,6 +148,7 @@ export const {
   useLoginMutation,
   useSendPhoneCodeMutation,
   useVerifyPhoneCodeMutation,
+  useExchangeOAuthCodeMutation,
   useRefreshMutation,
   useLogoutMutation,
   useGetMeQuery,

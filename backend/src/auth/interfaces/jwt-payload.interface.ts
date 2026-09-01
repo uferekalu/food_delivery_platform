@@ -24,3 +24,17 @@ export interface PhoneSignupTokenPayload {
   phone: string;
   purpose: 'verify-phone-signup';
 }
+
+/**
+ * Redeemed once by `POST /auth/oauth/exchange` (docs/ROADMAP.md FDP-42) to actually issue
+ * session tokens and set the refresh cookie. Google's own redirect back to
+ * `GET /auth/google/callback` necessarily lands on the backend's bare domain, not proxied
+ * through the frontend's origin (docs/ARCHITECTURE.md §11) — a cookie set there would be
+ * third-party again. This carries only a `sub` and a short (60s) expiry to the frontend via a
+ * URL param instead, which redeems it through the frontend's own `/api/*` proxy — a real
+ * first-party call — rather than putting the actual session tokens in a URL at all.
+ */
+export interface OAuthExchangeTokenPayload {
+  sub: string;
+  purpose: 'oauth-exchange';
+}

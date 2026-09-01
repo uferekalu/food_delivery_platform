@@ -341,6 +341,38 @@ Phone is a verified, optional supplement:
   `NotificationsModule` → `RealtimeModule` → `AuthModule`, which would otherwise be a circular
   module dependency.
 
+**"Continue with Google" (FDP-42).** A server-driven OAuth redirect (Passport's
+`passport-google-oauth20` strategy), not Google's client-side JS SDK — no new frontend script,
+and it composes with the existing cookie-proxy architecture above instead of fighting it:
+
+- The frontend's "Continue with Google" is a plain `<a href="/api/auth/google">` (a real browser
+  navigation, not `NextLink`/fetch) — Next.js's existing `/api/:path*` rewrite forwards this to
+  the backend exactly like any other proxied call, so it needs no new rewrite rule.
+- `GET /auth/google` (`AuthGuard('google')`) redirects to Google's consent screen. Google's own
+  redirect back to `GET /auth/google/callback` necessarily lands directly on the backend's own
+  domain — Google needs a fixed, pre-registered absolute callback URL, so this one leg can't go
+  through the frontend's proxy the way our own calls do.
+- That means a cookie set directly in the callback response would be third-party again (the
+  exact problem the `/api/*` proxy above exists to avoid). Instead, the callback finds-or-creates
+  the user by (Google-verified) email — an existing email/password account just gets Google as
+  an additional way in, not a separate account — and mints a 60-second `OAuthExchangeTokenPayload`
+  JWT, redirecting to `${FRONTEND_URL}/login/oauth-callback?code=...`. No session token is ever
+  put in a URL, only this narrow, single-purpose, short-lived exchange code.
+  That frontend page immediately redeems it via `POST /auth/oauth/exchange` — a normal call
+  through the frontend's own `/api/*` proxy — which is where session tokens actually get issued
+  and the refresh cookie is finally set, correctly first-party.
+- A brand-new Google signup gets an unusable random password (bcrypt-hashed, nobody knows the
+  plaintext) until they set a real one via "forgot password", `isEmailVerified: true` (Google
+  already verified it), and `role: 'customer'` — Google sign-in has no UI step to pick
+  `restaurant_owner` the way the registration form does.
+- `GoogleStrategy` falls back to harmless placeholder client ID/secret when unconfigured (same
+  graceful-degradation pattern as Termii/Mapbox) — `passport-oauth2`'s constructor throws
+  synchronously on a missing `clientID`, which would otherwise crash app boot entirely in any
+  environment without Google configured, not just make the feature unavailable.
+- `GOOGLE_CALLBACK_URL` must exactly match an "Authorized redirect URI" registered on the Google
+  Cloud OAuth client — this has to be updated (adding the real backend's own https URL) whenever
+  the backend's deployed domain changes, the same way `FRONTEND_URL`/`CORS_ORIGINS` already do.
+
 ## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in
