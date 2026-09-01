@@ -11,6 +11,7 @@ import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
 import type {
   PaymentAdapter,
   InitiatePaymentResult,
+  VerifyPaymentResult,
 } from './adapters/payment-adapter.interface';
 
 @Injectable()
@@ -124,6 +125,49 @@ export class PaymentsService {
     } else {
       await this.ordersService.markPaymentFailed(order._id.toString());
     }
+  }
+
+  /**
+   * Client-triggered confirmation, called right after the provider redirects back to
+   * `/checkout/callback` — the webhook is still the primary path (docs/ARCHITECTURE.md §4), but
+   * relying on it alone left orders stuck in `PENDING_PAYMENT` forever whenever webhook delivery
+   * didn't reach this deploy (e.g. the provider dashboard's webhook URL not pointed at the
+   * current backend). `PaymentAdapter.verify()` asks the provider directly with our secret key —
+   * this is the "authenticated verify() call" alternative CLAUDE.md's payment-state rule already
+   * names alongside webhook verification, it just had no caller until now. Reuses the same
+   * idempotent order-transition methods the webhook path uses, so whichever of the two arrives
+   * first wins and the other is a safe no-op.
+   */
+  async verifyPayment(
+    userId: string,
+    orderId: string,
+  ): Promise<OrderDocument> {
+    const order = await this.ordersService.findOne(userId, orderId);
+    if (order.status !== 'PENDING_PAYMENT') return order;
+    if (!order.paymentRef) {
+      throw new BadRequestException(
+        'This order has no payment attempt to verify yet',
+      );
+    }
+
+    const adapter = this.getAdapter(order.paymentProvider);
+    let result: VerifyPaymentResult;
+    try {
+      result = await adapter.verify(order.paymentRef);
+    } catch (error) {
+      // A provider-side error *checking* status is not the same as a failed payment — leave the
+      // order in PENDING_PAYMENT so the webhook, or a later retry, can still resolve it.
+      this.logger.error(
+        `${order.paymentProvider} verify failed for order ${orderId}`,
+        error,
+      );
+      return order;
+    }
+
+    if (result.success) {
+      return (await this.ordersService.markPaidFromWebhook(orderId)) ?? order;
+    }
+    return (await this.ordersService.markPaymentFailed(orderId)) ?? order;
   }
 
   /**

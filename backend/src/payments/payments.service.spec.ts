@@ -25,11 +25,13 @@ describe('PaymentsService', () => {
   let providerResolver: jest.Mocked<Pick<PaymentProviderResolver, 'resolve'>>;
   let stripeAdapter: {
     initiate: jest.Mock;
+    verify: jest.Mock;
     handleWebhook: jest.Mock;
     refund: jest.Mock;
   };
   let paystackAdapter: {
     initiate: jest.Mock;
+    verify: jest.Mock;
     handleWebhook: jest.Mock;
     refund: jest.Mock;
   };
@@ -53,11 +55,13 @@ describe('PaymentsService', () => {
     providerResolver = { resolve: jest.fn() };
     stripeAdapter = {
       initiate: jest.fn(),
+      verify: jest.fn(),
       handleWebhook: jest.fn(),
       refund: jest.fn(),
     };
     paystackAdapter = {
       initiate: jest.fn(),
+      verify: jest.fn(),
       handleWebhook: jest.fn(),
       refund: jest.fn(),
     };
@@ -77,6 +81,7 @@ describe('PaymentsService', () => {
           provide: FlutterwaveAdapter,
           useValue: {
             initiate: jest.fn(),
+            verify: jest.fn(),
             handleWebhook: jest.fn(),
             refund: jest.fn(),
           },
@@ -197,6 +202,94 @@ describe('PaymentsService', () => {
         BadRequestException,
       );
       expect(ordersService.setPaymentRef).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyPayment', () => {
+    it('returns the order unchanged if it is no longer PENDING_PAYMENT', async () => {
+      const order = { status: 'PLACED' };
+      ordersService.findOne.mockResolvedValue(order as never);
+
+      const result = await service.verifyPayment(user.sub, 'order-1');
+
+      expect(result).toBe(order);
+      expect(stripeAdapter.verify).not.toHaveBeenCalled();
+    });
+
+    it('rejects an order with no payment attempt to verify yet', async () => {
+      ordersService.findOne.mockResolvedValue({
+        status: 'PENDING_PAYMENT',
+        paymentRef: null,
+      } as never);
+
+      await expect(
+        service.verifyPayment(user.sub, 'order-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("marks the order paid when the provider confirms success — the fix for orders stuck on 'Confirming your payment…' when a webhook never arrives", async () => {
+      ordersService.findOne.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        paymentRef: 'ORD-1-abcd',
+      } as never);
+      paystackAdapter.verify.mockResolvedValue({
+        success: true,
+        reference: 'ORD-1-abcd',
+      });
+      ordersService.markPaidFromWebhook.mockResolvedValue({
+        status: 'PLACED',
+      } as never);
+
+      const result = await service.verifyPayment(user.sub, 'order-1');
+
+      expect(paystackAdapter.verify).toHaveBeenCalledWith('ORD-1-abcd');
+      expect(ordersService.markPaidFromWebhook).toHaveBeenCalledWith(
+        'order-1',
+      );
+      expect(ordersService.markPaymentFailed).not.toHaveBeenCalled();
+      expect(result).toEqual({ status: 'PLACED' });
+    });
+
+    it('marks the order failed when the provider reports no success', async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      stripeAdapter.verify.mockResolvedValue({
+        success: false,
+        reference: 'cs_test_abc',
+      });
+      ordersService.markPaymentFailed.mockResolvedValue({
+        paymentStatus: 'failed',
+      } as never);
+
+      const result = await service.verifyPayment(user.sub, 'order-1');
+
+      expect(ordersService.markPaymentFailed).toHaveBeenCalledWith('order-1');
+      expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
+      expect(result).toEqual({ paymentStatus: 'failed' });
+    });
+
+    it('leaves the order in PENDING_PAYMENT when the provider check itself errors, rather than marking it failed', async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      stripeAdapter.verify.mockRejectedValue(new Error('Stripe API down'));
+
+      const result = await service.verifyPayment(user.sub, 'order-1');
+
+      expect(result).toBe(order);
+      expect(ordersService.markPaymentFailed).not.toHaveBeenCalled();
+      expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { PaymentProvider } from "../restaurant-types";
+import type { Order, PaymentProvider } from "../restaurant-types";
 
 export interface InitiatePaymentInput {
   orderId: string;
@@ -19,7 +19,15 @@ export const paymentsApi = api.injectEndpoints({
     getPaymentProviders: builder.query<PaymentProvider[], string>({
       query: (currency) => `/payments/providers?currency=${encodeURIComponent(currency)}`,
     }),
+
+    // Active nudge called from the checkout callback page right after the provider redirects
+    // back, so the customer never gets stuck waiting on a webhook that may never arrive at this
+    // deploy — see docs/ROADMAP.md's payment-verification fix and PaymentsService.verifyPayment.
+    verifyPayment: builder.mutation<Order, string>({
+      query: (orderId) => ({ url: `/payments/${orderId}/verify`, method: "POST" }),
+    }),
   }),
 });
 
-export const { useInitiatePaymentMutation, useGetPaymentProvidersQuery } = paymentsApi;
+export const { useInitiatePaymentMutation, useGetPaymentProvidersQuery, useVerifyPaymentMutation } =
+  paymentsApi;
