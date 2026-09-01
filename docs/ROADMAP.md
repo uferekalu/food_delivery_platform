@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-57**
+**Next available ticket number: FDP-58**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -69,6 +69,7 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-54 | `stripe-connect-payouts` | Vendor payouts epic, part 4 of 4 — Stripe Connect (Express accounts) for card/global payments: hosted onboarding link, an `account.updated` webhook to know when onboarding actually completes, and `transfer_data`/`application_fee_amount` on the Checkout Session. The most involved of the three providers since Connect's onboarding is a multi-step redirect flow, not a single API call like the other two | ⏳ Planned |
 | FDP-55 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
 | FDP-56 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
+| FDP-57 | `paystack-payout-error-handling` | Connecting a Paystack payout account failed with a raw "Internal server error" — `PaystackPayoutsController`'s three endpoints never caught a raw adapter error the way `PaymentsService.initiatePayment`/`refundOrder` already do, so any real Paystack rejection (an unresolvable account number, a bank code mismatch) fell straight through to Nest's global filter as an opaque 500. The actual trigger live: Paystack's test mode caps *real* bank-account resolution at 3/day — exhausted by this session's own FDP-52 verification calls — which Paystack reports clearly, but the missing try/catch swallowed that message entirely. Fixed the error handling, and added Paystack's documented workaround (bank code `001`, "Test Bank") as a selectable option in the bank dropdown whenever running on a test-mode key, so payout setup can still be exercised without waiting on the daily cap | ✅ Done |
 
 Phases are sequential but not rigid — if a later phase's work is discovered while doing an
 earlier one, note it here rather than scope-creeping the current branch.

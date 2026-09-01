@@ -175,13 +175,28 @@ export class PaystackAdapter implements PaymentAdapter {
   // (FDP-53) and Stripe Connect (FDP-54) each have their own, differently-shaped onboarding.
 
   /** NGN banks only for now — this project's primary currency; broadened if/when a non-NGN
-   * Paystack corridor actually needs it. */
+   * Paystack corridor actually needs it. Appends Paystack's own "Test Bank" (code `001`) when
+   * running against a test-mode secret key — Paystack caps *real* bank-account resolution at 3
+   * per day in test mode (hit live, 2026-09-01: a resolve attempt against a real bank returned
+   * "Test mode daily limit of 3 live bank resolves exceeded"), and `001` is Paystack's documented
+   * escape hatch for exercising this flow beyond that cap. It doesn't appear in the real `/bank`
+   * list, and never appears at all once this runs on a live key (business_name/currency won't
+   * accept it in production, so there's no reason to offer it there). */
   async listBanks(): Promise<PaystackBank[]> {
     const result = await this.request<PaystackListBanksResponse>(
       '/bank?country=nigeria&currency=NGN&perPage=100',
     );
     if (!result.status || !result.data) {
       throw new Error(result.message ?? 'Could not load the bank list');
+    }
+    if (this.secretKey.startsWith('sk_test_')) {
+      return [
+        ...result.data,
+        {
+          name: 'Test Bank (sandbox only — bypasses the 3/day resolve limit)',
+          code: '001',
+        },
+      ];
     }
     return result.data;
   }
