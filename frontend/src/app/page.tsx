@@ -173,10 +173,15 @@ export default function Home() {
       ? { href: "/dashboard/restaurants", label: "Go to my restaurants" }
       : { href: "/register?role=restaurant_owner", label: "Register your business" };
 
+  // restaurant_owner and admin accounts can never become riders (RidersService.apply()
+  // rejects them outright — see docs/ROADMAP.md FDP-61) — null hides the CTA entirely rather
+  // than pointing them at an application they'd only get a 400 from.
   const riderCta =
     authenticated && user.role === "rider"
       ? { href: "/rider", label: "Go to my dashboard" }
-      : { href: "/rider/apply", label: "Register here" };
+      : authenticated && (user.role === "restaurant_owner" || user.role === "admin")
+        ? null
+        : { href: "/rider/apply", label: "Register here" };
 
   return (
     <div className="flex flex-col">
@@ -382,14 +387,16 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-white">Let&apos;s do it together</h2>
             <p className="text-white/70">Ride with us, bring your restaurant online, or join the team.</p>
           </div>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-            <TogetherItem
-              icon={<BikeIcon />}
-              title="Become a rider"
-              description="Flexibility and competitive earnings, on your own schedule."
-              href={riderCta.href}
-              label={riderCta.label}
-            />
+          <div className={cn("grid grid-cols-1 gap-8", riderCta ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+            {riderCta && (
+              <TogetherItem
+                icon={<BikeIcon />}
+                title="Become a rider"
+                description="Flexibility and competitive earnings, on your own schedule."
+                href={riderCta.href}
+                label={riderCta.label}
+              />
+            )}
             <TogetherItem
               icon={<StoreIcon className="size-6" />}
               title="Register your business"

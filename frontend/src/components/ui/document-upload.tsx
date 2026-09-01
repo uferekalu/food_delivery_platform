@@ -1,8 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { useLazyGetUploadSignatureQuery, type UploadFolder } from "@/lib/redux/services/uploads-api";
+import { Spinner } from "./spinner";
 import { Button } from "./button";
 
 export interface DocumentUploadProps {
@@ -14,8 +16,10 @@ export interface DocumentUploadProps {
   className?: string;
 }
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const ACCEPTED_HINT = "PDF, JPG, or PNG — max 5MB.";
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png"];
 
 function fileNameFromUrl(url: string): string {
   try {
@@ -25,30 +29,62 @@ function fileNameFromUrl(url: string): string {
   }
 }
 
+function isImageUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function FileIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-8 text-text-muted">
+      <path
+        d="M6 2.5h8l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1v-17a1 1 0 011-1z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M14 2.5v4a1 1 0 001 1h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /**
  * Same direct-to-Cloudinary signed-upload pattern as ImageUpload, but for a document that isn't
  * necessarily an image (a CAC certificate is commonly a PDF) — posts to Cloudinary's `/auto/
  * upload` endpoint instead of `/image/upload` so either file type is accepted. `resource_type`
  * isn't part of the signed params (only `timestamp`/`folder` are, see UploadsService), so the
  * same signature works unchanged for this endpoint too.
+ *
+ * Cloudinary's own account-level "PDF and ZIP delivery" security setting must be enabled for
+ * uploaded PDFs to actually be viewable afterwards — otherwise every PDF URL (signed or not)
+ * 401s with `X-Cld-Error: deny or ACL failure`, confirmed live for this project's account. This
+ * component can't work around that from the client; it's a one-time Cloudinary Console setting
+ * (Settings → Security → allow PDF/ZIP delivery), independent of any code here.
  */
 export function DocumentUpload({ label, folder, value, onChange, hint, className }: DocumentUploadProps) {
   const [fetchSignature] = useLazyGetUploadSignatureQuery();
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Only known for a file picked *this session* — a document loaded from a saved URL (editing
+  // an existing restaurant/rider) has no original filename to recover, so falls back to
+  // decoding Cloudinary's generated public_id instead.
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const displayName = value ? (selectedFileName ?? fileNameFromUrl(value)) : null;
+  const showImagePreview = !!value && isImageUrl(value);
 
   async function handleFileSelected(file: File) {
     setError(null);
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setStatus("error");
-      setError("Please choose a PDF, JPG, PNG, or WEBP file.");
+      setError("Please choose a PDF, JPG, or PNG file.");
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
       setStatus("error");
-      setError("File must be under 10MB.");
+      setError("File must be under 5MB.");
       return;
     }
 
@@ -70,6 +106,7 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
       if (!response.ok) throw new Error("Upload failed");
 
       const data = (await response.json()) as { secure_url: string };
+      setSelectedFileName(file.name);
       onChange(data.secure_url);
       setStatus("idle");
     } catch {
@@ -83,42 +120,48 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <span className="text-sm font-medium text-text">{label}</span>
-      <div className="flex items-center gap-3">
-        {value && (
-          <a
-            href={value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-primary hover:underline"
-          >
-            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4 shrink-0">
-              <path
-                d="M4 1.5h5l3 3v10a.5.5 0 01-.5.5h-8a.5.5 0 01-.5-.5v-12a.5.5 0 01.5-.5z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span className="truncate">{fileNameFromUrl(value)}</span>
-          </a>
-        )}
-        <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-4">
+        <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border-strong bg-surface-subtle">
+          {showImagePreview ? (
+            <Image src={value} alt="" fill sizes="80px" className="object-cover" />
+          ) : (
+            <FileIcon />
+          )}
+          {status === "uploading" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/40">
+              <Spinner size="sm" className="text-neutral-0" />
+            </div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          {displayName && (
+            <a
+              href={value ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="max-w-64 truncate text-sm text-primary hover:underline"
+            >
+              {displayName}
+            </a>
+          )}
           <Button
             type="button"
             variant="outline"
             size="sm"
             isLoading={status === "uploading"}
             onClick={() => inputRef.current?.click()}
+            className="self-start"
           >
             {value ? "Replace document" : "Upload document"}
           </Button>
+          <span className="text-xs text-text-muted">{ACCEPTED_HINT}</span>
           {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,image/jpeg,image/png,image/webp"
+          accept=".pdf,image/jpeg,image/png"
           className="sr-only"
           onChange={(e) => {
             const file = e.target.files?.[0];
