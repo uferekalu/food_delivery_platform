@@ -9,6 +9,16 @@ export interface CreateOrderInput {
   promoCode?: string;
 }
 
+// Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51).
+export interface RestaurantEarnings {
+  currency: string;
+  deliveredOrders: number;
+  grossRevenue: number;
+  platformFeeTotal: number;
+  netEarned: number;
+  payoutSetupComplete: boolean;
+}
+
 export const ordersApi = api.injectEndpoints({
   endpoints: (builder) => ({
     createOrder: builder.mutation<Order, CreateOrderInput>({
@@ -37,6 +47,11 @@ export const ordersApi = api.injectEndpoints({
           : [{ type: "Order", id: "QUEUE" }],
     }),
 
+    getRestaurantEarnings: builder.query<RestaurantEarnings, string>({
+      query: (restaurantId) => `/orders/restaurant/${restaurantId}/earnings`,
+      providesTags: (_result, _error, restaurantId) => [{ type: "Order", id: `EARNINGS-${restaurantId}` }],
+    }),
+
     updateOrderStatus: builder.mutation<Order, { orderId: string; status: OrderStatus }>({
       query: ({ orderId, status }) => ({ url: `/orders/${orderId}/status`, method: "PATCH", body: { status } }),
       invalidatesTags: (result, _error, { orderId }) => [
@@ -52,5 +67,6 @@ export const {
   useGetOrderQuery,
   useGetMyOrdersQuery,
   useGetRestaurantOrdersQuery,
+  useGetRestaurantEarningsQuery,
   useUpdateOrderStatusMutation,
 } = ordersApi;

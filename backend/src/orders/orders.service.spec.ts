@@ -177,6 +177,8 @@ describe('OrdersService', () => {
     expect(order.tax).toBe(0);
     expect(order.discount).toBe(0);
     expect(order.total).toBe(230);
+    expect(order.platformFeeAmount).toBe(30); // 15% of 200 subtotal
+    expect(order.restaurantPayoutAmount).toBe(170); // 200 - 30
     expect(order.currency).toBe('NGN');
     expect(order.paymentProvider).toBe('paystack'); // NGN default per the routing table
     expect(order.paymentStatus).toBe('pending');
@@ -428,6 +430,8 @@ describe('OrdersService', () => {
       tax: 0,
       discount: 0,
       total: 11.5,
+      platformFeeAmount: 1.5,
+      restaurantPayoutAmount: 8.5,
       currency: 'NGN',
       status,
       statusHistory: [{ status, at: new Date(), by: userId }],
@@ -478,6 +482,66 @@ describe('OrdersService', () => {
 
       await expect(
         ordersService.findForRestaurant(intruder, restaurant._id.toString()),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('getEarningsSummary (FDP-51)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    it('sums gross revenue, platform fee, and net earnings across DELIVERED orders only', async () => {
+      const restaurant = await createApprovedRestaurant();
+      await createOrderAtStatus(restaurant._id.toString(), 'DELIVERED');
+      await createOrderAtStatus(restaurant._id.toString(), 'DELIVERED');
+      await createOrderAtStatus(restaurant._id.toString(), 'PLACED'); // not yet earned
+      await createOrderAtStatus(restaurant._id.toString(), 'REFUNDED'); // no longer earned
+
+      const summary = await ordersService.getEarningsSummary(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      // createOrderAtStatus's fixed fixture: subtotal 10, platformFeeAmount 1.5, restaurantPayoutAmount 8.5
+      expect(summary.deliveredOrders).toBe(2);
+      expect(summary.grossRevenue).toBe(20);
+      expect(summary.platformFeeTotal).toBe(3);
+      expect(summary.netEarned).toBe(17);
+      expect(summary.currency).toBe('NGN');
+      expect(summary.payoutSetupComplete).toBe(false);
+    });
+
+    it('returns zeroed totals for a restaurant with no delivered orders yet', async () => {
+      const restaurant = await createApprovedRestaurant();
+
+      const summary = await ordersService.getEarningsSummary(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(summary).toEqual({
+        currency: 'NGN',
+        deliveredOrders: 0,
+        grossRevenue: 0,
+        platformFeeTotal: 0,
+        netEarned: 0,
+        payoutSetupComplete: false,
+      });
+    });
+
+    it('rejects a caller who does not own the restaurant', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.getEarningsSummary(intruder, restaurant._id.toString()),
       ).rejects.toThrow();
     });
   });
@@ -734,6 +798,8 @@ describe('OrdersService', () => {
         tax: 0,
         discount: 0,
         total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
         currency: 'NGN',
         status: 'DELIVERED',
         statusHistory: [],
@@ -752,6 +818,8 @@ describe('OrdersService', () => {
         tax: 0,
         discount: 0,
         total: 57.5,
+        platformFeeAmount: 7.5,
+        restaurantPayoutAmount: 42.5,
         currency: 'NGN',
         status: 'PLACED',
         statusHistory: [],
@@ -770,6 +838,8 @@ describe('OrdersService', () => {
         tax: 0,
         discount: 0,
         total: 23,
+        platformFeeAmount: 3,
+        restaurantPayoutAmount: 17,
         currency: 'USD',
         status: 'PENDING_PAYMENT',
         statusHistory: [],

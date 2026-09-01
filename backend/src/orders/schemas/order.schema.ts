@@ -57,6 +57,18 @@ export class Order {
   @Prop({ type: Number, required: true, min: 0 })
   total: number;
 
+  // Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — snapshotted at order creation
+  // from the platform commission rate in effect at the time (OrdersService.PLATFORM_COMMISSION_RATE),
+  // so a later rate change never rewrites historical orders. restaurantPayoutAmount is what the
+  // restaurant is owed for this order (subtotal minus the platform's commission) — settled
+  // automatically by the payment provider once FDP-52/53/54 wire up real subaccount/Connect
+  // splits; until then it's informational only (see Restaurant.payoutAccounts).
+  @Prop({ type: Number, required: true, min: 0 })
+  platformFeeAmount: number;
+
+  @Prop({ type: Number, required: true, min: 0 })
+  restaurantPayoutAmount: number;
+
   // Copied from the restaurant at order time (docs/ARCHITECTURE.md §3) — the platform never
   // does cross-currency conversion, so this never needs to be recomputed later.
   @Prop({ type: String, required: true })

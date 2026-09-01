@@ -33,6 +33,17 @@ export class OrdersController {
     return this.ordersService.findForRestaurant(user, restaurantId);
   }
 
+  // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — vendor
+  // payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51).
+  @Roles('restaurant_owner', 'admin')
+  @Get('restaurant/:restaurantId/earnings')
+  getEarnings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('restaurantId') restaurantId: string,
+  ) {
+    return this.ordersService.getEarningsSummary(user, restaurantId);
+  }
+
   // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — admin-only
   // unrestricted lookup for dispute/refund handling (docs/ROADMAP.md FDP-20), unlike the
   // ownership-checked `:id` route below.

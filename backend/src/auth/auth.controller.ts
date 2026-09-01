@@ -206,7 +206,9 @@ export class AuthController {
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       avatarUrl: user.avatarUrl,
-      phone: user.phone,
+      // `undefined` when the schema field is genuinely absent (see user.schema.ts's phone
+      // comment) — normalized to `null` so PublicUser's contract doesn't change.
+      phone: user.phone ?? null,
       isPhoneVerified: user.isPhoneVerified,
     };
   }

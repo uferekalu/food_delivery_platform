@@ -97,6 +97,14 @@ const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
 // platform fee unrelated to distance.
 const SERVICE_FEE_RATE = 0.05;
 
+// Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — the platform's commission on the
+// food subtotal only, not deliveryFee (the rider's earnings, see findForRider) or serviceFee
+// (already the platform's own revenue line). Computed on the pre-discount subtotal: a promo
+// discount is a platform marketing cost, not something passed on to reduce what the restaurant
+// is owed. Snapshotted onto the order at creation (like serviceFee) so a later rate change never
+// rewrites historical orders' numbers.
+const PLATFORM_COMMISSION_RATE = 0.15;
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -249,6 +257,8 @@ export class OrdersService {
     );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
     const tax = 0;
+    const platformFeeAmount = round2(subtotal * PLATFORM_COMMISSION_RATE);
+    const restaurantPayoutAmount = round2(subtotal - platformFeeAmount);
 
     let discount = 0;
     let redeemedPromoCodeId: string | null = null;
@@ -290,6 +300,8 @@ export class OrdersService {
       tax,
       discount,
       total,
+      platformFeeAmount,
+      restaurantPayoutAmount,
       currency: restaurant.currency,
       status: 'PENDING_PAYMENT',
       statusHistory: [
@@ -568,6 +580,69 @@ export class OrdersService {
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
     return order;
+  }
+
+  /**
+   * A restaurant owner's earnings — vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51).
+   * Only counts DELIVERED orders (money the restaurant has actually, finally earned — a later
+   * refund moves an order to REFUNDED, a separate terminal state, so it naturally drops out
+   * here). `payoutSetupComplete` reflects whether *any* provider has an active payout account
+   * yet — until FDP-52/53/54 wire up real onboarding, this is always false and every
+   * restaurant's dashboard shows "payout setup required" instead of a withdraw action.
+   */
+  async getEarningsSummary(
+    requester: AccessTokenPayload,
+    restaurantId: string,
+  ): Promise<{
+    currency: string;
+    deliveredOrders: number;
+    grossRevenue: number;
+    platformFeeTotal: number;
+    netEarned: number;
+    payoutSetupComplete: boolean;
+  }> {
+    const restaurant =
+      await this.restaurantsService.findByIdOrThrow(restaurantId);
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+
+    const [summary] = await this.orderModel
+      .aggregate<{
+        deliveredOrders: number;
+        grossRevenue: number;
+        platformFeeTotal: number;
+        netEarned: number;
+      }>([
+        // .toString(), never the raw ObjectId — ref fields in this schema store as strings
+        // (Mongoose 9 quirk hit repeatedly elsewhere in this codebase), and aggregate's $match
+        // doesn't auto-cast the way .find()/.findOne() do.
+        {
+          $match: {
+            restaurantId: restaurant._id.toString(),
+            status: 'DELIVERED',
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            deliveredOrders: { $sum: 1 },
+            grossRevenue: { $sum: '$subtotal' },
+            platformFeeTotal: { $sum: '$platformFeeAmount' },
+            netEarned: { $sum: '$restaurantPayoutAmount' },
+          },
+        },
+      ])
+      .exec();
+
+    return {
+      currency: restaurant.currency,
+      deliveredOrders: summary?.deliveredOrders ?? 0,
+      grossRevenue: summary?.grossRevenue ?? 0,
+      platformFeeTotal: summary?.platformFeeTotal ?? 0,
+      netEarned: summary?.netEarned ?? 0,
+      payoutSetupComplete: restaurant.payoutAccounts.some(
+        (account) => account.status === 'active',
+      ),
+    };
   }
 
   /** Platform-wide order stats for the admin analytics overview (docs/ROADMAP.md FDP-20) — one

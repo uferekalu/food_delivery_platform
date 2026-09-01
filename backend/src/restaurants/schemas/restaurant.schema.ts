@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Address, AddressSchema } from '../../common/schemas/address.schema';
 import { OpeningHour, OpeningHourSchema } from './opening-hour.schema';
+import { PayoutAccount, PayoutAccountSchema } from './payout-account.schema';
 
 @Schema({ timestamps: true })
 export class Restaurant {
@@ -69,6 +70,10 @@ export class Restaurant {
   // data, out of scope) — still useful for the "under 30 min" style filter FDP-21 calls for.
   @Prop({ type: Number, default: null, min: 0 })
   estimatedDeliveryMinutes: number | null;
+
+  // Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — see PayoutAccount's doc comment.
+  @Prop({ type: [PayoutAccountSchema], default: [] })
+  payoutAccounts: PayoutAccount[];
 }
 
 export type RestaurantDocument = HydratedDocument<Restaurant>;

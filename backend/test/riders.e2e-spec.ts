@@ -123,6 +123,8 @@ describe('Riders (e2e)', () => {
       tax: 0,
       discount: 0,
       total: 11.5,
+      platformFeeAmount: 1.5,
+      restaurantPayoutAmount: 8.5,
       currency: 'NGN',
       status: 'READY_FOR_PICKUP',
       statusHistory: [

@@ -62,7 +62,9 @@ function toPublicUser(user: UserDocument): PublicUser {
     role: user.role,
     isEmailVerified: user.isEmailVerified,
     avatarUrl: user.avatarUrl,
-    phone: user.phone,
+    // `undefined` when the schema field is genuinely absent (see user.schema.ts's phone
+    // comment) — normalized to `null` so this contract never changes.
+    phone: user.phone ?? null,
     isPhoneVerified: user.isPhoneVerified,
   };
 }
