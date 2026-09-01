@@ -1,25 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Container } from "@/components/ui/container";
-import { Input } from "@/components/ui/input";
-import { buttonVariants, Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { RestaurantCard } from "@/components/restaurant-card";
+import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import NextLink from "next/link";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
-
-function SearchIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="size-4 shrink-0">
-      <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M17 17l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function StoreIcon() {
   return (
@@ -82,6 +70,37 @@ function BriefcaseIcon() {
   );
 }
 
+function StarIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-4 text-warning">
+      <path d="M10 1.5l2.6 5.4 5.9.7-4.4 4.1 1.2 5.8L10 14.8l-5.3 2.7 1.2-5.8-4.4-4.1 5.9-.7L10 1.5z" />
+    </svg>
+  );
+}
+
+/**
+ * A wave, not a straight edge — one of the few genuinely distinctive shapes available without
+ * an illustration asset, used to break the hero's rectangle into the section below it rather
+ * than a flat color-band handoff. Fill matches the very next section's background exactly so
+ * the curve reads as the *next* section's edge tucking under the hero, not a decoration
+ * floating on top of it.
+ */
+function WaveDivider({ fillClassName }: { fillClassName: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1440 80"
+      preserveAspectRatio="none"
+      className="absolute inset-x-0 -bottom-px h-12 w-full sm:h-16"
+    >
+      <path
+        d="M0 32C240 68 480 68 720 46C960 24 1200 4 1440 24V80H0V32Z"
+        className={fillClassName}
+      />
+    </svg>
+  );
+}
+
 interface CategoryTile {
   icon: React.ReactNode;
   title: string;
@@ -114,8 +133,11 @@ const CATEGORY_TILES: CategoryTile[] = [
 ];
 
 function CategoryCard({ tile }: { tile: CategoryTile }) {
-  const content = (
-    <>
+  return (
+    <NextLink
+      href={tile.href}
+      className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6 transition-colors duration-150 hover:border-border-strong"
+    >
       <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
         {tile.icon}
       </div>
@@ -128,31 +150,50 @@ function CategoryCard({ tile }: { tile: CategoryTile }) {
           Coming soon
         </Badge>
       )}
-    </>
-  );
-
-  return (
-    <NextLink
-      href={tile.href}
-      className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6 transition-colors duration-150 hover:border-border-strong"
-    >
-      {content}
     </NextLink>
   );
 }
 
+function TogetherCard({
+  icon,
+  title,
+  description,
+  href,
+  label,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
+      <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+        {icon}
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="font-semibold text-text">{title}</span>
+        <span className="text-sm text-text-muted">{description}</span>
+      </div>
+      <NextLink href={href} className={buttonVariants({ variant: "outline", size: "sm" })}>
+        {label}
+      </NextLink>
+    </div>
+  );
+}
+
 export default function Home() {
-  const router = useRouter();
   const { user, status } = useAppSelector((state) => state.auth);
   const authenticated = status === "authenticated" && !!user;
-  const [searchInput, setSearchInput] = useState("");
 
   // A large-enough page covers today's restaurant count in one request (see FDP-32 PR) — cheap
   // for a "Top restaurants" preview and doubles as the source for the "Countries we deliver"
-  // section below, so the homepage doesn't need two separate fetches.
+  // strip below, so the homepage doesn't need two separate fetches.
   const { data, isLoading } = useListRestaurantsQuery({ sort: "rating", limit: 50 });
   const topRestaurants = data?.items.slice(0, 4) ?? [];
   const countries = Array.from(new Set((data?.items ?? []).map((r) => r.country))).sort();
+  const featuredRestaurant = topRestaurants[0];
 
   const partnerCta =
     authenticated && user.role === "restaurant_owner"
@@ -164,55 +205,123 @@ export default function Home() {
       ? { href: "/rider", label: "Go to my dashboard" }
       : { href: "/rider/apply", label: "Register here" };
 
-  function submitSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const params = searchInput.trim() ? `?search=${encodeURIComponent(searchInput.trim())}` : "";
-    router.push(`/restaurants${params}`);
-  }
-
   return (
     <div className="flex flex-col">
-      {/* Hero */}
-      <section className="bg-surface-subtle">
-        <Container className="flex flex-col items-start gap-6 py-20">
-          <span className="text-sm font-semibold tracking-wide text-primary uppercase">Food Delivery Platform</span>
-          <h1 className="max-w-2xl text-4xl font-bold text-text sm:text-5xl">
-            Connecting customers with restaurants and reliable delivery
-          </h1>
-          <p className="max-w-xl text-lg text-text-muted">
-            Order from local restaurants and track your delivery live, from checkout to your door.
-            Real-time order status, secure payments, and delivery you can follow on a map.
-          </p>
-          <form onSubmit={submitSearch} className="flex w-full max-w-md flex-col gap-2 sm:flex-row">
-            <div className="relative flex-1">
-              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted">
-                <SearchIcon />
-              </span>
-              <Input
-                type="search"
-                placeholder="Search restaurants or cuisines…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9"
-                aria-label="Search restaurants or cuisines"
-              />
+      {/* Hero — two columns on desktop (copy + a floating order-status mock), gradient wash +
+          soft blobs instead of a flat band, wave edge into the section below. No search box
+          here anymore: it's in the persistent header (see layout.tsx) so it's reachable from
+          every page, not just this one — docs/ROADMAP.md FDP-46. */}
+      <section
+        className="relative overflow-hidden"
+        style={{
+          backgroundImage: [
+            "radial-gradient(ellipse 60% 50% at 12% 15%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 70%)",
+            "radial-gradient(ellipse 55% 60% at 90% -10%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 65%)",
+            "linear-gradient(180deg, var(--color-surface-subtle), var(--color-surface-subtle))",
+          ].join(", "),
+        }}
+      >
+        <Container className="relative grid grid-cols-1 items-center gap-10 py-16 sm:py-20 lg:grid-cols-[1.1fr_0.9fr] lg:py-28">
+          <div className="flex flex-col items-start gap-6">
+            <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
+              Now delivering
+            </span>
+            <h1 className="max-w-xl text-4xl font-bold text-balance text-text sm:text-5xl">
+              Your favorite restaurants, on their way in minutes
+            </h1>
+            <p className="max-w-lg text-lg text-text-muted">
+              Browse local restaurants, order in a couple of taps, and follow your delivery on a
+              live map — from checkout to your door.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
+                Browse restaurants
+              </NextLink>
+              <NextLink href={partnerCta.href} className={buttonVariants({ variant: "outline" })}>
+                {partnerCta.label}
+              </NextLink>
             </div>
-            <Button type="submit">Search</Button>
-          </form>
-          <div className="flex flex-wrap gap-3">
-            <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
-              Browse restaurants
-            </NextLink>
-            <NextLink href={partnerCta.href} className={buttonVariants({ variant: "outline" })}>
-              {partnerCta.label}
-            </NextLink>
+          </div>
+
+          {/* Decorative floating card — hidden on mobile so it never competes for space with
+              the copy above at a 375px viewport (frontend/CLAUDE.md responsive bar). */}
+          <div className="relative hidden aspect-square items-center justify-center lg:flex">
+            <div
+              className="absolute inset-6 rounded-[2.5rem]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)), color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)))",
+              }}
+            />
+            <div className="relative flex w-72 flex-col gap-4 rounded-2xl border border-border bg-surface p-5 shadow-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+                  <PlateIcon className="size-6" />
+                </div>
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate font-semibold text-text">
+                    {featuredRestaurant?.name ?? "Top-rated near you"}
+                  </span>
+                  <span className="flex items-center gap-1 text-sm text-text-muted">
+                    <StarIcon />
+                    {featuredRestaurant ? featuredRestaurant.avgRating.toFixed(1) : "4.8"} · Open now
+                  </span>
+                </div>
+              </div>
+              <div className="h-px bg-border" />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-muted">Order status</span>
+                <Badge variant="success">On the way</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full w-2/3 rounded-full bg-primary" />
+                </div>
+                <span className="shrink-0 text-xs text-text-muted">~12 min</span>
+              </div>
+            </div>
+          </div>
+        </Container>
+        <WaveDivider fillClassName="fill-[var(--color-surface)]" />
+      </section>
+
+      {/* Countries we deliver — a slim strip, not a full section with its own heading, so it
+          reads as supporting detail rather than another copy-pasted grid block. */}
+      {countries.length > 0 && (
+        <section className="border-b border-border bg-surface">
+          <Container className="flex flex-wrap items-center justify-center gap-3 py-5 text-center">
+            <span className="text-sm font-medium text-text-muted">Now delivering across</span>
+            <div className="flex flex-wrap justify-center gap-2">
+              {countries.map((country) => (
+                <Badge key={country} variant="neutral">
+                  {country}
+                </Badge>
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {/* Anything delivered */}
+      <section className="bg-surface">
+        <Container className="flex flex-col gap-8 py-16">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h2 className="text-2xl font-bold text-text">Anything delivered</h2>
+            <p className="max-w-lg text-text-muted">
+              Restaurants are live today — groceries and pharmacy are next on our roadmap.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {CATEGORY_TILES.map((tile) => (
+              <CategoryCard key={tile.title} tile={tile} />
+            ))}
           </div>
         </Container>
       </section>
 
       {/* Top restaurants */}
       {(isLoading || topRestaurants.length > 0) && (
-        <section className="border-t border-border bg-surface">
+        <section className="border-t border-border bg-surface-subtle">
           <Container className="flex flex-col gap-6 py-16">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-col gap-1">
@@ -234,86 +343,32 @@ export default function Home() {
         </section>
       )}
 
-      {/* Anything delivered */}
-      <section className="border-t border-border bg-surface-subtle">
-        <Container className="flex flex-col gap-8 py-16">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h2 className="text-2xl font-bold text-text">Anything delivered</h2>
-            <p className="max-w-lg text-text-muted">
-              Restaurants are live today — groceries and pharmacy are next on our roadmap.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {CATEGORY_TILES.map((tile) => (
-              <CategoryCard key={tile.title} tile={tile} />
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      {/* Countries we deliver */}
-      {countries.length > 0 && (
-        <section className="border-t border-border bg-surface">
-          <Container className="flex flex-col items-center gap-6 py-16 text-center">
-            <h2 className="text-2xl font-bold text-text">Countries where we deliver</h2>
-            <div className="flex flex-wrap justify-center gap-2">
-              {countries.map((country) => (
-                <Badge key={country} variant="neutral" className="px-4 py-1.5 text-sm">
-                  {country}
-                </Badge>
-              ))}
-            </div>
-          </Container>
-        </section>
-      )}
-
       {/* Let's do it together */}
-      <section className="border-t border-border bg-surface-subtle">
+      <section className="border-t border-border bg-surface">
         <Container className="flex flex-col gap-8 py-16">
           <h2 className="text-center text-2xl font-bold text-text">Let&apos;s do it together</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
-                <BikeIcon />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="font-semibold text-text">Become a rider</span>
-                <span className="text-sm text-text-muted">
-                  Enjoy flexibility and competitive earnings delivering on your own schedule.
-                </span>
-              </div>
-              <NextLink href={riderCta.href} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                {riderCta.label}
-              </NextLink>
-            </div>
-            <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
-                <StoreIcon />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="font-semibold text-text">Register your business</span>
-                <span className="text-sm text-text-muted">
-                  Grow with us — reach more customers and manage your menu with ease.
-                </span>
-              </div>
-              <NextLink href={partnerCta.href} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                {partnerCta.label}
-              </NextLink>
-            </div>
-            <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
-                <BriefcaseIcon />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="font-semibold text-text">Careers</span>
-                <span className="text-sm text-text-muted">
-                  Ambitious, humble, and love working with others? We&apos;d like to hear from you.
-                </span>
-              </div>
-              <NextLink href="/careers" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                View careers
-              </NextLink>
-            </div>
+            <TogetherCard
+              icon={<BikeIcon />}
+              title="Become a rider"
+              description="Enjoy flexibility and competitive earnings delivering on your own schedule."
+              href={riderCta.href}
+              label={riderCta.label}
+            />
+            <TogetherCard
+              icon={<StoreIcon />}
+              title="Register your business"
+              description="Grow with us — reach more customers and manage your menu with ease."
+              href={partnerCta.href}
+              label={partnerCta.label}
+            />
+            <TogetherCard
+              icon={<BriefcaseIcon />}
+              title="Careers"
+              description="Ambitious, humble, and love working with others? We'd like to hear from you."
+              href="/careers"
+              label="View careers"
+            />
           </div>
         </Container>
       </section>
