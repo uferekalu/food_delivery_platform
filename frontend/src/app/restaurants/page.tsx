@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
@@ -44,7 +45,19 @@ const DELIVERY_TIME_OPTIONS: SelectOption[] = [
 ];
 
 export default function RestaurantsPage() {
-  const [searchInput, setSearchInput] = useState("");
+  return (
+    <Suspense fallback={<Container className="py-10" />}>
+      <RestaurantsPageContent />
+    </Suspense>
+  );
+}
+
+function RestaurantsPageContent() {
+  const searchParams = useSearchParams();
+  // Only used as the initial value — the header's search (see header-search.tsx) always
+  // navigates here with `?search=`, but this page owns its own debounced state afterward so
+  // typing in the on-page search box doesn't fight the URL for control.
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("search") ?? "");
   const search = useDebouncedValue(searchInput, 350);
   const [minRating, setMinRating] = useState("");
   const [maxPriceLevel, setMaxPriceLevel] = useState("");

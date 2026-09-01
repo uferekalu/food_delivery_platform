@@ -8,8 +8,10 @@ import { AuthStatus } from "@/components/auth-status";
 import { MobileNav } from "@/components/mobile-nav";
 import { CartDrawer } from "@/components/cart-drawer";
 import { NotificationBell } from "@/components/notification-bell";
+import { HeaderSearch } from "@/components/header-search";
 import { Logo } from "@/components/logo";
 import { Footer } from "@/components/footer";
+import { Container } from "@/components/ui/container";
 import { StoreProvider } from "@/lib/redux/store-provider";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { SessionInitializer } from "@/components/session-initializer";
@@ -56,20 +58,26 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ThemeInitializer />
           <SessionInitializer />
           <ToastProvider>
-            <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between gap-3 border-b border-border bg-surface p-3">
-              <NextLink href="/restaurants" className="flex shrink-0 items-center gap-2 text-sm font-semibold text-primary">
-                <Logo className="size-8" />
-                Restaurants
-              </NextLink>
-              <div className="flex items-center gap-2">
-                <NotificationBell />
-                <CartDrawer />
-                <div className="hidden items-center gap-3 sm:flex">
-                  <AuthStatus />
-                  <ThemeToggle />
+            <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-surface">
+              <Container className="flex flex-wrap items-center gap-3 py-3">
+                <NextLink href="/restaurants" className="flex shrink-0 items-center gap-2 text-sm font-semibold text-primary">
+                  <Logo className="size-8" />
+                  Restaurants
+                </NextLink>
+                {/* Full-width row of its own below `sm` (order-3 + w-full forces the wrap);
+                    a normal flex-1 middle column at `sm` and up — see frontend/CLAUDE.md
+                    "Responsive design" and docs/ROADMAP.md FDP-46. */}
+                <HeaderSearch className="order-3 w-full sm:order-0 sm:w-auto sm:max-w-md sm:flex-1" />
+                <div className="ml-auto flex items-center gap-2">
+                  <NotificationBell />
+                  <CartDrawer />
+                  <div className="hidden items-center gap-3 sm:flex">
+                    <AuthStatus />
+                    <ThemeToggle />
+                  </div>
+                  <MobileNav />
                 </div>
-                <MobileNav />
-              </div>
+              </Container>
             </header>
             <div className="flex-1">{children}</div>
             <Footer />
