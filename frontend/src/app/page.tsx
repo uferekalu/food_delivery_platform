@@ -5,13 +5,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
+import { cn } from "@/lib/cn";
 import NextLink from "next/link";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 
-function StoreIcon() {
+function StoreIcon({ className = "size-7" }: { className?: string }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-7">
+    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className={className}>
       <path
         d="M5 12l1.5-6h19L27 12M5 12v13h22V12M5 12h22M13 25v-7h6v7"
         stroke="currentColor"
@@ -47,7 +48,7 @@ function PillIcon() {
 
 function BikeIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-7">
+    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-6">
       <circle cx="8" cy="23" r="4" stroke="currentColor" strokeWidth="1.6" />
       <circle cx="24" cy="23" r="4" stroke="currentColor" strokeWidth="1.6" />
       <path
@@ -63,7 +64,7 @@ function BikeIcon() {
 
 function BriefcaseIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-7">
+    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-6">
       <rect x="4" y="11" width="24" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
       <path d="M12 11V8a2 2 0 012-2h4a2 2 0 012 2v3M4 17h24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
@@ -78,83 +79,49 @@ function StarIcon() {
   );
 }
 
-/**
- * A wave, not a straight edge — one of the few genuinely distinctive shapes available without
- * an illustration asset, used to break the hero's rectangle into the section below it rather
- * than a flat color-band handoff. Fill matches the very next section's background exactly so
- * the curve reads as the *next* section's edge tucking under the hero, not a decoration
- * floating on top of it.
- */
-function WaveDivider({ fillClassName }: { fillClassName: string }) {
+function ArrowIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 1440 80"
-      preserveAspectRatio="none"
-      className="absolute inset-x-0 -bottom-px h-12 w-full sm:h-16"
-    >
-      <path
-        d="M0 32C240 68 480 68 720 46C960 24 1200 4 1440 24V80H0V32Z"
-        className={fillClassName}
-      />
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5">
+      <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-interface CategoryTile {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+function BentoTile({
+  href,
+  className,
+  style,
+  children,
+}: {
   href: string;
-  comingSoon?: boolean;
-}
-
-const CATEGORY_TILES: CategoryTile[] = [
-  {
-    icon: <StoreIcon />,
-    title: "Restaurants",
-    description: "Order from local restaurants — starters to dessert, delivered hot.",
-    href: "/categories",
-  },
-  {
-    icon: <BasketIcon />,
-    title: "Groceries",
-    description: "Everyday essentials from nearby stores.",
-    href: "/categories?tab=groceries",
-    comingSoon: true,
-  },
-  {
-    icon: <PillIcon />,
-    title: "Pharmacy & more",
-    description: "Health and wellness, delivered.",
-    href: "/categories?tab=pharmacy",
-    comingSoon: true,
-  },
-];
-
-function CategoryCard({ tile }: { tile: CategoryTile }) {
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
   return (
     <NextLink
-      href={tile.href}
-      className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6 transition-colors duration-150 hover:border-border-strong"
-    >
-      <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
-        {tile.icon}
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="font-semibold text-text">{tile.title}</span>
-        <span className="text-sm text-text-muted">{tile.description}</span>
-      </div>
-      {tile.comingSoon && (
-        <Badge variant="neutral" className="w-fit">
-          Coming soon
-        </Badge>
+      href={href}
+      style={style}
+      className={cn(
+        "group relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border p-6 transition-colors duration-150 hover:border-border-strong",
+        className,
       )}
+    >
+      {children}
     </NextLink>
   );
 }
 
-function TogetherCard({
+function StatTile({ value, label }: { value: React.ReactNode; label: string }) {
+  return (
+    <div className="flex flex-col justify-center gap-1 rounded-2xl border border-border bg-surface p-6">
+      <span className="text-3xl font-bold text-text">{value}</span>
+      <span className="text-sm text-text-muted">{label}</span>
+    </div>
+  );
+}
+
+function TogetherItem({
   icon,
   title,
   description,
@@ -168,16 +135,16 @@ function TogetherCard({
   label: string;
 }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-      <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
-        {icon}
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="font-semibold text-text">{title}</span>
-        <span className="text-sm text-text-muted">{description}</span>
-      </div>
-      <NextLink href={href} className={buttonVariants({ variant: "outline", size: "sm" })}>
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex size-11 items-center justify-center rounded-full bg-white/15 text-white">{icon}</div>
+      <span className="font-semibold text-white">{title}</span>
+      <span className="text-sm text-white/70">{description}</span>
+      <NextLink
+        href={href}
+        className="group mt-1 inline-flex items-center gap-1 text-sm font-semibold text-white hover:underline"
+      >
         {label}
+        <ArrowIcon />
       </NextLink>
     </div>
   );
@@ -188,12 +155,18 @@ export default function Home() {
   const authenticated = status === "authenticated" && !!user;
 
   // A large-enough page covers today's restaurant count in one request (see FDP-32 PR) — cheap
-  // for a "Top restaurants" preview and doubles as the source for the "Countries we deliver"
-  // strip below, so the homepage doesn't need two separate fetches.
+  // for a "Top restaurants" rail and doubles as the source for the live stats and "delivering
+  // across" strip below, so the homepage doesn't need three separate fetches.
   const { data, isLoading } = useListRestaurantsQuery({ sort: "rating", limit: 50 });
-  const topRestaurants = data?.items.slice(0, 4) ?? [];
+  const topRestaurants = data?.items.slice(0, 8) ?? [];
   const countries = Array.from(new Set((data?.items ?? []).map((r) => r.country))).sort();
   const featuredRestaurant = topRestaurants[0];
+
+  const deliveryMinutes = (data?.items ?? [])
+    .map((r) => r.estimatedDeliveryMinutes)
+    .filter((v): v is number => v != null);
+  const avgDeliveryMinutes =
+    deliveryMinutes.length > 0 ? Math.round(deliveryMinutes.reduce((a, b) => a + b, 0) / deliveryMinutes.length) : null;
 
   const partnerCta =
     authenticated && user.role === "restaurant_owner"
@@ -207,53 +180,51 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
-      {/* Hero — two columns on desktop (copy + a floating order-status mock), gradient wash +
-          soft blobs instead of a flat band, wave edge into the section below. No search box
-          here anymore: it's in the persistent header (see layout.tsx) so it's reachable from
-          every page, not just this one — docs/ROADMAP.md FDP-46. */}
-      <section
-        className="relative overflow-hidden"
-        style={{
-          backgroundImage: [
-            "radial-gradient(ellipse 60% 50% at 12% 15%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 70%)",
-            "radial-gradient(ellipse 55% 60% at 90% -10%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 65%)",
-            "linear-gradient(180deg, var(--color-surface-subtle), var(--color-surface-subtle))",
-          ].join(", "),
-        }}
-      >
-        <Container className="relative grid grid-cols-1 items-center gap-10 py-16 sm:py-20 lg:grid-cols-[1.1fr_0.9fr] lg:py-28">
-          <div className="flex flex-col items-start gap-6">
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
-              Now delivering
-            </span>
-            <h1 className="max-w-xl text-4xl font-bold text-balance text-text sm:text-5xl">
-              Your favorite restaurants, on their way in minutes
-            </h1>
-            <p className="max-w-lg text-lg text-text-muted">
-              Browse local restaurants, order in a couple of taps, and follow your delivery on a
-              live map — from checkout to your door.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <NextLink href="/restaurants" className={buttonVariants({ variant: "primary" })}>
-                Browse restaurants
-              </NextLink>
-              <NextLink href={partnerCta.href} className={buttonVariants({ variant: "outline" })}>
-                {partnerCta.label}
-              </NextLink>
-            </div>
+      {/* Hero — a solid brand band (not a soft neutral wash) with an angled bottom edge, always
+          rendered dark regardless of site theme: a deliberate, theme-invariant brand moment
+          rather than another light "hero card with a gradient tint" template. No search box
+          here: it's in the persistent header (layout.tsx), reachable from every page — see
+          docs/ROADMAP.md FDP-46. */}
+      <section className="relative">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "linear-gradient(135deg, var(--color-brand-700), var(--color-brand-950))",
+            clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 88%)",
+          }}
+        />
+        <Container className="relative flex flex-col items-start gap-6 py-20 sm:py-24 lg:py-28">
+          <span className="w-fit rounded-full border border-white/30 px-3 py-1 text-xs font-semibold tracking-wide text-white uppercase">
+            Now delivering
+          </span>
+          <h1 className="max-w-2xl text-4xl font-bold text-balance text-white sm:text-5xl lg:text-6xl">
+            Your city&apos;s best food, moving at the speed of now
+          </h1>
+          <p className="max-w-lg text-lg text-white/80">
+            Browse local restaurants, order in a couple of taps, and follow your delivery on a
+            live map — from checkout to your door.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <NextLink href="/restaurants" className={cn(buttonVariants({ size: "lg" }), "bg-white text-brand-700 hover:bg-neutral-100")}>
+              Browse restaurants
+            </NextLink>
+            <NextLink
+              href={partnerCta.href}
+              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "border-white/40 bg-transparent text-white hover:bg-white/10")}
+            >
+              {partnerCta.label}
+            </NextLink>
           </div>
+        </Container>
+      </section>
 
-          {/* Decorative floating card — hidden on mobile so it never competes for space with
-              the copy above at a 375px viewport (frontend/CLAUDE.md responsive bar). */}
-          <div className="relative hidden aspect-square items-center justify-center lg:flex">
-            <div
-              className="absolute inset-6 rounded-[2.5rem]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)), color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)))",
-              }}
-            />
-            <div className="relative flex w-72 flex-col gap-4 rounded-2xl border border-border bg-surface p-5 shadow-xl">
+      {/* Floating order-status card straddles the hero's angled edge — hidden below `lg` so it
+          never competes with the copy above at a 375px viewport. */}
+      <div className="relative z-10 hidden lg:block">
+        <Container>
+          <div className="-mt-16 flex justify-end">
+            <div className="flex w-80 flex-col gap-4 rounded-2xl border border-border bg-surface p-5 shadow-xl">
               <div className="flex items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
                   <PlateIcon className="size-6" />
@@ -282,47 +253,14 @@ export default function Home() {
             </div>
           </div>
         </Container>
-        <WaveDivider fillClassName="fill-[var(--color-surface)]" />
-      </section>
+      </div>
 
-      {/* Countries we deliver — a slim strip, not a full section with its own heading, so it
-          reads as supporting detail rather than another copy-pasted grid block. */}
-      {countries.length > 0 && (
-        <section className="border-b border-border bg-surface">
-          <Container className="flex flex-wrap items-center justify-center gap-3 py-5 text-center">
-            <span className="text-sm font-medium text-text-muted">Now delivering across</span>
-            <div className="flex flex-wrap justify-center gap-2">
-              {countries.map((country) => (
-                <Badge key={country} variant="neutral">
-                  {country}
-                </Badge>
-              ))}
-            </div>
-          </Container>
-        </section>
-      )}
-
-      {/* Anything delivered */}
-      <section className="bg-surface">
-        <Container className="flex flex-col gap-8 py-16">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h2 className="text-2xl font-bold text-text">Anything delivered</h2>
-            <p className="max-w-lg text-text-muted">
-              Restaurants are live today — groceries and pharmacy are next on our roadmap.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {CATEGORY_TILES.map((tile) => (
-              <CategoryCard key={tile.title} tile={tile} />
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      {/* Top restaurants */}
+      {/* Top restaurants comes right after the hero — a horizontal, snap-scrolling rail rather
+          than a static grid — so the thing customers actually want (real restaurants to order
+          from) is immediately reachable, not buried below the category tiles. */}
       {(isLoading || topRestaurants.length > 0) && (
-        <section className="border-t border-border bg-surface-subtle">
-          <Container className="flex flex-col gap-6 py-16">
+        <section className="bg-surface-subtle">
+          <Container className="flex flex-col gap-6 py-14 lg:pt-8">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <h2 className="text-2xl font-bold text-text">Top restaurants</h2>
@@ -332,40 +270,137 @@ export default function Home() {
                 See all restaurants →
               </NextLink>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
               {isLoading
-                ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-48 w-72 shrink-0" />
+                  ))
                 : topRestaurants.map((restaurant) => (
-                    <RestaurantCard key={restaurant._id} restaurant={restaurant} />
+                    <div key={restaurant._id} className="w-72 shrink-0 snap-start">
+                      <RestaurantCard restaurant={restaurant} />
+                    </div>
                   ))}
             </div>
           </Container>
         </section>
       )}
 
-      {/* Let's do it together */}
+      {/* Bento grid — one asymmetric composition instead of two separate "3 equal icon tiles"
+          and "4 equal restaurant cards" sections, mixing category entry points with live
+          platform numbers so the section has real substance, not just repeated cards. */}
       <section className="border-t border-border bg-surface">
-        <Container className="flex flex-col gap-8 py-16">
-          <h2 className="text-center text-2xl font-bold text-text">Let&apos;s do it together</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <TogetherCard
+        <Container className="flex flex-col gap-6 py-16 lg:py-20 lg:pt-24">
+          {countries.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium text-text-muted">Now delivering across</span>
+              {countries.map((country) => (
+                <Badge key={country} variant="neutral">
+                  {country}
+                </Badge>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
+            <BentoTile
+              href="/categories"
+              className="lg:col-span-2 lg:row-span-2"
+              style={{
+                backgroundImage:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)), var(--color-surface))",
+              }}
+            >
+              <div className="flex size-16 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+                <StoreIcon className="size-8" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-2xl font-bold text-text">Restaurants</span>
+                <span className="text-text-muted">
+                  Starters to dessert from the best kitchens near you, delivered hot.
+                </span>
+                <span className="group mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                  Explore restaurants
+                  <ArrowIcon />
+                </span>
+              </div>
+            </BentoTile>
+
+            <BentoTile href="/categories?tab=groceries" className="bg-surface">
+              <div className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+                <BasketIcon />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-text">Groceries</span>
+                <span className="text-sm text-text-muted">Everyday essentials, on the way.</span>
+              </div>
+              <Badge variant="neutral" className="w-fit">
+                Coming soon
+              </Badge>
+            </BentoTile>
+
+            <BentoTile href="/categories?tab=pharmacy" className="bg-surface">
+              <div className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+                <PillIcon />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-text">Pharmacy & more</span>
+                <span className="text-sm text-text-muted">Health and wellness, delivered.</span>
+              </div>
+              <Badge variant="neutral" className="w-fit">
+                Coming soon
+              </Badge>
+            </BentoTile>
+
+            {isLoading ? (
+              <>
+                <Skeleton className="h-full min-h-32 w-full rounded-2xl" />
+                <Skeleton className="h-full min-h-32 w-full rounded-2xl" />
+              </>
+            ) : (
+              <>
+                <StatTile
+                  value={data && data.total > 0 ? data.total : "New"}
+                  label={data && data.total > 0 ? "restaurants live on the platform" : "restaurants joining every week"}
+                />
+                <StatTile
+                  value={avgDeliveryMinutes ? `~${avgDeliveryMinutes} min` : "Live"}
+                  label={avgDeliveryMinutes ? "average delivery time right now" : "order tracking on a map"}
+                />
+              </>
+            )}
+          </div>
+        </Container>
+      </section>
+
+      {/* Let's do it together — one wide gradient banner with three inline items, instead of
+          three separate matching bordered cards (the single most generic "3-feature-card"
+          pattern shared by every template homepage). */}
+      <section
+        style={{ backgroundImage: "linear-gradient(120deg, var(--color-brand-700), var(--color-brand-900))" }}
+      >
+        <Container className="flex flex-col gap-10 py-16 lg:flex-row lg:items-center lg:gap-16">
+          <div className="flex flex-col gap-2 lg:max-w-56 lg:shrink-0">
+            <h2 className="text-2xl font-bold text-white">Let&apos;s do it together</h2>
+            <p className="text-white/70">Ride with us, bring your restaurant online, or join the team.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+            <TogetherItem
               icon={<BikeIcon />}
               title="Become a rider"
-              description="Enjoy flexibility and competitive earnings delivering on your own schedule."
+              description="Flexibility and competitive earnings, on your own schedule."
               href={riderCta.href}
               label={riderCta.label}
             />
-            <TogetherCard
-              icon={<StoreIcon />}
+            <TogetherItem
+              icon={<StoreIcon className="size-6" />}
               title="Register your business"
-              description="Grow with us — reach more customers and manage your menu with ease."
+              description="Reach more customers and manage your menu with ease."
               href={partnerCta.href}
               label={partnerCta.label}
             />
-            <TogetherCard
+            <TogetherItem
               icon={<BriefcaseIcon />}
               title="Careers"
-              description="Ambitious, humble, and love working with others? We'd like to hear from you."
+              description="Ambitious, humble, and love working with others?"
               href="/careers"
               label="View careers"
             />
