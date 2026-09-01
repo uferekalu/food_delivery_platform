@@ -1,11 +1,12 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -40,14 +41,29 @@ function formatStatus(status: OrderStatus): string {
 function OrderActions({ order }: { order: Order }) {
   const { toast } = useToast();
   const [updateStatus, { isLoading }] = useUpdateOrderStatusMutation();
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   function transition(status: OrderStatus) {
     void updateStatus({ orderId: order._id, status })
       .unwrap()
-      .catch((err: unknown) =>
-        toast({ title: "Couldn't update the order", description: getErrorMessage(err), variant: "danger" }),
-      );
+      .then(() => setConfirmingCancel(false))
+      .catch((err: unknown) => {
+        setConfirmingCancel(false);
+        toast({ title: "Couldn't update the order", description: getErrorMessage(err), variant: "danger" });
+      });
   }
+
+  const cancelDialog = (
+    <ConfirmDialog
+      open={confirmingCancel}
+      onClose={() => setConfirmingCancel(false)}
+      onConfirm={() => transition("CANCELLED")}
+      title={`Cancel order ${order.orderNumber}?`}
+      description="The customer will be notified and, if already paid, this order becomes eligible for a refund. This can't be undone."
+      confirmLabel="Cancel order"
+      isLoading={isLoading}
+    />
+  );
 
   if (order.status === "PLACED") {
     return (
@@ -55,9 +71,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("ACCEPTED_BY_RESTAURANT")}>
           Accept
         </Button>
-        <Button size="sm" variant="destructive" isLoading={isLoading} onClick={() => transition("CANCELLED")}>
+        <Button size="sm" variant="destructive" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
           Reject
         </Button>
+        {cancelDialog}
       </div>
     );
   }
@@ -68,9 +85,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("PREPARING")}>
           Start preparing
         </Button>
-        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => transition("CANCELLED")}>
+        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
           Cancel
         </Button>
+        {cancelDialog}
       </div>
     );
   }
@@ -81,9 +99,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("READY_FOR_PICKUP")}>
           Mark ready
         </Button>
-        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => transition("CANCELLED")}>
+        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
           Cancel
         </Button>
+        {cancelDialog}
       </div>
     );
   }

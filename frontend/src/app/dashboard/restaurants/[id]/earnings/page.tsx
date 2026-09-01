@@ -98,6 +98,8 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
               }}
               placeholder={banksLoading ? "Loading banks…" : "Choose your bank"}
               disabled={banksLoading}
+              searchable
+              searchPlaceholder="Search banks…"
             />
           </FormField>
           <FormField label="Account number" required>

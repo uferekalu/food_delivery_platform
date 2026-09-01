@@ -165,6 +165,8 @@ export function RestaurantForm({
                   if (suggested) setValue("currency", suggested, { shouldValidate: true });
                 }}
                 placeholder="Select a country…"
+                searchable
+                searchPlaceholder="Search countries…"
               />
             )}
           />
@@ -184,6 +186,8 @@ export function RestaurantForm({
                 value={field.value}
                 onChange={field.onChange}
                 placeholder="Select a currency…"
+                searchable
+                searchPlaceholder="Search currencies…"
               />
             )}
           />
