@@ -57,7 +57,14 @@ Glovo, Chowdeck) — built for global reach with first-class support for African
 - Incoming order queue with accept/reject/prepare/ready actions, real-time updates
 - Order history & basic analytics (revenue, top items, order volume)
 - Restaurant profile (logo, cover photo, description, cuisine tags, address/geo)
-- Payout/settlement visibility (read-only ledger view; actual payout rails are provider-side)
+- Payouts: a platform commission is taken on every order; the restaurant's share is settled
+  automatically by the payment provider itself (Paystack/Flutterwave subaccounts with a
+  transaction split, Stripe Connect for card payments) — the platform never holds or manually
+  disburses customer funds, consistent with §5's "no in-house payout/ledger system" boundary; see
+  `docs/ARCHITECTURE.md` §Payouts & Platform Fee. A restaurant must complete provider-hosted
+  payout-account onboarding before receiving its split; until then its orders' full amount is
+  held by the platform account and the dashboard flags the restaurant as "payout setup required."
+  Phased build-out starting at `docs/ROADMAP.md` FDP-51.
 
 ### Rider-facing (dashboard)
 - Online/offline availability toggle

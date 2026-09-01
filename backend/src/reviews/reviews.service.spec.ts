@@ -185,6 +185,8 @@ describe('ReviewsService', () => {
       tax: 0,
       discount: 0,
       total: 11.5,
+      platformFeeAmount: 1.5,
+      restaurantPayoutAmount: 8.5,
       currency: 'NGN',
       status,
       statusHistory: [{ status, at: new Date(), by: customerId }],

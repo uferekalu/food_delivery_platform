@@ -251,6 +251,8 @@ export interface Order {
   tax: number;
   discount: number;
   total: number;
+  platformFeeAmount: number;
+  restaurantPayoutAmount: number;
   currency: string;
   status: OrderStatus;
   statusHistory: StatusHistoryEntry[];

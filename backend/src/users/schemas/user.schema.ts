@@ -50,12 +50,17 @@ export class User {
   avatarUrl: string | null;
 
   // E.164-ish (optional leading `+`, digits only) — the only channel SMS notifications
-  // (docs/ROADMAP.md FDP-19) can actually reach; null until the user supplies one, since
-  // registration never required a phone number. `sparse` (not a plain `unique`) so any number
-  // of users can each have `phone: null` without colliding on the unique index — only actual
-  // phone values need to be distinct.
-  @Prop({ type: String, default: null, trim: true, unique: true, sparse: true })
-  phone: string | null;
+  // (docs/ROADMAP.md FDP-19) can actually reach; absent until the user supplies one, since
+  // registration never required a phone number. Deliberately NO `default` here (not even
+  // `null`) — a sparse index only excludes a document where the field is genuinely *missing*,
+  // not one where it's explicitly set to `null`. An earlier `default: null` meant every
+  // phone-less user actually had the field present with value null, so the second such user to
+  // register hit a real E11000 duplicate-key error on this "unique" index — reproduces 100% of
+  // the time with 2+ phone-less registrations, caught via the riders/reviews/admin e2e specs.
+  // toPublicUser() below normalizes the resulting `undefined` back to `null` at the API
+  // boundary so PublicUser's `phone: string | null` contract doesn't change.
+  @Prop({ type: String, trim: true, unique: true, sparse: true })
+  phone?: string | null;
 
   // Proven by completing the OTP-over-SMS flow (docs/ROADMAP.md FDP-41), independently of
   // isEmailVerified — a user can have one, both, or neither verified.
