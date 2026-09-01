@@ -116,7 +116,7 @@ const CATEGORY_TILES: CategoryTile[] = [
 function CategoryCard({ tile }: { tile: CategoryTile }) {
   const content = (
     <>
-      <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary">
+      <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
         {tile.icon}
       </div>
       <div className="flex flex-col gap-1">
@@ -273,7 +273,7 @@ export default function Home() {
           <h2 className="text-center text-2xl font-bold text-text">Let&apos;s do it together</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary">
+              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
                 <BikeIcon />
               </div>
               <div className="flex flex-col gap-1">
@@ -287,7 +287,7 @@ export default function Home() {
               </NextLink>
             </div>
             <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary">
+              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
                 <StoreIcon />
               </div>
               <div className="flex flex-col gap-1">
@@ -301,7 +301,7 @@ export default function Home() {
               </NextLink>
             </div>
             <div className="flex flex-col items-start gap-3 rounded-xl border border-border bg-surface p-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary">
+              <div className="flex size-14 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
                 <BriefcaseIcon />
               </div>
               <div className="flex flex-col gap-1">
