@@ -39,4 +39,12 @@ export const envValidationSchema = Joi.object({
   // Sentry (docs/ROADMAP.md FDP-22) — optional, same graceful-degradation pattern as Termii
   // above: no error tracking happens until a real DSN is set in Render's env vars.
   SENTRY_DSN: Joi.string().uri().optional(),
+
+  // Google OAuth (docs/ROADMAP.md FDP-42) — optional, same graceful-degradation pattern as
+  // Termii above. GoogleStrategy falls back to harmless placeholder values when unset so app
+  // boot never fails over a missing OAuth client; hitting /auth/google without real credentials
+  // just fails at Google's end instead (an invalid client_id error page), not a server crash.
+  GOOGLE_CLIENT_ID: Joi.string().optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string().optional(),
+  GOOGLE_CALLBACK_URL: Joi.string().uri().optional(),
 });

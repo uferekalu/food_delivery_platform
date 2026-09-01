@@ -15,6 +15,7 @@ import { PhoneOtp, PhoneOtpSchema } from './schemas/phone-otp.schema';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
@@ -43,6 +44,7 @@ import { RolesGuard } from './guards/roles.guard';
   providers: [
     AuthService,
     JwtAccessStrategy,
+    GoogleStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

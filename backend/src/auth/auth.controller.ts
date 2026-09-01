@@ -9,9 +9,11 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService, AuthTokens, PublicUser } from './auth.service';
@@ -23,9 +25,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { SendPhoneCodeDto } from './dto/send-phone-code.dto';
 import { VerifyPhoneCodeDto } from './dto/verify-phone-code.dto';
+import { ExchangeOAuthCodeDto } from './dto/exchange-oauth-code.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AccessTokenPayload } from './interfaces/jwt-payload.interface';
+import type { GoogleProfile } from './strategies/google.strategy';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
 // The frontend proxies browser requests through its own /api/:path* rewrite (see
@@ -103,6 +107,48 @@ export class AuthController {
       loggedIn: false as const,
       phoneVerificationToken: result.phoneVerificationToken,
     };
+  }
+
+  // Not a fetch/XHR — the browser navigates here directly (via a plain <a> tag hitting the
+  // frontend's own /api/:path* proxy, see docs/ARCHITECTURE.md §11), so AuthGuard('google')
+  // redirecting the browser to Google's consent screen is the entire handler; there's no
+  // response body to return. @Public() is still required so the *global* JwtAuthGuard (which
+  // only reads @Public(), not AuthGuard('google')) doesn't also demand a Bearer token here.
+  @Public()
+  @UseGuards(AuthGuard('google'))
+  @Get('google')
+  googleLogin() {}
+
+  // Google's own redirect necessarily lands directly on this backend's domain, not proxied
+  // through the frontend — see the comment on OAuthExchangeTokenPayload for why this hands the
+  // frontend a short-lived exchange code instead of setting the refresh cookie right here.
+  @Public()
+  @UseGuards(AuthGuard('google'))
+  @Get('google/callback')
+  async googleCallback(
+    @Req() req: Request & { user: GoogleProfile },
+    @Res() res: Response,
+  ) {
+    const exchangeToken = await this.authService.loginOrRegisterWithGoogle(
+      req.user,
+    );
+    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
+    res.redirect(`${frontendUrl}/login/oauth-callback?code=${exchangeToken}`);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('oauth/exchange')
+  @HttpCode(HttpStatus.OK)
+  async exchangeOAuthCode(
+    @Body() dto: ExchangeOAuthCodeDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { user, tokens } = await this.authService.exchangeOAuthToken(
+      dto.code,
+    );
+    this.setRefreshCookie(res, tokens);
+    return { user, accessToken: tokens.accessToken };
   }
 
   @Public()
