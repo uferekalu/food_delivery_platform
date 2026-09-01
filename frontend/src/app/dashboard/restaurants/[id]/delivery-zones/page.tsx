@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useGetMyRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import {
@@ -55,6 +56,17 @@ function ZoneRow({
 }) {
   const { toast } = useToast();
   const [deleteZone, { isLoading: isDeleting }] = useDeleteDeliveryZoneMutation();
+  const [confirming, setConfirming] = useState(false);
+
+  function confirmDelete() {
+    void deleteZone({ restaurantId, zoneId: zone._id })
+      .unwrap()
+      .then(() => setConfirming(false))
+      .catch((err: unknown) => {
+        setConfirming(false);
+        toast({ title: "Couldn't delete zone", description: getErrorMessage(err), variant: "danger" });
+      });
+  }
 
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border py-3 last:border-b-0">
@@ -76,16 +88,19 @@ function ZoneRow({
           size="sm"
           variant="ghost"
           disabled={isDeleting}
-          onClick={() =>
-            void deleteZone({ restaurantId, zoneId: zone._id })
-              .unwrap()
-              .catch((err: unknown) =>
-                toast({ title: "Couldn't delete zone", description: getErrorMessage(err), variant: "danger" }),
-              )
-          }
+          onClick={() => setConfirming(true)}
           icon={<TrashIcon />}
         />
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={confirmDelete}
+        title={`Delete "${zone.name}"?`}
+        description="This can't be undone."
+        confirmLabel="Delete"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { Portal } from "./portal";
@@ -29,6 +30,12 @@ export interface SelectProps {
   className?: string;
   "aria-describedby"?: string;
   "aria-label"?: string;
+  /** Adds a type-to-filter search box at the top of the open list — for a list long enough that
+   * scrolling to find an option is the actual bottleneck (countries, currencies, banks), not a
+   * handful of choices where it'd just be noise. Replaces single-character typeahead, which
+   * exists for exactly the same reason on a short list. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 export function Select({
@@ -42,6 +49,8 @@ export function Select({
   className,
   "aria-describedby": describedByProp,
   "aria-label": ariaLabel,
+  searchable = false,
+  searchPlaceholder = "Search…",
 }: SelectProps) {
   const field = useFormFieldContext();
   const selectId = id ?? field?.id;
@@ -49,14 +58,34 @@ export function Select({
   const isInvalid = invalid ?? field?.invalid ?? false;
 
   const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const [query, setQuery] = useState("");
+  const [rawActiveIndex, setActiveIndex] = useState(-1);
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const typeaheadRef = useRef("");
   const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const selected = useMemo(() => options.find((o) => o.value === value), [options, value]);
+
+  // Only ever narrows `options` — the trigger's own label lookup above always reads the full
+  // list, so a selected value never "disappears" from view just because a search is active.
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !query.trim()) return options;
+    const q = query.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, searchable, query]);
+
+  // Derived, not synchronized via an effect: a search narrowing the list can easily leave
+  // rawActiveIndex pointing at nothing (or a now-hidden option) — falling back to the first
+  // enabled visible option is a pure function of the current list, computed at render time
+  // rather than corrected a tick later by a setState-in-effect.
+  const activeIndex = useMemo(() => {
+    if (rawActiveIndex >= 0 && !visibleOptions[rawActiveIndex]?.disabled) return rawActiveIndex;
+    return visibleOptions.findIndex((o) => !o.disabled);
+  }, [rawActiveIndex, visibleOptions]);
 
   const openList = useCallback(() => {
     if (disabled) return;
@@ -65,6 +94,7 @@ export function Select({
       const r = trigger.getBoundingClientRect();
       setRect({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
     }
+    setQuery("");
     const initialIndex = options.findIndex((o) => o.value === value);
     setActiveIndex(initialIndex >= 0 ? initialIndex : options.findIndex((o) => !o.disabled));
     setOpen(true);
@@ -77,14 +107,15 @@ export function Select({
 
   useEffect(() => {
     if (!open) return;
-    listRef.current?.focus();
-  }, [open]);
+    if (searchable) searchInputRef.current?.focus();
+    else listRef.current?.focus();
+  }, [open, searchable]);
 
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (triggerRef.current?.contains(target) || listRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target) || containerRef.current?.contains(target)) return;
       closeList(false);
     };
     document.addEventListener("mousedown", handleClick);
@@ -92,70 +123,89 @@ export function Select({
   }, [open, closeList]);
 
   const commit = (index: number) => {
-    const option = options[index];
+    const option = visibleOptions[index];
     if (!option || option.disabled) return;
     onChange(option.value);
     closeList();
   };
 
+  // Steps from the derived `activeIndex` (what's actually highlighted right now), not the raw
+  // stored index — the two can diverge right after a search narrows the list, and stepping from
+  // a stale raw index would move relative to an item that's no longer even visible.
   const moveActive = (delta: number) => {
-    setActiveIndex((current) => {
-      let next = current;
-      for (let i = 0; i < options.length; i++) {
-        next = (next + delta + options.length) % options.length;
-        if (!options[next].disabled) return next;
-      }
-      return current;
-    });
+    if (visibleOptions.length === 0) return;
+    let next = activeIndex;
+    for (let i = 0; i < visibleOptions.length; i++) {
+      next = (next + delta + visibleOptions.length) % visibleOptions.length;
+      if (!visibleOptions[next].disabled) break;
+    }
+    setActiveIndex(next);
   };
 
-  const handleListKeyDown = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+  function handleNavigationKeyDown(e: ReactKeyboardEvent): boolean {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
         moveActive(1);
-        break;
+        return true;
       case "ArrowUp":
         e.preventDefault();
         moveActive(-1);
-        break;
+        return true;
       case "Home":
         e.preventDefault();
-        setActiveIndex(options.findIndex((o) => !o.disabled));
-        break;
+        setActiveIndex(visibleOptions.findIndex((o) => !o.disabled));
+        return true;
       case "End":
         e.preventDefault();
-        for (let i = options.length - 1; i >= 0; i--) {
-          if (!options[i].disabled) {
+        for (let i = visibleOptions.length - 1; i >= 0; i--) {
+          if (!visibleOptions[i].disabled) {
             setActiveIndex(i);
             break;
           }
         }
-        break;
+        return true;
       case "Enter":
-      case " ":
         e.preventDefault();
         commit(activeIndex);
-        break;
+        return true;
       case "Escape":
         e.preventDefault();
         closeList();
-        break;
+        return true;
       case "Tab":
         closeList(false);
-        break;
+        return true;
       default:
-        if (e.key.length === 1) {
-          window.clearTimeout(typeaheadTimer.current);
-          typeaheadRef.current += e.key.toLowerCase();
-          const match = options.findIndex((o) => !o.disabled && o.label.toLowerCase().startsWith(typeaheadRef.current));
-          if (match >= 0) setActiveIndex(match);
-          typeaheadTimer.current = setTimeout(() => {
-            typeaheadRef.current = "";
-          }, 500);
-        }
+        return false;
+    }
+  }
+
+  const handleListKeyDown = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (handleNavigationKeyDown(e)) return;
+    if (e.key === " ") {
+      e.preventDefault();
+      commit(activeIndex);
+      return;
+    }
+    if (e.key.length === 1) {
+      window.clearTimeout(typeaheadTimer.current);
+      typeaheadRef.current += e.key.toLowerCase();
+      const match = visibleOptions.findIndex(
+        (o) => !o.disabled && o.label.toLowerCase().startsWith(typeaheadRef.current),
+      );
+      if (match >= 0) setActiveIndex(match);
+      typeaheadTimer.current = setTimeout(() => {
+        typeaheadRef.current = "";
+      }, 500);
     }
   };
+
+  const handleSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    handleNavigationKeyDown(e);
+  };
+
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value);
 
   const activeId = activeIndex >= 0 ? `${selectId}-option-${activeIndex}` : undefined;
 
@@ -188,36 +238,60 @@ export function Select({
 
       {open && rect && (
         <Portal>
-          <ul
-            ref={listRef}
-            role="listbox"
-            tabIndex={-1}
-            aria-activedescendant={activeId}
-            aria-labelledby={selectId}
-            onKeyDown={handleListKeyDown}
+          <div
+            ref={containerRef}
             style={{ position: "absolute", top: rect.top, left: rect.left, width: rect.width, zIndex: "var(--z-dropdown)" }}
-            className="max-h-64 overflow-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg outline-none"
+            className="overflow-hidden rounded-md border border-border bg-surface-raised shadow-lg"
           >
-            {options.map((option, index) => (
-              <li
-                key={option.value}
-                id={`${selectId}-option-${index}`}
-                role="option"
-                aria-selected={option.value === value}
-                aria-disabled={option.disabled}
-                onMouseEnter={() => !option.disabled && setActiveIndex(index)}
-                onClick={() => commit(index)}
-                className={cn(
-                  "cursor-pointer px-3 py-2 text-sm text-text",
-                  index === activeIndex && "bg-primary-subtle",
-                  option.value === value && "font-medium",
-                  option.disabled && "cursor-not-allowed opacity-50",
-                )}
-              >
-                {option.label}
-              </li>
-            ))}
-          </ul>
+            {searchable && (
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={handleSearchChange}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                aria-controls={`${selectId}-listbox`}
+                aria-activedescendant={activeId}
+                className="w-full border-b border-border bg-transparent px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none"
+              />
+            )}
+            <ul
+              ref={listRef}
+              id={`${selectId}-listbox`}
+              role="listbox"
+              tabIndex={searchable ? -1 : 0}
+              aria-activedescendant={activeId}
+              aria-labelledby={selectId}
+              onKeyDown={searchable ? undefined : handleListKeyDown}
+              className="max-h-64 overflow-auto py-1 outline-none"
+            >
+              {visibleOptions.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-text-muted">No matches</li>
+              ) : (
+                visibleOptions.map((option, index) => (
+                  <li
+                    key={option.value}
+                    id={`${selectId}-option-${index}`}
+                    role="option"
+                    aria-selected={option.value === value}
+                    aria-disabled={option.disabled}
+                    onMouseEnter={() => !option.disabled && setActiveIndex(index)}
+                    onClick={() => commit(index)}
+                    className={cn(
+                      "cursor-pointer px-3 py-2 text-sm text-text",
+                      index === activeIndex && "bg-primary-subtle",
+                      option.value === value && "font-medium",
+                      option.disabled && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    {option.label}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
         </Portal>
       )}
     </>

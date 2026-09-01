@@ -15,6 +15,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -267,14 +268,38 @@ function ItemFormModal({
   );
 }
 
+type PendingDelete =
+  | { kind: "category"; id: string; name: string }
+  | { kind: "item"; id: string; name: string };
+
 function MenuManager({ restaurantId }: { restaurantId: string }) {
   const { data: menu, isLoading, isError } = useGetMenuQuery(restaurantId);
-  const [deleteCategory] = useDeleteCategoryMutation();
-  const [deleteItem] = useDeleteItemMutation();
+  const [deleteCategory, { isLoading: isDeletingCategory }] = useDeleteCategoryMutation();
+  const [deleteItem, { isLoading: isDeletingItem }] = useDeleteItemMutation();
   const [toggleAvailability] = useToggleItemAvailabilityMutation();
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const { toast } = useToast();
+
+  function confirmPendingDelete() {
+    if (!pendingDelete) return;
+    const mutation =
+      pendingDelete.kind === "category"
+        ? deleteCategory({ restaurantId, categoryId: pendingDelete.id })
+        : deleteItem({ restaurantId, itemId: pendingDelete.id });
+    void mutation
+      .unwrap()
+      .then(() => setPendingDelete(null))
+      .catch((err: unknown) => {
+        setPendingDelete(null);
+        toast({
+          title: `Couldn't delete ${pendingDelete.kind}`,
+          description: getErrorMessage(err),
+          variant: "danger",
+        });
+      });
+  }
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
   if (isError) return <Alert variant="danger">Couldn&apos;t load the menu.</Alert>;
@@ -298,13 +323,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                   label="Delete category"
                   size="sm"
                   variant="ghost"
-                  onClick={() => {
-                    void deleteCategory({ restaurantId, categoryId: category._id })
-                      .unwrap()
-                      .catch((err: unknown) =>
-                        toast({ title: "Couldn't delete category", description: getErrorMessage(err), variant: "danger" }),
-                      );
-                  }}
+                  onClick={() => setPendingDelete({ kind: "category", id: category._id, name: category.name })}
                   icon={<TrashIcon />}
                 />
               </div>
@@ -370,7 +389,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                         label="Delete item"
                         size="sm"
                         variant="ghost"
-                        onClick={() => void deleteItem({ restaurantId, itemId: item._id })}
+                        onClick={() => setPendingDelete({ kind: "item", id: item._id, name: item.name })}
                         icon={<TrashIcon />}
                       />
                     </div>
@@ -400,6 +419,20 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
           onClose={() => setEditingItem(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmPendingDelete}
+        title={pendingDelete ? `Delete "${pendingDelete.name}"?` : ""}
+        description={
+          pendingDelete?.kind === "category"
+            ? "This also deletes every item in this category. This can't be undone."
+            : "This can't be undone."
+        }
+        confirmLabel="Delete"
+        isLoading={isDeletingCategory || isDeletingItem}
+      />
     </div>
   );
 }

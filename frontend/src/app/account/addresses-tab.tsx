@@ -7,6 +7,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useListAddressesQuery, useRemoveAddressMutation } from "@/lib/redux/services/account-api";
 import { getErrorMessage } from "@/lib/redux/error";
@@ -38,6 +39,17 @@ function TrashIcon() {
 function AddressRow({ address, onEdit }: { address: SavedAddress; onEdit: () => void }) {
   const { toast } = useToast();
   const [removeAddress, { isLoading: isRemoving }] = useRemoveAddressMutation();
+  const [confirming, setConfirming] = useState(false);
+
+  function confirmDelete() {
+    void removeAddress(address._id)
+      .unwrap()
+      .then(() => setConfirming(false))
+      .catch((err: unknown) => {
+        setConfirming(false);
+        toast({ title: "Couldn't delete address", description: getErrorMessage(err), variant: "danger" });
+      });
+  }
 
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border py-3 last:border-b-0">
@@ -62,16 +74,19 @@ function AddressRow({ address, onEdit }: { address: SavedAddress; onEdit: () => 
           size="sm"
           variant="ghost"
           disabled={isRemoving}
-          onClick={() =>
-            void removeAddress(address._id)
-              .unwrap()
-              .catch((err: unknown) =>
-                toast({ title: "Couldn't delete address", description: getErrorMessage(err), variant: "danger" }),
-              )
-          }
+          onClick={() => setConfirming(true)}
           icon={<TrashIcon />}
         />
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={confirmDelete}
+        title={`Delete "${address.label}"?`}
+        description="This can't be undone."
+        confirmLabel="Delete"
+        isLoading={isRemoving}
+      />
     </div>
   );
 }
