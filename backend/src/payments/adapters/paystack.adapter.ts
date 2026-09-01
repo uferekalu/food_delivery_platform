@@ -27,6 +27,29 @@ interface PaystackWebhookPayload {
   data: { reference: string; status: string };
 }
 
+export interface PaystackBank {
+  name: string;
+  code: string;
+}
+
+interface PaystackListBanksResponse {
+  status: boolean;
+  data?: PaystackBank[];
+  message?: string;
+}
+
+interface PaystackResolveAccountResponse {
+  status: boolean;
+  data?: { account_number: string; account_name: string };
+  message?: string;
+}
+
+interface PaystackCreateSubaccountResponse {
+  status: boolean;
+  data?: { subaccount_code: string };
+  message?: string;
+}
+
 // Paystack's "Standard" hosted checkout — see stripe.adapter.ts for why a hosted redirect over
 // an embedded form. Primarily the NGN leg of docs/ARCHITECTURE.md §4's routing table; amounts
 // are converted to kobo (Paystack's minor unit, ×100) below.
@@ -65,6 +88,25 @@ export class PaystackAdapter implements PaymentAdapter {
           reference,
           callback_url: params.successUrl,
           metadata: { orderId: params.orderId },
+          // Vendor payouts epic (docs/ROADMAP.md FDP-52) — `subaccount` tells Paystack to split
+          // this transaction's settlement with the restaurant's account. `transaction_charge`
+          // (a flat amount in the same minor unit as `amount`, going to the *platform's* main
+          // account — mirrors percentage_charge's "what the platform keeps" framing) overrides
+          // the subaccount's own stored percentage for this specific transaction, since the
+          // right split isn't a fixed percentage of the whole order total — see
+          // InitiatePaymentParams.restaurantPayoutAmount's doc comment for why. `bearer:
+          // 'account'` keeps Paystack's own processing fee on the platform, never deducted from
+          // what the restaurant receives.
+          ...(params.restaurantPayoutAccountReference &&
+          params.restaurantPayoutAmount != null
+            ? {
+                subaccount: params.restaurantPayoutAccountReference,
+                transaction_charge: Math.round(
+                  (params.amount - params.restaurantPayoutAmount) * 100,
+                ),
+                bearer: 'account',
+              }
+            : {}),
         }),
       },
     );
@@ -124,5 +166,80 @@ export class PaystackAdapter implements PaymentAdapter {
       method: 'POST',
       body: JSON.stringify({ transaction: paymentRef }),
     });
+  }
+
+  // --- Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) ---
+  // Paystack-specific onboarding: a restaurant picks their bank + enters an account number, we
+  // resolve it to a name for them to confirm (catches typos before money is on the line), then
+  // create a subaccount. None of this is part of the shared PaymentAdapter interface — Flutterwave
+  // (FDP-53) and Stripe Connect (FDP-54) each have their own, differently-shaped onboarding.
+
+  /** NGN banks only for now — this project's primary currency; broadened if/when a non-NGN
+   * Paystack corridor actually needs it. */
+  async listBanks(): Promise<PaystackBank[]> {
+    const result = await this.request<PaystackListBanksResponse>(
+      '/bank?country=nigeria&currency=NGN&perPage=100',
+    );
+    if (!result.status || !result.data) {
+      throw new Error(result.message ?? 'Could not load the bank list');
+    }
+    return result.data;
+  }
+
+  /** Confirms an account number actually belongs to the name the restaurant expects, before we
+   * ever create a subaccount against it — the single most valuable fraud/typo guard available
+   * here, and Paystack does the lookup, we never see raw bank credentials beyond the account
+   * number itself. */
+  async resolveAccount(
+    accountNumber: string,
+    bankCode: string,
+  ): Promise<{ accountNumber: string; accountName: string }> {
+    const result = await this.request<PaystackResolveAccountResponse>(
+      `/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+    );
+    if (!result.status || !result.data) {
+      throw new Error(result.message ?? "Couldn't verify that account number");
+    }
+    return {
+      accountNumber: result.data.account_number,
+      accountName: result.data.account_name,
+    };
+  }
+
+  /**
+   * `percentageCharge` is what the *platform* (the main account) keeps — Paystack's own naming
+   * is from the main account's perspective, easy to get backwards. This is only the subaccount's
+   * *stored default*; every real transaction (see `initiate()` above) overrides it with an
+   * exact `transaction_charge` computed from that specific order's numbers, since a flat
+   * percentage of the whole order total would be wrong (it includes the delivery fee and
+   * service fee, neither of which belongs to the restaurant) — Paystack still requires some
+   * percentage at creation time, so this is set to the platform's commission rate as a sane
+   * fallback that's never actually relied on. No separate transfer call from this codebase is
+   * needed for this provider: Paystack settles both sides of the split directly.
+   */
+  async createSubaccount(params: {
+    businessName: string;
+    bankCode: string;
+    accountNumber: string;
+    percentageCharge: number;
+  }): Promise<{ subaccountCode: string }> {
+    const result = await this.request<PaystackCreateSubaccountResponse>(
+      '/subaccount',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          business_name: params.businessName,
+          settlement_bank: params.bankCode,
+          account_number: params.accountNumber,
+          percentage_charge: params.percentageCharge,
+        }),
+      },
+    );
+    if (!result.status || !result.data) {
+      throw new Error(
+        result.message ?? 'Could not create the payout subaccount',
+      );
+    }
+    return { subaccountCode: result.data.subaccount_code };
   }
 }

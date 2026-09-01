@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { OrdersService } from '../orders/orders.service';
+import { RestaurantsService } from '../restaurants/restaurants.service';
 import { PaymentProviderResolver } from './provider-resolver';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
@@ -21,6 +22,9 @@ describe('PaymentsService', () => {
       | 'adminFindOrThrow'
       | 'markRefunded'
     >
+  >;
+  let restaurantsService: jest.Mocked<
+    Pick<RestaurantsService, 'findByIdOrThrow'>
   >;
   let providerResolver: jest.Mocked<Pick<PaymentProviderResolver, 'resolve'>>;
   let stripeAdapter: {
@@ -52,6 +56,13 @@ describe('PaymentsService', () => {
       adminFindOrThrow: jest.fn(),
       markRefunded: jest.fn(),
     };
+    restaurantsService = { findByIdOrThrow: jest.fn() };
+    // Default: no active payout account for any provider — the pre-FDP-52 behavior every
+    // existing initiatePayment test below exercises. Tests that need an active account
+    // override this per-case.
+    restaurantsService.findByIdOrThrow.mockResolvedValue({
+      payoutAccounts: [],
+    } as never);
     providerResolver = { resolve: jest.fn() };
     stripeAdapter = {
       initiate: jest.fn(),
@@ -70,6 +81,7 @@ describe('PaymentsService', () => {
       providers: [
         PaymentsService,
         { provide: OrdersService, useValue: ordersService },
+        { provide: RestaurantsService, useValue: restaurantsService },
         { provide: PaymentProviderResolver, useValue: providerResolver },
         {
           provide: ConfigService,
@@ -106,6 +118,7 @@ describe('PaymentsService', () => {
     it("initiates against the order's default provider and records the payment ref", async () => {
       const order = {
         _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
         status: 'PENDING_PAYMENT',
         paymentProvider: 'stripe',
         orderNumber: 'ORD-1',
@@ -142,6 +155,7 @@ describe('PaymentsService', () => {
     it('rejects a provider override the currency does not support', async () => {
       ordersService.findOne.mockResolvedValue({
         _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
         status: 'PENDING_PAYMENT',
         paymentProvider: 'paystack',
         currency: 'NGN',
@@ -156,6 +170,7 @@ describe('PaymentsService', () => {
     it('honors a valid provider override', async () => {
       const order = {
         _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
         status: 'PENDING_PAYMENT',
         paymentProvider: 'paystack',
         orderNumber: 'ORD-1',
@@ -179,12 +194,77 @@ describe('PaymentsService', () => {
       );
     });
 
+    it("passes the restaurant's active payout account reference and payout amount through to the adapter (FDP-52)", async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        orderNumber: 'ORD-1',
+        total: 115,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      restaurantsService.findByIdOrThrow.mockResolvedValue({
+        payoutAccounts: [
+          { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
+          { provider: 'stripe', status: 'pending', reference: null },
+        ],
+      } as never);
+      paystackAdapter.initiate.mockResolvedValue({
+        redirectUrl: 'https://checkout.paystack.com/abc',
+        reference: 'ORD-1-abcd',
+      });
+
+      await service.initiatePayment(user, 'order-1');
+
+      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurantPayoutAccountReference: 'ACCT_test123',
+          restaurantPayoutAmount: 85,
+        }),
+      );
+    });
+
+    it('omits the payout account reference when the restaurant has none active for the charging provider', async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        orderNumber: 'ORD-1',
+        total: 115,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      restaurantsService.findByIdOrThrow.mockResolvedValue({
+        payoutAccounts: [
+          { provider: 'stripe', status: 'active', reference: 'acct_stripe' },
+        ],
+      } as never);
+      paystackAdapter.initiate.mockResolvedValue({
+        redirectUrl: 'https://checkout.paystack.com/abc',
+        reference: 'ORD-1-abcd',
+      });
+
+      await service.initiatePayment(user, 'order-1');
+
+      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurantPayoutAccountReference: undefined,
+        }),
+      );
+    });
+
     it("wraps a raw adapter error (e.g. the provider's own API rejection) as a BadRequestException instead of letting it surface as a 500", async () => {
       // Found via live testing against the real Stripe API (FDP-14): a tiny order total
       // triggers Stripe's ~$0.50 minimum-charge rejection, which previously bubbled up as an
       // opaque "Internal server error".
       const order = {
         _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
         status: 'PENDING_PAYMENT',
         paymentProvider: 'stripe',
         orderNumber: 'ORD-1',
@@ -222,9 +302,9 @@ describe('PaymentsService', () => {
         paymentRef: null,
       } as never);
 
-      await expect(
-        service.verifyPayment(user.sub, 'order-1'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.verifyPayment(user.sub, 'order-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it("marks the order paid when the provider confirms success — the fix for orders stuck on 'Confirming your payment…' when a webhook never arrives", async () => {
@@ -245,9 +325,7 @@ describe('PaymentsService', () => {
       const result = await service.verifyPayment(user.sub, 'order-1');
 
       expect(paystackAdapter.verify).toHaveBeenCalledWith('ORD-1-abcd');
-      expect(ordersService.markPaidFromWebhook).toHaveBeenCalledWith(
-        'order-1',
-      );
+      expect(ordersService.markPaidFromWebhook).toHaveBeenCalledWith('order-1');
       expect(ordersService.markPaymentFailed).not.toHaveBeenCalled();
       expect(result).toEqual({ status: 'PLACED' });
     });

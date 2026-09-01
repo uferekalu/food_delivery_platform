@@ -252,6 +252,71 @@ describe('RestaurantsService', () => {
     });
   });
 
+  describe('setPayoutAccount (FDP-52)', () => {
+    it('adds a new payout account entry for a provider the restaurant has none of yet', async () => {
+      const created = await service.create('owner-id', baseDto);
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const updated = await service.setPayoutAccount(
+        created._id.toString(),
+        requester,
+        'paystack',
+        'active',
+        'ACCT_test123',
+      );
+
+      // Map to plain objects first — a live Mongoose subdocument array trips toEqual's deep
+      // walk over its strict-mode getters (see backend/CLAUDE.md "Testing").
+      expect(
+        updated.payoutAccounts.map((a) => ({
+          provider: a.provider,
+          status: a.status,
+          reference: a.reference,
+        })),
+      ).toEqual([
+        { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
+      ]);
+    });
+
+    it('updates the existing entry in place rather than duplicating it, if a restaurant reconnects the same provider', async () => {
+      const created = await service.create('owner-id', baseDto);
+      const requester = { ...owner, sub: 'owner-id' };
+
+      await service.setPayoutAccount(
+        created._id.toString(),
+        requester,
+        'paystack',
+        'active',
+        'ACCT_old',
+      );
+      const updated = await service.setPayoutAccount(
+        created._id.toString(),
+        requester,
+        'paystack',
+        'active',
+        'ACCT_new',
+      );
+
+      expect(updated.payoutAccounts).toHaveLength(1);
+      expect(updated.payoutAccounts[0].reference).toBe('ACCT_new');
+    });
+
+    it('rejects a caller who does not own the restaurant', async () => {
+      const created = await service.create('owner-id', baseDto);
+      const requester = { ...otherOwner, sub: 'a-different-owner-id' };
+
+      await expect(
+        service.setPayoutAccount(
+          created._id.toString(),
+          requester,
+          'paystack',
+          'active',
+          'ACCT_test123',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
   describe('approve', () => {
     it('sets isApproved to true', async () => {
       const created = await service.create('owner-id', baseDto);

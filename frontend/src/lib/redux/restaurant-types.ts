@@ -27,6 +27,13 @@ export interface OpeningHour {
   isClosed?: boolean;
 }
 
+// Vendor payouts epic (docs/ROADMAP.md FDP-51 onward).
+export interface PayoutAccount {
+  provider: PaymentProvider;
+  status: "pending" | "active";
+  reference: string | null;
+}
+
 export interface Restaurant {
   _id: string;
   ownerId: string;
@@ -46,6 +53,7 @@ export interface Restaurant {
   reviewCount: number;
   priceLevel: number;
   estimatedDeliveryMinutes: number | null;
+  payoutAccounts: PayoutAccount[];
   createdAt: string;
   updatedAt: string;
 }

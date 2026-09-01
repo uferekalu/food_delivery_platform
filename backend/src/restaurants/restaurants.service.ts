@@ -9,6 +9,8 @@ import { slugify } from '../common/utils/slugify';
 import { escapeRegExp } from '../common/utils/regex';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema';
+import type { PayoutAccountStatus } from './schemas/payout-account.schema';
+import type { PaymentProvider } from '../payments/payment-provider';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { ListRestaurantsDto } from './dto/list-restaurants.dto';
@@ -181,6 +183,34 @@ export class RestaurantsService {
   async approve(id: string): Promise<RestaurantDocument> {
     const restaurant = await this.findByIdOrThrow(id);
     restaurant.isApproved = true;
+    return restaurant.save();
+  }
+
+  /**
+   * Vendor payouts epic (docs/ROADMAP.md FDP-51 onward) — upserts the one payout-account entry
+   * for `provider` (a restaurant has at most one per provider). Called once a provider-specific
+   * onboarding flow (e.g. PaystackAdapter's subaccount creation, FDP-52) has actually produced a
+   * real account reference; never called with a fabricated reference.
+   */
+  async setPayoutAccount(
+    id: string,
+    requester: AccessTokenPayload,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+  ): Promise<RestaurantDocument> {
+    const restaurant = await this.findByIdOrThrow(id);
+    this.assertOwnerOrAdmin(restaurant, requester);
+
+    const existing = restaurant.payoutAccounts.find(
+      (account) => account.provider === provider,
+    );
+    if (existing) {
+      existing.status = status;
+      existing.reference = reference;
+    } else {
+      restaurant.payoutAccounts.push({ provider, status, reference });
+    }
     return restaurant.save();
   }
 

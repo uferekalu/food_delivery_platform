@@ -114,6 +114,8 @@ Webhook signatures are verified for all three providers before any order/payment
 mutated. Payment state transitions only happen server-side, driven by verified webhook events
 or a verified `verify()` poll — never trusted from client-reported "payment succeeded" calls.
 
+Restaurant payouts (a provider-side split at charge time, not a separate transfer) are §14.
+
 ## 5. Design tokens (frontend source of truth)
 
 Single source of truth: `frontend/src/styles/tokens.css` (Tailwind v4 is CSS-first — values
@@ -396,3 +398,47 @@ product settings.
 Each app ships a `.env.example` documenting every required variable with a placeholder value
 and a one-line comment on where to get it. Real values live only in local `.env` (gitignored)
 and in the Vercel/Render dashboards.
+
+## 14. Payouts & platform fee
+
+Decision (docs/ROADMAP.md FDP-51 onward, reversing an earlier "read-only ledger" scope): the
+platform takes a commission on every order, and the restaurant's remaining share settles
+automatically via the payment provider's own split/connected-account mechanism. The platform
+never holds customer funds and manually disburses them — no in-house wallet or transfer queue.
+
+**Commission model.** `PLATFORM_COMMISSION_RATE` (`backend/src/common/constants/platform-fee.ts`,
+currently 15%) is a single shared constant applied to the order's food `subtotal` only — never
+`deliveryFee` (the rider's own earnings, see `OrdersService.findForRider`) or `serviceFee`
+(already the platform's direct revenue line). `OrdersService.createOrder` snapshots the result
+onto every order as `platformFeeAmount`/`restaurantPayoutAmount` at creation time, so a later
+rate change never rewrites historical orders. `OrdersService.getEarningsSummary` sums these over
+a restaurant's `DELIVERED` orders for its dashboard.
+
+**Per-provider onboarding.** `Restaurant.payoutAccounts` holds one entry per payment provider a
+restaurant has connected — `{ provider, status: 'pending' | 'active', reference }`, mirroring the
+multi-provider reality `PaymentProviderResolver` already models (a customer can override the
+currency's default provider per order, so a restaurant's payout coverage has to cover more than
+just its default). Until a provider has an `active` entry, that provider's orders for this
+restaurant settle in full to the platform's own account — never blocked, just not yet split.
+
+**Paystack (FDP-52, live).** A restaurant supplies a bank + account number
+(`PaystackPayoutsController`); the backend resolves it via Paystack's `/bank/resolve` (confirms
+the account name before anything is created — the cheapest fraud/typo guard available) and
+creates a subaccount via `/subaccount`, storing the resulting `subaccount_code` as the payout
+account's `reference`. At charge time, `PaymentsService.initiatePayment` looks up the order's
+restaurant's *active* Paystack account and passes it to `PaystackAdapter.initiate()`, which adds
+`subaccount` (routes the split) and an explicit `transaction_charge` — **not** the subaccount's
+own stored `percentage_charge`, and this distinction matters: a flat percentage of the whole
+order `total` would hand the restaurant a cut of the delivery fee and service fee too, since
+neither belongs to it. `transaction_charge` is computed per-transaction as
+`total - restaurantPayoutAmount` (in the provider's minor unit), so Paystack pays the restaurant
+subaccount *exactly* `restaurantPayoutAmount` and settles everything else — the platform's
+commission, the delivery fee, and the service fee — to the platform's own account. The delivery
+fee's eventual trip to the rider is a separate, not-yet-automated concern (riders currently just
+see it reflected in their own earnings view, docs/ROADMAP.md FDP-16); this split only concerns
+restaurant payouts.
+
+**Flutterwave (FDP-53) and Stripe Connect (FDP-54)** are not yet built. Flutterwave's subaccount
+model is expected to mirror Paystack's shape closely; Stripe Connect is structurally different
+(a hosted onboarding redirect rather than a single API call, and an `account.updated` webhook to
+know onboarding actually finished) and will need its own design pass when picked up.
