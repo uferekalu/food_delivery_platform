@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { Order, PaymentProvider } from "../restaurant-types";
+import type { Order, PaymentProvider, Restaurant } from "../restaurant-types";
 
 export interface InitiatePaymentInput {
   orderId: string;
@@ -8,6 +8,28 @@ export interface InitiatePaymentInput {
 
 export interface InitiatePaymentResult {
   redirectUrl: string;
+}
+
+// Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52).
+export interface PaystackBank {
+  name: string;
+  code: string;
+}
+
+export interface ResolvePaystackAccountInput {
+  restaurantId: string;
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface ResolvedPaystackAccount {
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface SetupPaystackPayoutResult {
+  restaurant: Restaurant;
+  verifiedAccountName: string;
 }
 
 export const paymentsApi = api.injectEndpoints({
@@ -26,8 +48,37 @@ export const paymentsApi = api.injectEndpoints({
     verifyPayment: builder.mutation<Order, string>({
       query: (orderId) => ({ url: `/payments/${orderId}/verify`, method: "POST" }),
     }),
+
+    listPaystackBanks: builder.query<PaystackBank[], void>({
+      query: () => "/payments/paystack/banks",
+    }),
+
+    resolvePaystackAccount: builder.mutation<ResolvedPaystackAccount, ResolvePaystackAccountInput>({
+      query: ({ restaurantId, ...body }) => ({
+        url: `/restaurants/${restaurantId}/payout/paystack/resolve-account`,
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupPaystackPayout: builder.mutation<SetupPaystackPayoutResult, ResolvePaystackAccountInput>({
+      query: ({ restaurantId, ...body }) => ({
+        url: `/restaurants/${restaurantId}/payout/paystack/setup`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { restaurantId }) => [
+        { type: "Order", id: `EARNINGS-${restaurantId}` },
+      ],
+    }),
   }),
 });
 
-export const { useInitiatePaymentMutation, useGetPaymentProvidersQuery, useVerifyPaymentMutation } =
-  paymentsApi;
+export const {
+  useInitiatePaymentMutation,
+  useGetPaymentProvidersQuery,
+  useVerifyPaymentMutation,
+  useListPaystackBanksQuery,
+  useResolvePaystackAccountMutation,
+  useSetupPaystackPayoutMutation,
+} = paymentsApi;

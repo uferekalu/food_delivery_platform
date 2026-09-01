@@ -17,6 +17,7 @@ import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
+import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
@@ -96,14 +97,6 @@ const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
 // DeliveryZonesService.calculateFee) — this flat rate only applies to serviceFee, which is a
 // platform fee unrelated to distance.
 const SERVICE_FEE_RATE = 0.05;
-
-// Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — the platform's commission on the
-// food subtotal only, not deliveryFee (the rider's earnings, see findForRider) or serviceFee
-// (already the platform's own revenue line). Computed on the pre-discount subtotal: a promo
-// discount is a platform marketing cost, not something passed on to reduce what the restaurant
-// is owed. Snapshotted onto the order at creation (like serviceFee) so a later rate change never
-// rewrites historical orders' numbers.
-const PLATFORM_COMMISSION_RATE = 0.15;
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -257,6 +250,12 @@ export class OrdersService {
     );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
     const tax = 0;
+    // Vendor payouts epic (docs/ROADMAP.md FDP-51 onward) — the platform's commission on the
+    // food subtotal only, not deliveryFee (the rider's earnings, see findForRider) or
+    // serviceFee (already the platform's own revenue line). Computed on the pre-discount
+    // subtotal: a promo discount is a platform marketing cost, not something passed on to
+    // reduce what the restaurant is owed. Snapshotted onto the order at creation (like
+    // serviceFee) so a later rate change never rewrites historical orders' numbers.
     const platformFeeAmount = round2(subtotal * PLATFORM_COMMISSION_RATE);
     const restaurantPayoutAmount = round2(subtotal - platformFeeAmount);
 

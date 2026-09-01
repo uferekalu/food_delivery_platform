@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrdersService } from '../orders/orders.service';
+import { RestaurantsService } from '../restaurants/restaurants.service';
 import type { OrderDocument } from '../orders/schemas/order.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PaymentProviderResolver } from './provider-resolver';
@@ -20,6 +21,7 @@ export class PaymentsService {
 
   constructor(
     private readonly ordersService: OrdersService,
+    private readonly restaurantsService: RestaurantsService,
     private readonly providerResolver: PaymentProviderResolver,
     private readonly config: ConfigService,
     private readonly stripeAdapter: StripeAdapter,
@@ -63,6 +65,18 @@ export class PaymentsService {
 
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     const adapter = this.getAdapter(provider);
+
+    // Vendor payouts epic (docs/ROADMAP.md FDP-52 onward) — only passed through if this
+    // restaurant has actually onboarded an *active* payout account for the provider this
+    // specific order is charging through; an adapter with no automated-split support yet (or a
+    // restaurant with no active account) just ignores these, per the interface's doc comment.
+    const restaurant = await this.restaurantsService.findByIdOrThrow(
+      order.restaurantId.toString(),
+    );
+    const payoutAccount = restaurant.payoutAccounts.find(
+      (account) => account.provider === provider && account.status === 'active',
+    );
+
     let result: InitiatePaymentResult;
     try {
       result = await adapter.initiate({
@@ -73,6 +87,8 @@ export class PaymentsService {
         customerEmail: user.email,
         successUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}`,
         cancelUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}&cancelled=true`,
+        restaurantPayoutAccountReference: payoutAccount?.reference ?? undefined,
+        restaurantPayoutAmount: order.restaurantPayoutAmount,
       });
     } catch (error) {
       // A raw adapter error (a provider's own API error — e.g. Stripe rejecting a charge below
@@ -138,10 +154,7 @@ export class PaymentsService {
    * idempotent order-transition methods the webhook path uses, so whichever of the two arrives
    * first wins and the other is a safe no-op.
    */
-  async verifyPayment(
-    userId: string,
-    orderId: string,
-  ): Promise<OrderDocument> {
+  async verifyPayment(userId: string, orderId: string): Promise<OrderDocument> {
     const order = await this.ordersService.findOne(userId, orderId);
     if (order.status !== 'PENDING_PAYMENT') return order;
     if (!order.paymentRef) {

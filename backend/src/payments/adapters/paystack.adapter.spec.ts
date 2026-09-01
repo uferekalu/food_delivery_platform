@@ -142,5 +142,204 @@ describe('PaystackAdapter', () => {
         }),
       ).rejects.toThrow('Invalid key');
     });
+
+    it('splits the transaction via subaccount when the restaurant has an active payout account — computing transaction_charge from restaurantPayoutAmount, never a flat percentage of the whole total', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: {
+              authorization_url: 'https://checkout.paystack.com/abc',
+              reference: 'ORD-1-abcd',
+            },
+          }),
+      });
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await adapter.initiate({
+        orderId: 'order-1',
+        orderNumber: 'ORD-1',
+        amount: 115, // order.total: subtotal 100 + deliveryFee 10 + serviceFee 5
+        currency: 'NGN',
+        customerEmail: 'jane@example.com',
+        successUrl: 'http://localhost:3000',
+        cancelUrl: 'http://localhost:3000',
+        restaurantPayoutAccountReference: 'ACCT_test123',
+        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as {
+        subaccount: string;
+        transaction_charge: number;
+        bearer: string;
+      };
+      expect(body.subaccount).toBe('ACCT_test123');
+      // Platform keeps everything except the restaurant's share: (115 - 85) * 100 kobo
+      expect(body.transaction_charge).toBe(3000);
+      expect(body.bearer).toBe('account');
+    });
+
+    it('omits the split fields entirely when the restaurant has no active payout account', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: {
+              authorization_url: 'https://checkout.paystack.com/abc',
+              reference: 'ORD-1-abcd',
+            },
+          }),
+      });
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await adapter.initiate({
+        orderId: 'order-1',
+        orderNumber: 'ORD-1',
+        amount: 115,
+        currency: 'NGN',
+        customerEmail: 'jane@example.com',
+        successUrl: 'http://localhost:3000',
+        cancelUrl: 'http://localhost:3000',
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(body.subaccount).toBeUndefined();
+      expect(body.transaction_charge).toBeUndefined();
+      expect(body.bearer).toBeUndefined();
+    });
+  });
+
+  describe('listBanks', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('returns the bank list on success', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: [{ name: 'Access Bank', code: '044' }],
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      const banks = await adapter.listBanks();
+
+      expect(banks).toEqual([{ name: 'Access Bank', code: '044' }]);
+    });
+
+    it('throws when Paystack reports failure', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({ status: false, message: 'Service unavailable' }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.listBanks()).rejects.toThrow('Service unavailable');
+    });
+  });
+
+  describe('resolveAccount', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('returns the resolved account name on success', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: { account_number: '0123456789', account_name: 'Jane Doe' },
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      const result = await adapter.resolveAccount('0123456789', '044');
+
+      expect(result).toEqual({
+        accountNumber: '0123456789',
+        accountName: 'Jane Doe',
+      });
+    });
+
+    it('throws when the account cannot be resolved', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: false,
+            message: 'Could not resolve account name',
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.resolveAccount('0000000000', '044')).rejects.toThrow(
+        'Could not resolve account name',
+      );
+    });
+  });
+
+  describe('createSubaccount', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('returns the new subaccount code on success', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: { subaccount_code: 'ACCT_new123' },
+          }),
+      });
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      const result = await adapter.createSubaccount({
+        businessName: 'Burgundy Kitchen',
+        bankCode: '044',
+        accountNumber: '0123456789',
+        percentageCharge: 15,
+      });
+
+      expect(result).toEqual({ subaccountCode: 'ACCT_new123' });
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as {
+        business_name: string;
+        settlement_bank: string;
+        account_number: string;
+        percentage_charge: number;
+      };
+      expect(body).toEqual({
+        business_name: 'Burgundy Kitchen',
+        settlement_bank: '044',
+        account_number: '0123456789',
+        percentage_charge: 15,
+      });
+    });
+
+    it('throws when Paystack rejects the subaccount', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({ status: false, message: 'Invalid account number' }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(
+        adapter.createSubaccount({
+          businessName: 'Burgundy Kitchen',
+          bankCode: '044',
+          accountNumber: '0000000000',
+          percentageCharge: 15,
+        }),
+      ).rejects.toThrow('Invalid account number');
+    });
   });
 });
