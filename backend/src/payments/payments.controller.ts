@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -30,6 +31,10 @@ export class PaymentsController {
     private readonly providerResolver: PaymentProviderResolver,
   ) {}
 
+  // Tighter than the app-wide 100/min default (backend/CLAUDE.md) — each call creates a real
+  // provider-hosted checkout session; nothing about a customer's own checkout flow needs more
+  // than a handful of these a minute, even retrying after switching provider.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('initiate')
   initiate(
     @CurrentUser() user: AccessTokenPayload,
@@ -49,6 +54,9 @@ export class PaymentsController {
     return this.providerResolver.resolve(query.currency);
   }
 
+  // A refund is a real, irreversible reversal of money already collected — worth throttling even
+  // behind the admin role gate, purely as defense in depth against a compromised admin token.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Roles('admin')
   @Post(':orderId/refund')
   refund(@Param('orderId') orderId: string) {
@@ -57,7 +65,9 @@ export class PaymentsController {
 
   /** Called by the checkout callback page right after the provider redirects back — an active
    * nudge alongside the passive webhook, so a customer never gets stuck on "Confirming your
-   * payment…" waiting on a webhook that may never arrive at this deploy. */
+   * payment…" waiting on a webhook that may never arrive at this deploy. Throttled to stop a
+   * runaway retry loop from hammering the provider's own verify API on our behalf. */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':orderId/verify')
   verify(
     @CurrentUser() user: AccessTokenPayload,
