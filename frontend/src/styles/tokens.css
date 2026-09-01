@@ -60,6 +60,11 @@
   --color-primary-active: var(--color-brand-800);
   --color-primary-subtle: var(--color-brand-50);
   --color-primary-foreground: var(--color-neutral-0);
+  /* Text sitting ON TOP of `--color-primary-subtle` (badges, tag chips) — a dedicated alias
+     rather than reusing `--color-primary` because in dark mode the two need to diverge: see
+     the dark-mode override below for why. Same value as `--color-primary` in light mode, so
+     nothing changes there. */
+  --color-primary-subtle-foreground: var(--color-primary);
 
   --color-surface: var(--color-neutral-0);
   --color-surface-subtle: var(--color-neutral-50);
@@ -140,6 +145,12 @@
   --dark-primary-active: var(--color-brand-300);
   --dark-primary-subtle: hsl(344 45% 16%);
   --dark-primary-foreground: var(--color-neutral-0);
+  /* `--dark-primary` (brand-500, hsl(344 58% 49%)) text on `--dark-primary-subtle` (hsl(344 45%
+     16%)) measures ~3.05:1 — same hue, both saturated, differing mostly in lightness, which
+     reads as low-contrast in practice despite the numeric lightness gap and fails WCAG AA's
+     4.5:1 for normal text. This was the real bug behind illegible cuisine-type badges in dark
+     mode. brand-300 against the same background measures ~7.5:1. */
+  --dark-primary-subtle-foreground: var(--color-brand-300);
 
   --dark-surface: var(--color-neutral-950);
   --dark-surface-subtle: var(--color-neutral-900);
@@ -179,6 +190,7 @@
     --color-primary-active: var(--dark-primary-active);
     --color-primary-subtle: var(--dark-primary-subtle);
     --color-primary-foreground: var(--dark-primary-foreground);
+    --color-primary-subtle-foreground: var(--dark-primary-subtle-foreground);
 
     --color-surface: var(--dark-surface);
     --color-surface-subtle: var(--dark-surface-subtle);
@@ -213,6 +225,7 @@
   --color-primary-active: var(--dark-primary-active);
   --color-primary-subtle: var(--dark-primary-subtle);
   --color-primary-foreground: var(--dark-primary-foreground);
+  --color-primary-subtle-foreground: var(--dark-primary-subtle-foreground);
 
   --color-surface: var(--dark-surface);
   --color-surface-subtle: var(--dark-surface-subtle);

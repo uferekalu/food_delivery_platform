@@ -45,6 +45,7 @@ export const semantic = {
   primaryActive: "var(--color-primary-active)",
   primarySubtle: "var(--color-primary-subtle)",
   primaryForeground: "var(--color-primary-foreground)",
+  primarySubtleForeground: "var(--color-primary-subtle-foreground)",
   surface: "var(--color-surface)",
   surfaceSubtle: "var(--color-surface-subtle)",
   surfaceRaised: "var(--color-surface-raised)",

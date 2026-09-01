@@ -53,7 +53,7 @@ function CuisineChips({
         onClick={() => onChange(null)}
         className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
           active === null
-            ? "border-primary bg-primary-subtle text-primary"
+            ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
             : "border-border text-text-muted hover:text-text"
         }`}
       >
@@ -66,7 +66,7 @@ function CuisineChips({
           onClick={() => onChange(cuisine)}
           className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
             active === cuisine
-              ? "border-primary bg-primary-subtle text-primary"
+              ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
               : "border-border text-text-muted hover:text-text"
           }`}
         >

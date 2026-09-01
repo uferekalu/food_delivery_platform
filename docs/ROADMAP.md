@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-45**
+**Next available ticket number: FDP-46**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -45,7 +45,7 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-30 | `menu-item-photos` | Image upload on the owner's menu-item form (reusing the existing `ImageUpload`/Cloudinary pipeline) + display on storefront item cards. The schema/type already supported `imageUrl`; only the UI was missing | ✅ Done |
 | FDP-31 | `restaurant-card-images` | Restaurant logo/cover photo on the browse-restaurants grid, currently text-and-badges only | ✅ Done |
 | FDP-32 | `homepage-sections` | Homepage rebuilt into Glovo-style sections: hero, "Top restaurants", "Anything delivered" category tiles, "Countries where we deliver" (generated from real restaurant `country` data), "Let's do it together". The hero's search box is keyword/cuisine search against the existing `/restaurants` endpoint, not a real address/geolocation input — true location-based discovery is the separately-tracked, not-yet-decided "nearby restaurants map" feature, so it isn't faked here. Folds in the Careers holding page and "Countries we deliver" originally scoped as FDP-34, since both are homepage sections the client explicitly asked for | ✅ Done |
-| FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-46 | ✅ Done |
+| FDP-33 | `categories-page` | Multi-vertical category browse page (Food/Groceries/Pharmacy tabs) — Food fully functional, other verticals show "coming soon" pending FDP-47 | ✅ Done |
 | FDP-34 | ~~`countries-careers-pages`~~ | Superseded — folded into FDP-32 | ➖ Merged into FDP-32 |
 | FDP-35 | `checkout-ux-polish` | Checkout UX to match Glovo's pattern (delivery-option selector, collapsible promo code, cleaner summary) — arranges existing delivery-zone/promo-code functionality, no new backend logic | ✅ Done |
 | FDP-36 | `overlay-elevation-dark-mode` | `Modal`, `Drawer`, `DropdownMenu`, and `Select`'s popup all used `bg-surface` instead of `bg-surface-raised` — in dark mode this is the identical near-black as the page background (`Card`/`Toast` already correctly use `bg-surface-raised`), so every one of these overlays visually blended into whatever was behind it. Found via a real screenshot of the add-to-cart modal in dark mode | ✅ Done |
@@ -57,8 +57,9 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-42 | `google-oauth` | "Continue with Google" — server-driven Passport redirect flow, not Google's client-side JS SDK. Redeems a short-lived one-time exchange code through the frontend's own `/api/*` proxy rather than setting the refresh cookie directly from the callback (which lands on the backend's bare domain, third-party again) — see docs/ARCHITECTURE.md §11 | ✅ Done |
 | FDP-43 | `facebook-oauth` | "Continue with Facebook" — reuses every part of FDP-42's pattern (`AuthService.loginOrRegisterWithOAuthProfile` is provider-agnostic). The code ships regardless of Meta's business verification timeline; going live on the real production domain (not just localhost) still needs that review to finish, independent of anything here | ✅ Done |
 | FDP-44 | `facebook-oauth-email-scope-fix` | Real-world Facebook login was failing with a 500 on `/auth/facebook/callback` — unlike Google, Facebook doesn't return an email by default and `FacebookStrategy` never requested the `email` permission scope, so `profile.emails` was always empty and `validate()` threw. Also hardened both Google's and Facebook's "no email on profile" error path to a proper `UnauthorizedException` (401) instead of a raw `Error` surfacing as an opaque 500 | ✅ Done |
-| FDP-45 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
-| FDP-46 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
+| FDP-45 | `dark-mode-badge-contrast` | Cuisine-type badges (and other `Badge variant="primary"` uses: homepage category-tile icons, categories-page cuisine chips) were nearly illegible in dark mode — `--dark-primary` text on `--dark-primary-subtle` background measures ~3.05:1, failing WCAG AA's 4.5:1 for normal text despite a numeric lightness gap, because both are the same saturated hue. Added a dedicated `--color-primary-subtle-foreground` token (brand-300 in dark mode, ~7.5:1) instead of widening `--dark-primary` itself, to avoid touching that token's other consumers (links, focus rings) | ✅ Done |
+| FDP-46 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
+| FDP-47 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
 
 Phases are sequential but not rigid — if a later phase's work is discovered while doing an
 earlier one, note it here rather than scope-creeping the current branch.
