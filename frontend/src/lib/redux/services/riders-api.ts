@@ -1,9 +1,34 @@
 import { api } from "../api";
-import type { Order, OrderStatus, Rider, VehicleType } from "../restaurant-types";
+import type {
+  Guarantor,
+  GovernmentIdType,
+  Order,
+  OrderStatus,
+  Rider,
+  VehicleType,
+} from "../restaurant-types";
+
+export interface ApplyRiderInput {
+  vehicleType: VehicleType;
+  dateOfBirth: string;
+  governmentIdType: GovernmentIdType;
+  governmentIdNumber: string;
+  governmentIdDocumentUrl: string;
+  proofOfAddressDocumentUrl: string;
+  driversLicenseNumber?: string;
+  driversLicenseExpiry?: string;
+  driversLicenseDocumentUrl?: string;
+  vehiclePlateNumber?: string;
+  vehicleRegistrationDocumentUrl?: string;
+  guarantor: Guarantor;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  nextOfKinRelationship: string;
+}
 
 export const ridersApi = api.injectEndpoints({
   endpoints: (builder) => ({
-    applyRider: builder.mutation<Rider, { vehicleType: VehicleType }>({
+    applyRider: builder.mutation<Rider, ApplyRiderInput>({
       query: (body) => ({ url: "/riders/apply", method: "POST", body }),
       invalidatesTags: [{ type: "Rider", id: "ME" }],
     }),

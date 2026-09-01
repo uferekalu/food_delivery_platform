@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useLazyGetUploadSignatureQuery, type UploadFolder } from "@/lib/redux/services/uploads-api";
-import { Spinner } from "./spinner";
 import { Button } from "./button";
 
 export interface DocumentUploadProps {

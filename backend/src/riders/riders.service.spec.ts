@@ -77,10 +77,35 @@ describe('RidersService', () => {
     return { sub: user._id.toString(), email: user.email, role: user.role };
   }
 
+  function kycFields() {
+    return {
+      dateOfBirth: '1995-06-15',
+      governmentIdType: 'national_id' as const,
+      governmentIdNumber: 'A1234567',
+      governmentIdDocumentUrl: 'https://example.com/id.pdf',
+      proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+      driversLicenseNumber: 'DL-998877',
+      driversLicenseExpiry: '2030-01-01',
+      driversLicenseDocumentUrl: 'https://example.com/license.pdf',
+      vehiclePlateNumber: 'ABC-123XY',
+      vehicleRegistrationDocumentUrl: 'https://example.com/vehicle-reg.pdf',
+      guarantor: {
+        fullName: 'Jane Guarantor',
+        phone: '+2348000000000',
+        relationship: 'Sister',
+        address: '12 Guarantor Street, Lagos',
+      },
+      nextOfKinName: 'John Nextofkin',
+      nextOfKinPhone: '+2348011111111',
+      nextOfKinRelationship: 'Brother',
+    };
+  }
+
   it('apply creates a Rider profile and promotes the user role', async () => {
     const customer = await createCustomer();
     const rider = await ridersService.apply(requesterFor(customer), {
       vehicleType: 'motorcycle',
+      ...kycFields(),
     });
 
     expect(rider.userId.toString()).toBe(customer._id.toString());
@@ -96,12 +121,13 @@ describe('RidersService', () => {
     const customer = await createCustomer();
     await ridersService.apply(requesterFor(customer), {
       vehicleType: 'bicycle',
+      ...kycFields(),
     });
 
     await expect(
       ridersService.apply(
         { sub: customer._id.toString(), email: customer.email, role: 'rider' },
-        { vehicleType: 'car' },
+        { vehicleType: 'car', ...kycFields() },
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -111,7 +137,7 @@ describe('RidersService', () => {
     await expect(
       ridersService.apply(
         { sub: customer._id.toString(), email: customer.email, role: 'admin' },
-        { vehicleType: 'car' },
+        { vehicleType: 'car', ...kycFields() },
       ),
     ).rejects.toThrow(BadRequestException);
 
@@ -130,7 +156,7 @@ describe('RidersService', () => {
           email: owner.email,
           role: 'restaurant_owner',
         },
-        { vehicleType: 'car' },
+        { vehicleType: 'car', ...kycFields() },
       ),
     ).rejects.toThrow(BadRequestException);
 
@@ -144,6 +170,7 @@ describe('RidersService', () => {
     const customer = await createCustomer();
     await ridersService.apply(requesterFor(customer), {
       vehicleType: 'car',
+      ...kycFields(),
     });
 
     const first = await ridersService.toggleOnline(customer._id.toString());
@@ -164,6 +191,7 @@ describe('RidersService', () => {
     const customer = await createCustomer();
     const rider = await ridersService.apply(requesterFor(customer), {
       vehicleType: 'van',
+      ...kycFields(),
     });
     expect(rider.isVerified).toBe(false);
 
@@ -179,6 +207,7 @@ describe('RidersService', () => {
     const customer = await createCustomer();
     await ridersService.apply(requesterFor(customer), {
       vehicleType: 'motorcycle',
+      ...kycFields(),
     });
 
     await expect(
@@ -193,14 +222,52 @@ describe('RidersService', () => {
     ).resolves.toBeDefined();
   });
 
+  it('apply rejects an applicant under 18 (FDP-61)', async () => {
+    const customer = await createCustomer();
+    const today = new Date();
+    const under18 = new Date(
+      today.getFullYear() - 17,
+      today.getMonth(),
+      today.getDate(),
+    );
+
+    await expect(
+      ridersService.apply(requesterFor(customer), {
+        vehicleType: 'bicycle',
+        ...kycFields(),
+        dateOfBirth: under18.toISOString().slice(0, 10),
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    const count = await riderModel.countDocuments().exec();
+    expect(count).toBe(0);
+  });
+
+  it('verify rejects a rider missing required KYC information (FDP-61)', async () => {
+    const customer = await createCustomer();
+    // Bypasses both ApplyRiderDto and schema validation (validateBeforeSave: false) to
+    // simulate legacy data from before these fields existed — RidersService.verify() must
+    // still catch it, not just trust that every Rider document was created via apply().
+    const incompleteRider = new riderModel({
+      userId: customer._id,
+      vehicleType: 'motorcycle',
+    });
+    await incompleteRider.save({ validateBeforeSave: false });
+
+    await expect(
+      ridersService.verify(incompleteRider._id.toString()),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   describe('countByVerification', () => {
     it('counts verified and pending riders separately', async () => {
       const a = await createCustomer();
       const b = await createCustomer();
       const riderA = await ridersService.apply(requesterFor(a), {
         vehicleType: 'bicycle',
+        ...kycFields(),
       });
-      await ridersService.apply(requesterFor(b), { vehicleType: 'car' });
+      await ridersService.apply(requesterFor(b), { vehicleType: 'car', ...kycFields() });
       await ridersService.verify(riderA._id.toString());
 
       expect(await ridersService.countByVerification()).toEqual({

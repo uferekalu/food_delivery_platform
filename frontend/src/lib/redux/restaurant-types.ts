@@ -171,6 +171,22 @@ export interface StatusHistoryEntry {
 export const VEHICLE_TYPES = ["bicycle", "motorcycle", "car", "van"] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
+export const GOVERNMENT_ID_TYPES = [
+  "national_id",
+  "passport",
+  "voters_card",
+  "drivers_license",
+] as const;
+export type GovernmentIdType = (typeof GOVERNMENT_ID_TYPES)[number];
+
+// Rider KYC (docs/ROADMAP.md FDP-61) — the surety a rider names to vouch for them.
+export interface Guarantor {
+  fullName: string;
+  phone: string;
+  relationship: string;
+  address: string;
+}
+
 export interface Rider {
   _id: string;
   userId: string;
@@ -179,6 +195,20 @@ export interface Rider {
   isVerified: boolean;
   rating: number;
   reviewCount: number;
+  dateOfBirth: string;
+  governmentIdType: GovernmentIdType;
+  governmentIdNumber: string;
+  governmentIdDocumentUrl: string;
+  proofOfAddressDocumentUrl: string;
+  driversLicenseNumber: string | null;
+  driversLicenseExpiry: string | null;
+  driversLicenseDocumentUrl: string | null;
+  vehiclePlateNumber: string | null;
+  vehicleRegistrationDocumentUrl: string | null;
+  guarantor: Guarantor;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  nextOfKinRelationship: string;
   createdAt: string;
   updatedAt: string;
 }
