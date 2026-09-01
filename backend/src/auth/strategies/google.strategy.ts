@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import {
@@ -45,7 +45,10 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ): void {
     const email = profile.emails?.[0]?.value;
     if (!email) {
-      done(new Error('Google account has no email'));
+      // UnauthorizedException (not a plain Error) so this surfaces as a clean 401 through
+      // Nest's AuthGuard/exception filter instead of an opaque 500 — see the same fix on
+      // FacebookStrategy.
+      done(new UnauthorizedException('Google account has no email'));
       return;
     }
     const googleProfile: GoogleProfile = {
