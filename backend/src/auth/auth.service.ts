@@ -29,7 +29,7 @@ import {
   PhoneSignupTokenPayload,
 } from './interfaces/jwt-payload.interface';
 import { RegisterDto } from './dto/register.dto';
-import type { GoogleProfile } from './strategies/google.strategy';
+import type { OAuthProfile } from './interfaces/oauth-profile.interface';
 
 const OAUTH_EXCHANGE_TTL = '60s';
 
@@ -244,19 +244,23 @@ export class AuthService {
   }
 
   /**
-   * Finds-or-creates a user for a Google-authenticated email and mints a short-lived exchange
+   * Finds-or-creates a user for an OAuth-authenticated email (Google, Facebook — any provider
+   * whose strategy normalizes its profile into OAuthProfile) and mints a short-lived exchange
    * token (see OAuthExchangeTokenPayload) — this does *not* itself issue session tokens or set
-   * the refresh cookie, since `GET /auth/google/callback` responds directly from the backend's
-   * own domain, not proxied through the frontend (docs/ARCHITECTURE.md §11). Real tokens are
-   * only issued by `exchangeOAuthToken` below, called from the frontend's own origin.
+   * the refresh cookie, since the provider's own redirect back to our callback responds
+   * directly from the backend's own domain, not proxied through the frontend
+   * (docs/ARCHITECTURE.md §11). Real tokens are only issued by `exchangeOAuthToken` below,
+   * called from the frontend's own origin.
    *
-   * An existing email/password account with the same (Google-verified) email is logged into
-   * directly — Google sign-in becomes an additional way in, not a separate account. A new
+   * An existing email/password (or other-provider) account with the same verified email is
+   * logged into directly — this becomes an additional way in, not a separate account. A new
    * account gets an unusable random password (nobody knows it) until the person sets a real one
-   * via "forgot password", and role defaults to `customer` — Google sign-in has no UI step to
+   * via "forgot password", and role defaults to `customer` — OAuth sign-in has no UI step to
    * pick `restaurant_owner` the way the registration form does.
    */
-  async loginOrRegisterWithGoogle(profile: GoogleProfile): Promise<string> {
+  async loginOrRegisterWithOAuthProfile(
+    profile: OAuthProfile,
+  ): Promise<string> {
     let user = await this.usersService.findByEmail(profile.email);
     if (!user) {
       const passwordHash = await bcrypt.hash(
@@ -286,7 +290,7 @@ export class AuthService {
     );
   }
 
-  /** Redeems an exchange token from `loginOrRegisterWithGoogle` — this is where session tokens
+  /** Redeems an exchange token from `loginOrRegisterWithOAuthProfile` — this is where session tokens
    * actually get issued, in a call made from the frontend's own origin (see the type doc on
    * OAuthExchangeTokenPayload for why that split exists). */
   async exchangeOAuthToken(

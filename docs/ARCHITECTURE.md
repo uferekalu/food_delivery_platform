@@ -373,6 +373,14 @@ and it composes with the existing cookie-proxy architecture above instead of fig
   Cloud OAuth client — this has to be updated (adding the real backend's own https URL) whenever
   the backend's deployed domain changes, the same way `FRONTEND_URL`/`CORS_ORIGINS` already do.
 
+**"Continue with Facebook" (FDP-42) reuses every part of the above.** Same server-driven
+Passport redirect pattern (`passport-facebook`), the same `OAuthProfile` shape
+(`AuthService.loginOrRegisterWithOAuthProfile` doesn't know or care which provider
+authenticated the person), the same exchange-token handoff through `/login/oauth-callback`,
+and the same placeholder-credentials graceful degradation. `FACEBOOK_CALLBACK_URL` must
+likewise exactly match a "Valid OAuth Redirect URI" registered on the Facebook app's Login
+product settings.
+
 ## 12. Deployment topology
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in

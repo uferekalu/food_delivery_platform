@@ -4,7 +4,7 @@ Phased build order. Each phase is one `feature/FDP-<n>-<description>` branch, pu
 against `main` and merged (see `docs/ENGINEERING_RULES.md` for the current branch/PR/merge
 workflow — nothing is ever pushed directly to `main`).
 
-**Next available ticket number: FDP-43**
+**Next available ticket number: FDP-44**
 
 Update the number above every time a new ticket branch is created (the
 `new-feature-branch` skill in `.claude/skills/` reads this file to pick the next number).
@@ -54,8 +54,8 @@ shared 2026-08-28, summarized here as each ticket lands.
 | FDP-39 | `fix-refresh-deadlock` | FDP-38's own fix shipped a self-deadlock: `refresh()` routes through the same `baseQueryWithReauth` it was being made to hold the mutex around, so `SessionInitializer` acquired the lock then blocked forever waiting on its own `await mutex.waitForUnlock()` inside that call — hanging every request on every page. Caught by testing the fix locally against the real backend before trusting it, not assumed from reasoning alone. Fixed by skipping the wait specifically when the request *is* `/auth/refresh` itself | ✅ Done |
 | FDP-40 | `item-images-everywhere` | Menu item photos were missing from the cart drawer, checkout summary, and order detail page — cart/order items snapshot `name`/`price` at add-time but never `imageUrl`, so there was nothing to show even though FDP-30 added the photo itself. Added the snapshot field to both, plus a thumbnail in the admin restaurant-review page (FDP-29), which had item cards but no image despite being the one page whose whole purpose is visually reviewing a menu | ✅ Done |
 | FDP-41 | `phone-otp-auth` | Phone number sign-up/login with SMS OTP via the existing Termii integration. Email/password stays the primary account identity — phone is a verified, optional supplement (see docs/ARCHITECTURE.md §11) — signing up with phone-only and no email is a bigger structural change (email is assumed to exist everywhere else: receipts, password reset, admin lists) not attempted here. WhatsApp OTP is a fast-follow once a Meta-approved WhatsApp Business sender exists | ✅ Done |
-| FDP-42 | `google-oauth` | "Continue with Google" — server-driven Passport redirect flow, not Google's client-side JS SDK. Redeems a short-lived one-time exchange code through the frontend's own `/api/*` proxy rather than setting the refresh cookie directly from the callback (which lands on the backend's bare domain, third-party again) — see docs/ARCHITECTURE.md §11 | 🔄 In progress |
-| FDP-43 | `facebook-oauth` | "Continue with Facebook" — needs Meta business verification (days–weeks), independent of the code | ⏳ Planned |
+| FDP-42 | `google-oauth` | "Continue with Google" — server-driven Passport redirect flow, not Google's client-side JS SDK. Redeems a short-lived one-time exchange code through the frontend's own `/api/*` proxy rather than setting the refresh cookie directly from the callback (which lands on the backend's bare domain, third-party again) — see docs/ARCHITECTURE.md §11 | ✅ Done |
+| FDP-43 | `facebook-oauth` | "Continue with Facebook" — reuses every part of FDP-42's pattern (`AuthService.loginOrRegisterWithOAuthProfile` is provider-agnostic). The code ships regardless of Meta's business verification timeline; going live on the real production domain (not just localhost) still needs that review to finish, independent of anything here | 🔄 In progress |
 | FDP-44 | `i18n-french` | i18n framework + French as the first additional language | ⏳ Planned |
 | FDP-45 | `grocery-pharmacy-marketplace` | New `Store`/`Product` data model + non-restaurant checkout for a real grocery/pharmacy marketplace — comparable in size to the original FDP-5 restaurant system; scoped separately before starting, not a line item of FDP-33 | ⏳ Needs separate scoping |
 
