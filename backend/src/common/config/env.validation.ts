@@ -47,4 +47,9 @@ export const envValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
   GOOGLE_CALLBACK_URL: Joi.string().uri().optional(),
+
+  // Facebook Login — same optional, graceful-degradation pattern as Google above.
+  FACEBOOK_APP_ID: Joi.string().optional(),
+  FACEBOOK_APP_SECRET: Joi.string().optional(),
+  FACEBOOK_CALLBACK_URL: Joi.string().uri().optional(),
 });

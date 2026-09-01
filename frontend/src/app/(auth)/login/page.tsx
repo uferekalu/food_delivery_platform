@@ -37,6 +37,14 @@ function GoogleIcon() {
   );
 }
 
+function FacebookIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18" className="size-4 shrink-0" fill="#1877F2">
+      <path d="M18 9a9 9 0 1 0-10.4 8.89v-6.29H5.31V9h2.29V7.02c0-2.26 1.35-3.51 3.41-3.51.99 0 2.02.18 2.02.18v2.22h-1.14c-1.12 0-1.47.7-1.47 1.42V9h2.5l-.4 2.6h-2.1v6.29A9 9 0 0 0 18 9z" />
+    </svg>
+  );
+}
+
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
@@ -188,13 +196,17 @@ export default function LoginPage() {
           <div className="h-px flex-1 bg-border" />
         </div>
         {/*
-          A plain <a>, not NextLink — this has to be a real, un-intercepted browser navigation
-          (it goes through the frontend's own /api/:path* rewrite to the backend, which
-          redirects on to Google's consent screen), not client-side app routing.
+          Plain <a> tags, not NextLink — these have to be real, un-intercepted browser
+          navigations (they go through the frontend's own /api/:path* rewrite to the backend,
+          which redirects on to the provider's consent screen), not client-side app routing.
         */}
         <a href="/api/auth/google" className={buttonVariants({ variant: "outline", className: "gap-2" })}>
           <GoogleIcon />
           Continue with Google
+        </a>
+        <a href="/api/auth/facebook" className={buttonVariants({ variant: "outline", className: "gap-2" })}>
+          <FacebookIcon />
+          Continue with Facebook
         </a>
         <p className="text-center text-sm text-text-muted">
           Don&apos;t have an account?{" "}

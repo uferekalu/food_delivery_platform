@@ -29,7 +29,7 @@ import { ExchangeOAuthCodeDto } from './dto/exchange-oauth-code.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AccessTokenPayload } from './interfaces/jwt-payload.interface';
-import type { GoogleProfile } from './strategies/google.strategy';
+import type { OAuthProfile } from './interfaces/oauth-profile.interface';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
 // The frontend proxies browser requests through its own /api/:path* rewrite (see
@@ -126,12 +126,31 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   @Get('google/callback')
   async googleCallback(
-    @Req() req: Request & { user: GoogleProfile },
+    @Req() req: Request & { user: OAuthProfile },
     @Res() res: Response,
   ) {
-    const exchangeToken = await this.authService.loginOrRegisterWithGoogle(
-      req.user,
-    );
+    const exchangeToken =
+      await this.authService.loginOrRegisterWithOAuthProfile(req.user);
+    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
+    res.redirect(`${frontendUrl}/login/oauth-callback?code=${exchangeToken}`);
+  }
+
+  // Same pattern as GET /auth/google above.
+  @Public()
+  @UseGuards(AuthGuard('facebook'))
+  @Get('facebook')
+  facebookLogin() {}
+
+  // Same pattern as GET /auth/google/callback above.
+  @Public()
+  @UseGuards(AuthGuard('facebook'))
+  @Get('facebook/callback')
+  async facebookCallback(
+    @Req() req: Request & { user: OAuthProfile },
+    @Res() res: Response,
+  ) {
+    const exchangeToken =
+      await this.authService.loginOrRegisterWithOAuthProfile(req.user);
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     res.redirect(`${frontendUrl}/login/oauth-callback?code=${exchangeToken}`);
   }
