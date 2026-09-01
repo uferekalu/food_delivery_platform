@@ -11,6 +11,18 @@ import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interfac
 import { Rider, RiderDocument } from './schemas/rider.schema';
 import { ApplyRiderDto } from './dto/apply-rider.dto';
 
+const MINIMUM_RIDER_AGE = 18;
+
+function getAgeInYears(dateOfBirth: Date): number {
+  const now = new Date();
+  let age = now.getFullYear() - dateOfBirth.getFullYear();
+  const hasHadBirthdayThisYear =
+    now.getMonth() > dateOfBirth.getMonth() ||
+    (now.getMonth() === dateOfBirth.getMonth() && now.getDate() >= dateOfBirth.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
+}
+
 @Injectable()
 export class RidersService {
   constructor(
@@ -47,9 +59,29 @@ export class RidersService {
       .exec();
     if (existing) throw new BadRequestException('You already applied');
 
+    if (getAgeInYears(new Date(dto.dateOfBirth)) < MINIMUM_RIDER_AGE) {
+      throw new BadRequestException(
+        `You must be at least ${MINIMUM_RIDER_AGE} years old to become a rider`,
+      );
+    }
+
     const rider = await this.riderModel.create({
       userId: requester.sub,
       vehicleType: dto.vehicleType,
+      dateOfBirth: dto.dateOfBirth,
+      governmentIdType: dto.governmentIdType,
+      governmentIdNumber: dto.governmentIdNumber,
+      governmentIdDocumentUrl: dto.governmentIdDocumentUrl,
+      proofOfAddressDocumentUrl: dto.proofOfAddressDocumentUrl,
+      driversLicenseNumber: dto.driversLicenseNumber ?? null,
+      driversLicenseExpiry: dto.driversLicenseExpiry ?? null,
+      driversLicenseDocumentUrl: dto.driversLicenseDocumentUrl ?? null,
+      vehiclePlateNumber: dto.vehiclePlateNumber ?? null,
+      vehicleRegistrationDocumentUrl: dto.vehicleRegistrationDocumentUrl ?? null,
+      guarantor: dto.guarantor,
+      nextOfKinName: dto.nextOfKinName,
+      nextOfKinPhone: dto.nextOfKinPhone,
+      nextOfKinRelationship: dto.nextOfKinRelationship,
     });
     await this.usersService.updateRole(requester.sub, 'rider');
     return rider;
@@ -85,8 +117,32 @@ export class RidersService {
   async verify(riderId: string): Promise<RiderDocument> {
     const rider = await this.riderModel.findById(riderId).exec();
     if (!rider) throw new NotFoundException('Rider not found');
+    this.assertKycComplete(rider);
     rider.isVerified = true;
     return rider.save();
+  }
+
+  /** Re-checks KYC completeness unconditionally at verify time, the same "regardless of
+   * caller" posture as RestaurantsService.approve() (docs/ROADMAP.md FDP-60) — ApplyRiderDto
+   * already makes it impossible to create an incomplete Rider through the normal flow, but this
+   * guards against legacy data from before these fields existed. */
+  private assertKycComplete(rider: RiderDocument): void {
+    const missing: string[] = [];
+    if (!rider.dateOfBirth) missing.push('date of birth');
+    if (!rider.governmentIdDocumentUrl) missing.push('government ID document');
+    if (!rider.proofOfAddressDocumentUrl) missing.push('proof of address document');
+    if (!rider.guarantor?.fullName) missing.push('guarantor details');
+    if (!rider.nextOfKinName) missing.push('next of kin details');
+    if (rider.vehicleType !== 'bicycle') {
+      if (!rider.driversLicenseDocumentUrl) missing.push("driver's license document");
+      if (!rider.vehicleRegistrationDocumentUrl) missing.push('vehicle registration document');
+      if (!rider.vehiclePlateNumber) missing.push('vehicle plate number');
+    }
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `This rider is missing required information and cannot be verified yet: ${missing.join(', ')}`,
+      );
+    }
   }
 
   /** Called by ReviewsService after a review is created/changed — recomputed from scratch each

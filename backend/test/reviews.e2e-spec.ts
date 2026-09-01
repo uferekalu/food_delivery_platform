@@ -11,6 +11,25 @@ import type { OrderDocument } from '../src/orders/schemas/order.schema';
 
 jest.setTimeout(60_000);
 
+// Valid rider KYC fields (docs/ROADMAP.md FDP-61) — see riders.e2e-spec.ts for the full field
+// rationale; only used here to get a rider profile through /riders/apply for the review flow.
+const VALID_RIDER_KYC = {
+  dateOfBirth: '1995-06-15',
+  governmentIdType: 'national_id',
+  governmentIdNumber: 'A1234567',
+  governmentIdDocumentUrl: 'https://example.com/id.pdf',
+  proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+  guarantor: {
+    fullName: 'Jane Guarantor',
+    phone: '+2348000000000',
+    relationship: 'Sister',
+    address: '12 Guarantor Street, Lagos',
+  },
+  nextOfKinName: 'John Nextofkin',
+  nextOfKinPhone: '+2348011111111',
+  nextOfKinRelationship: 'Brother',
+};
+
 describe('Reviews (e2e)', () => {
   let app: INestApplication<App>;
   let mongod: MongoMemoryServer;
@@ -141,7 +160,7 @@ describe('Reviews (e2e)', () => {
     const applyRes = await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${riderAccount.accessToken}`)
-      .send({ vehicleType: 'bicycle' })
+      .send({ vehicleType: 'bicycle', ...VALID_RIDER_KYC })
       .expect(201);
     const riderProfileId = (applyRes.body as { _id: string })._id;
 

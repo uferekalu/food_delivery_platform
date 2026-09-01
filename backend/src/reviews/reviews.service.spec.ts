@@ -154,7 +154,28 @@ describe('ReviewsService', () => {
     });
     const rider = await ridersService.apply(
       { sub: user._id.toString(), email: user.email, role: 'customer' },
-      { vehicleType: 'motorcycle' },
+      {
+        vehicleType: 'motorcycle',
+        dateOfBirth: '1995-06-15',
+        governmentIdType: 'national_id',
+        governmentIdNumber: 'A1234567',
+        governmentIdDocumentUrl: 'https://example.com/id.pdf',
+        proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+        driversLicenseNumber: 'DL-998877',
+        driversLicenseExpiry: '2030-01-01',
+        driversLicenseDocumentUrl: 'https://example.com/license.pdf',
+        vehiclePlateNumber: 'ABC-123XY',
+        vehicleRegistrationDocumentUrl: 'https://example.com/vehicle-reg.pdf',
+        guarantor: {
+          fullName: 'Jane Guarantor',
+          phone: '+2348000000000',
+          relationship: 'Sister',
+          address: '12 Guarantor Street, Lagos',
+        },
+        nextOfKinName: 'John Nextofkin',
+        nextOfKinPhone: '+2348011111111',
+        nextOfKinRelationship: 'Brother',
+      },
     );
     await ridersService.verify(rider._id.toString());
     return rider;

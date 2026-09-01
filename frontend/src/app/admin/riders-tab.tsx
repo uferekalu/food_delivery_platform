@@ -1,19 +1,16 @@
 "use client";
 
+import NextLink from "next/link";
+import { cn } from "@/lib/cn";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useToast } from "@/components/ui/toast";
-import { useListAllRidersQuery, useVerifyRiderMutation } from "@/lib/redux/services/riders-api";
-import { getErrorMessage } from "@/lib/redux/error";
+import { useListAllRidersQuery } from "@/lib/redux/services/riders-api";
 import type { Rider } from "@/lib/redux/restaurant-types";
 
 function RiderCard({ rider }: { rider: Rider }) {
-  const { toast } = useToast();
-  const [verify, { isLoading }] = useVerifyRiderMutation();
-
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
@@ -26,23 +23,12 @@ function RiderCard({ rider }: { rider: Rider }) {
         <span className="text-sm text-text-muted">
           Applied {new Date(rider.createdAt).toLocaleDateString()}
         </span>
-        {!rider.isVerified && (
-          <Button
-            size="sm"
-            className="self-start"
-            isLoading={isLoading}
-            onClick={() =>
-              void verify(rider._id)
-                .unwrap()
-                .then(() => toast({ title: "Rider verified", variant: "success" }))
-                .catch((err: unknown) =>
-                  toast({ title: "Couldn't verify rider", description: getErrorMessage(err), variant: "danger" }),
-                )
-            }
-          >
-            Verify
-          </Button>
-        )}
+        <NextLink
+          href={`/admin/riders/${rider._id}`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "self-start")}
+        >
+          {rider.isVerified ? "View details" : "Review application"}
+        </NextLink>
       </CardContent>
     </Card>
   );
