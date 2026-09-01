@@ -1,24 +1,28 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from './admin.service';
 import { OrdersService } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { RidersService } from '../riders/riders.service';
 import { UsersService } from '../users/users.service';
+import { MenuService } from '../menu/menu.service';
 
 describe('AdminService', () => {
   let service: AdminService;
   let ordersService: jest.Mocked<Pick<OrdersService, 'getAnalyticsSummary'>>;
   let restaurantsService: jest.Mocked<
-    Pick<RestaurantsService, 'countByApproval'>
+    Pick<RestaurantsService, 'countByApproval' | 'approve'>
   >;
   let ridersService: jest.Mocked<Pick<RidersService, 'countByVerification'>>;
   let usersService: jest.Mocked<Pick<UsersService, 'countByRole'>>;
+  let menuService: jest.Mocked<Pick<MenuService, 'getMenu'>>;
 
   beforeEach(async () => {
     ordersService = { getAnalyticsSummary: jest.fn() };
-    restaurantsService = { countByApproval: jest.fn() };
+    restaurantsService = { countByApproval: jest.fn(), approve: jest.fn() };
     ridersService = { countByVerification: jest.fn() };
     usersService = { countByRole: jest.fn() };
+    menuService = { getMenu: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -27,6 +31,7 @@ describe('AdminService', () => {
         { provide: RestaurantsService, useValue: restaurantsService },
         { provide: RidersService, useValue: ridersService },
         { provide: UsersService, useValue: usersService },
+        { provide: MenuService, useValue: menuService },
       ],
     }).compile();
 
@@ -65,6 +70,33 @@ describe('AdminService', () => {
       restaurants: { approved: 3, pending: 1 },
       riders: { verified: 2, pending: 1 },
       users: { customer: 20, restaurant_owner: 3, rider: 3, admin: 1 },
+    });
+  });
+
+  describe('approveRestaurant (FDP-60)', () => {
+    it('rejects approval when the restaurant has no menu items', async () => {
+      menuService.getMenu.mockResolvedValue([
+        { _id: 'cat-1', items: [] } as never,
+      ]);
+
+      await expect(service.approveRestaurant('restaurant-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(restaurantsService.approve).not.toHaveBeenCalled();
+    });
+
+    it('delegates to RestaurantsService.approve once the menu has at least one item', async () => {
+      menuService.getMenu.mockResolvedValue([
+        { _id: 'cat-1', items: [{ _id: 'item-1' }] } as never,
+      ]);
+      restaurantsService.approve.mockResolvedValue({
+        isApproved: true,
+      } as never);
+
+      const result = await service.approveRestaurant('restaurant-1');
+
+      expect(restaurantsService.approve).toHaveBeenCalledWith('restaurant-1');
+      expect(result).toEqual({ isApproved: true });
     });
   });
 });

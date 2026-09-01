@@ -83,10 +83,4 @@ export class RestaurantsController {
   toggleOpen(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.restaurantsService.toggleOpen(id, user);
   }
-
-  @Roles('admin')
-  @Patch(':id/approve')
-  approve(@Param('id') id: string) {
-    return this.restaurantsService.approve(id);
-  }
 }

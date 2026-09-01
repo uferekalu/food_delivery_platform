@@ -72,6 +72,7 @@ describe('UsersService', () => {
       cuisineTypes: ['Nigerian'],
       currency: 'NGN',
       country: 'Nigeria',
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
     });
   }

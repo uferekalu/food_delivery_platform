@@ -1,6 +1,6 @@
 import { api } from "../api";
 
-export type UploadFolder = "restaurants" | "menu-items" | "avatars" | "reviews";
+export type UploadFolder = "restaurants" | "menu-items" | "avatars" | "reviews" | "compliance-documents";
 
 export interface UploadSignature {
   signature: string;

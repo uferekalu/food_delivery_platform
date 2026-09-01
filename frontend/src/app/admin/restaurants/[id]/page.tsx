@@ -29,6 +29,11 @@ function AdminRestaurantReview({ id }: { id: string }) {
   const [approve, { isLoading: approving }] = useApproveRestaurantMutation();
 
   const itemCount = menu?.reduce((total, category) => total + category.items.length, 0) ?? 0;
+  const hasComplianceDocument = !!restaurant?.complianceDocumentUrl;
+  // Mirrors the backend's own approval gate (docs/ROADMAP.md FDP-60: RestaurantsService.approve
+  // + AdminService.approveRestaurant) — disabled here purely for immediate feedback; the
+  // server-side check is the one that actually matters and can't be bypassed from the client.
+  const canApprove = !loadingMenu && hasComplianceDocument && itemCount > 0;
 
   if (loadingRestaurant) {
     return (
@@ -106,6 +111,22 @@ function AdminRestaurantReview({ id }: { id: string }) {
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
+        <span className="text-sm font-semibold text-text">Business registration document</span>
+        {restaurant.complianceDocumentUrl ? (
+          <a
+            href={restaurant.complianceDocumentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-fit text-sm text-primary hover:underline"
+          >
+            View uploaded document →
+          </a>
+        ) : (
+          <span className="text-sm text-danger">Not uploaded — required before this restaurant can be approved</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
         <span className="text-sm font-semibold text-text">Opening hours</span>
         <div className="flex flex-col gap-1">
           {restaurant.openingHours.length === 0 ? (
@@ -171,29 +192,41 @@ function AdminRestaurantReview({ id }: { id: string }) {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-3 border-t border-border pt-6">
-        {restaurant.isApproved ? (
-          <NextLink href="/admin" className={buttonVariants({ variant: "outline" })}>
-            Back to admin dashboard
-          </NextLink>
-        ) : (
-          <Button
-            isLoading={approving}
-            onClick={() =>
-              void approve(restaurant._id)
-                .unwrap()
-                .then(() => {
-                  toast({ title: "Restaurant approved", variant: "success" });
-                  router.push("/admin");
-                })
-                .catch((err: unknown) =>
-                  toast({ title: "Couldn't approve restaurant", description: getErrorMessage(err), variant: "danger" }),
-                )
-            }
-          >
-            Approve restaurant
-          </Button>
+      <div className="flex flex-col gap-3 border-t border-border pt-6">
+        {!restaurant.isApproved && !canApprove && !loadingMenu && (
+          <Alert variant="warning" title="Can't approve yet">
+            {!hasComplianceDocument && itemCount === 0
+              ? "This restaurant needs a business registration document and at least one menu item first."
+              : !hasComplianceDocument
+                ? "This restaurant needs a business registration document first."
+                : "This restaurant needs at least one menu item first."}
+          </Alert>
         )}
+        <div className="flex flex-wrap gap-3">
+          {restaurant.isApproved ? (
+            <NextLink href="/admin" className={buttonVariants({ variant: "outline" })}>
+              Back to admin dashboard
+            </NextLink>
+          ) : (
+            <Button
+              isLoading={approving}
+              disabled={!canApprove}
+              onClick={() =>
+                void approve(restaurant._id)
+                  .unwrap()
+                  .then(() => {
+                    toast({ title: "Restaurant approved", variant: "success" });
+                    router.push("/admin");
+                  })
+                  .catch((err: unknown) =>
+                    toast({ title: "Couldn't approve restaurant", description: getErrorMessage(err), variant: "danger" }),
+                  )
+              }
+            >
+              Approve restaurant
+            </Button>
+          )}
+        </div>
       </div>
     </Container>
   );

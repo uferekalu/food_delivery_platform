@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -180,8 +181,20 @@ export class RestaurantsService {
     return restaurant.save();
   }
 
+  /**
+   * The compliance-document check applies unconditionally, regardless of caller — the menu-item
+   * check (the other approval prerequisite) can't live here since it needs MenuService, and
+   * RestaurantsModule importing MenuModule would create a cycle (MenuModule already imports
+   * RestaurantsModule) — see AdminService.approveRestaurant, the sole real entry point, which
+   * checks that one and then calls this.
+   */
   async approve(id: string): Promise<RestaurantDocument> {
     const restaurant = await this.findByIdOrThrow(id);
+    if (!restaurant.complianceDocumentUrl) {
+      throw new BadRequestException(
+        'This restaurant has not uploaded a business registration document yet',
+      );
+    }
     restaurant.isApproved = true;
     return restaurant.save();
   }

@@ -89,6 +89,7 @@ describe('MenuService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
   }
 
@@ -109,6 +110,7 @@ describe('MenuService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       address: { line1: '2 Main St', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
     const categoryOnB = await menuService.createCategory(
       restaurantB._id.toString(),

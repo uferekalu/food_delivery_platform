@@ -136,6 +136,7 @@ describe('OrdersService', () => {
       currency,
       country: 'Nigeria',
       address,
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
     return restaurantsService.approve(restaurant._id.toString());
   }

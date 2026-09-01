@@ -52,6 +52,15 @@ export class CreateRestaurantDto {
   @IsUrl()
   coverUrl?: string;
 
+  @ApiProperty({
+    description:
+      'Proof of business registration (e.g. a CAC certificate, or the equivalent for the ' +
+      "restaurant's country) — required before a restaurant can be created, and re-checked at " +
+      'admin approval time',
+  })
+  @IsUrl()
+  complianceDocumentUrl: string;
+
   @ApiProperty({ example: 'NGN', description: 'ISO 4217 currency code' })
   @IsString()
   @Length(3, 3)

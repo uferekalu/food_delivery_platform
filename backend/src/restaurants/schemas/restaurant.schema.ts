@@ -31,6 +31,15 @@ export class Restaurant {
   @Prop({ type: String, default: null })
   coverUrl: string | null;
 
+  // Restaurant onboarding compliance (docs/ROADMAP.md FDP-60) — business registration proof
+  // (e.g. a Nigerian CAC certificate, or the equivalent for another country), required at
+  // creation for every *new* restaurant and re-checked at approval time regardless of when the
+  // restaurant was created (see RestaurantsService.approve). Nullable at the schema level only
+  // because restaurants created before this field existed predate the requirement — never
+  // nullable on a newly-created one, CreateRestaurantDto requires it.
+  @Prop({ type: String, default: null })
+  complianceDocumentUrl: string | null;
+
   @Prop({ type: [String], default: [] })
   cuisineTypes: string[];
 
