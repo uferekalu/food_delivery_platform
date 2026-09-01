@@ -2,6 +2,15 @@
 @import "../styles/tokens.css";
 
 body {
+  /* Sticky-footer floor. Written as a manual two-declaration fallback (not the `min-h-dvh`
+     Tailwind utility) deliberately: a Tailwind class selector always outbeats this plain
+     element selector on specificity, so it can't be overridden from here — and some embedded
+     webviews (VS Code's Simple Browser panel, seen directly during a layout review) don't
+     size 100dvh to their actual visible height, leaving blank space below the footer on short
+     pages. 100vh is the safe floor everywhere; the second declaration only takes over in
+     engines that parse `dvh`, which get the more accurate dynamic value. */
+  min-height: 100vh;
+  min-height: 100dvh;
   background-color: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-sans);
