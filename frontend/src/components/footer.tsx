@@ -3,6 +3,7 @@
 import NextLink from "next/link";
 import { Logo } from "./logo";
 import { Container } from "@/components/ui/container";
+import { cn } from "@/lib/cn";
 import { useAppSelector } from "@/lib/redux/hooks";
 
 interface FooterLink {
@@ -59,15 +60,20 @@ export function Footer() {
             { href: "/login", label: "Log in" },
           ];
 
+  // restaurant_owner and admin accounts can never become riders (RidersService.apply()
+  // rejects them outright — see docs/ROADMAP.md FDP-61) — an empty column hides the whole
+  // "For riders" section below rather than pointing them at an application that'd 400.
   const riderLinks: FooterLink[] =
     authenticated && user.role === "rider"
       ? [{ href: "/rider", label: "Rider dashboard" }]
-      : authenticated
-        ? [{ href: "/rider/apply", label: "Become a rider" }]
-        : [
-            { href: "/rider/apply", label: "Become a rider" },
-            { href: "/login", label: "Log in" },
-          ];
+      : authenticated && (user.role === "restaurant_owner" || user.role === "admin")
+        ? []
+        : authenticated
+          ? [{ href: "/rider/apply", label: "Become a rider" }]
+          : [
+              { href: "/rider/apply", label: "Become a rider" },
+              { href: "/login", label: "Log in" },
+            ];
 
   return (
     <footer className="border-t border-border bg-surface-subtle">
@@ -84,10 +90,15 @@ export function Footer() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-16">
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-6 sm:gap-16",
+              riderLinks.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+            )}
+          >
             <FooterNav label="For customers" links={customerLinks} />
             <FooterNav label="For restaurants" links={restaurantLinks} />
-            <FooterNav label="For riders" links={riderLinks} />
+            {riderLinks.length > 0 && <FooterNav label="For riders" links={riderLinks} />}
           </div>
         </div>
 
