@@ -112,6 +112,16 @@ export class Order {
   @Prop({ type: Date, default: null })
   estimatedDeliveryAt: Date | null;
 
+  // Set exactly once, the moment the order transitions to DELIVERED
+  // (OrdersService.updateStatusByRider) — distinct from statusHistory (which also records this
+  // moment as an entry) so date-range sales reporting (docs/ROADMAP.md FDP-64) can $match/index
+  // on a top-level scalar field instead of unwinding statusHistory for every query. Left set
+  // (never cleared) if the order later moves DELIVERED → REFUNDED — it genuinely was delivered
+  // on this date, the report excludes REFUNDED orders from revenue by filtering on `status`,
+  // not by clearing this field.
+  @Prop({ type: Date, default: null, index: true })
+  deliveredAt: Date | null;
+
   @Prop({ type: String, default: null })
   promoCode: string | null;
 }

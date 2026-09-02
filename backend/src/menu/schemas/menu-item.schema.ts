@@ -29,6 +29,14 @@ export class MenuItem {
   @Prop({ type: Number, required: true, min: 0 })
   price: number;
 
+  // Owner-only cost-to-make (ingredients etc.), never shown to customers — feeds the sales
+  // report's cost-of-goods-sold/margin figures (docs/ROADMAP.md FDP-64). Nullable rather than
+  // required: existing items predate this field, and a newly-created item may not have one set
+  // immediately either — the sales report treats a null costPrice as "unknown", not zero, and
+  // flags it rather than silently understating COGS.
+  @Prop({ type: Number, min: 0, default: null })
+  costPrice: number | null;
+
   @Prop({ type: String, default: null })
   imageUrl: string | null;
 

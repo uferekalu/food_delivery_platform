@@ -39,6 +39,15 @@ export class CreateMenuItemDto {
   price: number;
 
   @ApiPropertyOptional({
+    description:
+      'Owner-only cost to make this item (ingredients etc.), used for sales-report COGS/margin figures — never shown to customers',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  costPrice?: number;
+
+  @ApiPropertyOptional({
     description: 'Set when the owner uploads a photo before submitting',
   })
   @IsOptional()

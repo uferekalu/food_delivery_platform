@@ -102,6 +102,56 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// Sales report types (docs/ROADMAP.md FDP-64) — named interfaces rather than inlining, since
+// the shape is meaningfully larger than getEarningsSummary's and is also the CSV export's
+// column source.
+export interface SalesReportItemBreakdown {
+  menuItemId: string;
+  name: string;
+  qtySold: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  /** null when revenue is 0 for this item in range — dividing by zero isn't a meaningful margin. */
+  marginPct: number | null;
+  /** True when at least one unit sold in range came from an OrderItem with no costPrice
+   * snapshot — this item's `cogs`/`profit` above are understated, not wrong-but-complete. */
+  hasIncompleteCostData: boolean;
+}
+
+export interface SalesReportDayBreakdown {
+  /** YYYY-MM-DD, UTC (matches $dateToString's default timezone). */
+  date: string;
+  orders: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+}
+
+export interface SalesReport {
+  currency: string;
+  range: { from: Date | null; to: Date | null };
+  totals: {
+    orders: number;
+    revenue: number;
+    deliveryFeeTotal: number;
+    serviceFeeTotal: number;
+    discountTotal: number;
+    platformFeeTotal: number;
+    netEarned: number;
+    totalCollected: number;
+    cogs: number;
+    grossProfit: number;
+    grossMarginPct: number | null;
+    avgOrderValue: number;
+  };
+  /** Distinct item names with at least one sale in range lacking a cost-price snapshot — surfaced
+   * up front so the owner sees the COGS/profit figures are incomplete before trusting them. */
+  itemsMissingCostPrice: string[];
+  byItem: SalesReportItemBreakdown[];
+  byDay: SalesReportDayBreakdown[];
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -215,14 +265,14 @@ export class OrdersService {
     // the owner makes mid-session doesn't retroactively reprice what's already in the cart.
     // What DOES need a fresh check is availability — an item can go unavailable after being
     // added but before checkout.
-    const availability = await this.menuItemModel
+    const menuItemSnapshots = await this.menuItemModel
       .find(
         { _id: { $in: cart.items.map((i) => i.menuItemId) } },
-        { isAvailable: 1 },
+        { isAvailable: 1, costPrice: 1 },
       )
       .exec();
     const unavailable = cart.items.find((item) => {
-      const current = availability.find(
+      const current = menuItemSnapshots.find(
         (a) => a._id.toString() === item.menuItemId.toString(),
       );
       return !current || !current.isAvailable;
@@ -288,6 +338,14 @@ export class OrdersService {
         menuItemId: item.menuItemId,
         name: item.name,
         price: item.price,
+        // Sales-report COGS (docs/ROADMAP.md FDP-64) — snapshotted here, not looked up live at
+        // report time, same "protect against later edits" reasoning as `price`/`name` above.
+        // null (not 0) when the menu item has no cost price set, so the report can tell "no
+        // cost data" apart from "this item genuinely costs nothing".
+        costPrice:
+          menuItemSnapshots.find(
+            (m) => m._id.toString() === item.menuItemId.toString(),
+          )?.costPrice ?? null,
         imageUrl: item.imageUrl,
         qty: item.qty,
         selectedModifiers: item.selectedModifiers,
@@ -473,12 +531,17 @@ export class OrdersService {
       );
     }
 
+    const now = new Date();
     order.status = targetStatus;
     order.statusHistory.push({
       status: targetStatus,
-      at: new Date(),
+      at: now,
       by: riderUserId,
     });
+    // Sales-report date-range filtering (docs/ROADMAP.md FDP-64) — see Order.deliveredAt's doc
+    // comment for why this is a separate top-level field rather than derived from
+    // statusHistory on every report query.
+    if (targetStatus === 'DELIVERED') order.deliveredAt = now;
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
@@ -642,6 +705,250 @@ export class OrdersService {
         (account) => account.status === 'active',
       ),
     };
+  }
+
+  /**
+   * A restaurant owner's detailed sales report (docs/ROADMAP.md FDP-64) — date-range filterable
+   * revenue/COGS/profit, broken down by item and by day. Same "only DELIVERED orders count"
+   * convention as getEarningsSummary above, filtered on `deliveredAt` rather than `createdAt`
+   * (a scheduled order placed in one period but delivered in another belongs to the period it
+   * was actually fulfilled in). COGS is computed from each OrderItem's snapshotted `costPrice`,
+   * which is null for any item that had no cost price set at order time — those contribute 0 to
+   * COGS (never silently treated as free), and are surfaced separately via
+   * `itemsMissingCostPrice`/`hasIncompleteCostData` so the owner knows the profit figures are
+   * incomplete rather than trusting a number that understates true cost.
+   */
+  async getSalesReport(
+    requester: AccessTokenPayload,
+    restaurantId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<SalesReport> {
+    const restaurant =
+      await this.restaurantsService.findByIdOrThrow(restaurantId);
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+
+    const [result] = await this.orderModel
+      .aggregate<{
+        totals: {
+          orders: number;
+          revenue: number;
+          deliveryFeeTotal: number;
+          serviceFeeTotal: number;
+          discountTotal: number;
+          platformFeeTotal: number;
+          netEarned: number;
+          totalCollected: number;
+        }[];
+        itemStats: {
+          _id: string;
+          name: string;
+          qtySold: number;
+          revenue: number;
+          cogs: number;
+          missingCostQty: number;
+        }[];
+        dayStats: { _id: string; orders: number; revenue: number }[];
+        dayCogsStats: { _id: string; cogs: number }[];
+      }>([
+        {
+          $match: this.deliveredOrdersMatch(
+            restaurant._id.toString(),
+            from,
+            to,
+          ),
+        },
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  orders: { $sum: 1 },
+                  revenue: { $sum: '$subtotal' },
+                  deliveryFeeTotal: { $sum: '$deliveryFee' },
+                  serviceFeeTotal: { $sum: '$serviceFee' },
+                  discountTotal: { $sum: '$discount' },
+                  platformFeeTotal: { $sum: '$platformFeeAmount' },
+                  netEarned: { $sum: '$restaurantPayoutAmount' },
+                  totalCollected: { $sum: '$total' },
+                },
+              },
+            ],
+            itemStats: [
+              { $unwind: '$items' },
+              {
+                $group: {
+                  _id: '$items.menuItemId',
+                  name: { $first: '$items.name' },
+                  qtySold: { $sum: '$items.qty' },
+                  revenue: {
+                    $sum: { $multiply: ['$items.price', '$items.qty'] },
+                  },
+                  cogs: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ['$items.costPrice', null] },
+                        0,
+                        { $multiply: ['$items.costPrice', '$items.qty'] },
+                      ],
+                    },
+                  },
+                  missingCostQty: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ['$items.costPrice', null] },
+                        '$items.qty',
+                        0,
+                      ],
+                    },
+                  },
+                },
+              },
+              { $sort: { revenue: -1 } },
+            ],
+            dayStats: [
+              {
+                $group: {
+                  _id: {
+                    $dateToString: { format: '%Y-%m-%d', date: '$deliveredAt' },
+                  },
+                  orders: { $sum: 1 },
+                  revenue: { $sum: '$subtotal' },
+                },
+              },
+              { $sort: { _id: 1 } },
+            ],
+            dayCogsStats: [
+              { $unwind: '$items' },
+              {
+                $group: {
+                  _id: {
+                    $dateToString: { format: '%Y-%m-%d', date: '$deliveredAt' },
+                  },
+                  cogs: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ['$items.costPrice', null] },
+                        0,
+                        { $multiply: ['$items.costPrice', '$items.qty'] },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ])
+      .exec();
+
+    const totals = result?.totals[0];
+    const revenue = totals?.revenue ?? 0;
+    const cogs = round2(
+      (result?.itemStats ?? []).reduce((sum, item) => sum + item.cogs, 0),
+    );
+    const grossProfit = round2(revenue - cogs);
+    const orders = totals?.orders ?? 0;
+
+    const cogsByDay = new Map(
+      (result?.dayCogsStats ?? []).map((d) => [d._id, d.cogs]),
+    );
+    const byDay: SalesReportDayBreakdown[] = (result?.dayStats ?? []).map(
+      (d) => {
+        const dayCogs = round2(cogsByDay.get(d._id) ?? 0);
+        return {
+          date: d._id,
+          orders: d.orders,
+          revenue: round2(d.revenue),
+          cogs: dayCogs,
+          profit: round2(d.revenue - dayCogs),
+        };
+      },
+    );
+
+    const byItem: SalesReportItemBreakdown[] = (result?.itemStats ?? []).map(
+      (item) => ({
+        menuItemId: item._id,
+        name: item.name,
+        qtySold: item.qtySold,
+        revenue: round2(item.revenue),
+        cogs: round2(item.cogs),
+        profit: round2(item.revenue - item.cogs),
+        marginPct:
+          item.revenue > 0
+            ? round2(((item.revenue - item.cogs) / item.revenue) * 100)
+            : null,
+        hasIncompleteCostData: item.missingCostQty > 0,
+      }),
+    );
+
+    return {
+      currency: restaurant.currency,
+      range: { from: from ?? null, to: to ?? null },
+      totals: {
+        orders,
+        revenue: round2(revenue),
+        deliveryFeeTotal: round2(totals?.deliveryFeeTotal ?? 0),
+        serviceFeeTotal: round2(totals?.serviceFeeTotal ?? 0),
+        discountTotal: round2(totals?.discountTotal ?? 0),
+        platformFeeTotal: round2(totals?.platformFeeTotal ?? 0),
+        netEarned: round2(totals?.netEarned ?? 0),
+        totalCollected: round2(totals?.totalCollected ?? 0),
+        cogs,
+        grossProfit,
+        grossMarginPct:
+          revenue > 0 ? round2((grossProfit / revenue) * 100) : null,
+        avgOrderValue: orders > 0 ? round2(revenue / orders) : 0,
+      },
+      itemsMissingCostPrice: [
+        ...new Set(
+          byItem.filter((i) => i.hasIncompleteCostData).map((i) => i.name),
+        ),
+      ],
+      byItem,
+      byDay,
+    };
+  }
+
+  /** Order-level detail backing the sales report's CSV export — one row per DELIVERED order in
+   * range, same date-range/ownership rules as getSalesReport, kept as a separate simpler query
+   * (a plain `.find()`, not an aggregation) since a CSV needs the individual order documents
+   * anyway rather than pre-aggregated summaries. */
+  async getSalesReportOrders(
+    requester: AccessTokenPayload,
+    restaurantId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<OrderDocument[]> {
+    const restaurant =
+      await this.restaurantsService.findByIdOrThrow(restaurantId);
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+
+    return this.orderModel
+      .find(this.deliveredOrdersMatch(restaurant._id.toString(), from, to))
+      .sort({ deliveredAt: 1 })
+      .exec();
+  }
+
+  /** Shared `$match` stage for both sales-report queries above — .toString(), never the raw
+   * ObjectId (Mongoose 9 quirk, ref fields in this schema store as strings). */
+  private deliveredOrdersMatch(
+    restaurantId: string,
+    from?: Date,
+    to?: Date,
+  ): Record<string, unknown> {
+    const match: Record<string, unknown> = {
+      restaurantId,
+      status: 'DELIVERED',
+    };
+    if (from || to) {
+      const deliveredAt: Record<string, Date> = {};
+      if (from) deliveredAt.$gte = from;
+      if (to) deliveredAt.$lte = to;
+      match.deliveredAt = deliveredAt;
+    }
+    return match;
   }
 
   /** Platform-wide order stats for the admin analytics overview (docs/ROADMAP.md FDP-20) — one

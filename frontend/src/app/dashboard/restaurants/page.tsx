@@ -85,6 +85,12 @@ function MyRestaurantsList() {
                 >
                   Earnings
                 </NextLink>
+                <NextLink
+                  href={`/dashboard/restaurants/${restaurant._id}/sales-report`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Sales report
+                </NextLink>
                 <Button
                   variant="ghost"
                   size="sm"

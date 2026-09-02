@@ -11,6 +11,7 @@ export interface CreateItemInput {
   name: string;
   description?: string;
   price: number;
+  costPrice?: number;
   imageUrl?: string;
   sortOrder?: number;
   modifierGroups?: ModifierGroup[];

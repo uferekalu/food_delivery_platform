@@ -89,6 +89,9 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
+  /** Owner-only cost to make this item, feeds the sales report's COGS/margin figures — never
+   * shown to customers. Null when not set. */
+  costPrice: number | null;
   imageUrl: string | null;
   isAvailable: boolean;
   sortOrder: number;
