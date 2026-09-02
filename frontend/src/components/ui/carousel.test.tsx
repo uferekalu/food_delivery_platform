@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { Carousel } from "./carousel";
 

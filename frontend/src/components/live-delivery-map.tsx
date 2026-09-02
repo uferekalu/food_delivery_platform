@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { semantic, neutral } from "@/styles/tokens";
@@ -29,6 +30,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
  * this returns null.
  */
 export function LiveDeliveryMap({ riderLocation, destination }: LiveDeliveryMapProps) {
+  const t = useTranslations("LiveDeliveryMap");
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const riderMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -80,7 +82,7 @@ export function LiveDeliveryMap({ riderLocation, destination }: LiveDeliveryMapP
   return (
     <div className="flex flex-col gap-2">
       <div ref={containerRef} className="h-64 w-full overflow-hidden rounded-lg border border-border" />
-      {!riderLocation && <p className="text-sm text-text-muted">Waiting for the rider&apos;s live location…</p>}
+      {!riderLocation && <p className="text-sm text-text-muted">{t("waitingForLocation")}</p>}
     </div>
   );
 }

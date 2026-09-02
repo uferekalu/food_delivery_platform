@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/cn";
 import { Input } from "@/components/ui/input";
 
@@ -20,6 +21,7 @@ function SearchIcon() {
  * (which reads the `search` param back out on mount), never manages results itself.
  */
 export function HeaderSearch({ className }: { className?: string }) {
+  const t = useTranslations("HeaderSearch");
   const router = useRouter();
   const [value, setValue] = useState("");
 
@@ -37,11 +39,11 @@ export function HeaderSearch({ className }: { className?: string }) {
         </span>
         <Input
           type="search"
-          placeholder="Search restaurants or cuisines…"
+          placeholder={t("placeholder")}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="h-10 pl-9"
-          aria-label="Search restaurants or cuisines"
+          aria-label={t("placeholder")}
         />
       </div>
     </form>

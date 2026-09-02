@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { IconButton } from "./icon-button";
 
@@ -50,6 +51,7 @@ const TICK_MS = 30;
  * (no auto-scroll at all).
  */
 export function Carousel({ children, className, itemClassName, speed = 30, ...props }: CarouselProps) {
+  const t = useTranslations("Common");
   const trackRef = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
   const [edge, setEdge] = useState({ atStart: true, atEnd: false });
@@ -117,7 +119,7 @@ export function Carousel({ children, className, itemClassName, speed = 30, ...pr
         ))}
       </div>
       <IconButton
-        label="Previous"
+        label={t("previous")}
         icon={<ChevronLeftIcon />}
         size="sm"
         variant="outline"
@@ -126,7 +128,7 @@ export function Carousel({ children, className, itemClassName, speed = 30, ...pr
         className="absolute top-1/2 left-2 hidden -translate-y-1/2 bg-surface shadow-md disabled:opacity-0 sm:flex"
       />
       <IconButton
-        label="Next"
+        label={t("next")}
         icon={<ChevronRightIcon />}
         size="sm"
         variant="outline"

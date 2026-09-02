@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/cn";
 import { Portal } from "@/components/ui/portal";
 import { IconButton } from "@/components/ui/icon-button";
@@ -32,16 +33,20 @@ function BellIcon() {
   );
 }
 
-function timeAgo(iso: string): string {
-  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+function useTimeAgo() {
+  const t = useTranslations("NotificationBell");
+  return (iso: string): string => {
+    const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+    if (minutes < 1) return t("justNow");
+    if (minutes < 60) return t("minutesAgo", { minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t("hoursAgo", { hours });
+    return t("daysAgo", { days: Math.floor(hours / 24) });
+  };
 }
 
 function NotificationRow({ notification, onOpen }: { notification: Notification; onOpen: (n: Notification) => void }) {
+  const timeAgo = useTimeAgo();
   const orderId = typeof notification.metadata.orderId === "string" ? notification.metadata.orderId : null;
 
   const body = (
@@ -62,9 +67,9 @@ function NotificationRow({ notification, onOpen }: { notification: Notification;
 
   if (orderId) {
     return (
-      <NextLink href={`/orders/${orderId}`} onClick={() => onOpen(notification)} className={className}>
+      <Link href={`/orders/${orderId}`} onClick={() => onOpen(notification)} className={className}>
         {body}
-      </NextLink>
+      </Link>
     );
   }
 
@@ -83,6 +88,7 @@ function NotificationRow({ notification, onOpen }: { notification: Notification;
  * the hamburger menu.
  */
 export function NotificationBell() {
+  const t = useTranslations("NotificationBell");
   const { status } = useAppSelector((state) => state.auth);
   const authenticated = status === "authenticated";
   const dispatch = useAppDispatch();
@@ -158,7 +164,7 @@ export function NotificationBell() {
     <div className="relative">
       <IconButton
         ref={triggerRef}
-        label="Notifications"
+        label={t("notifications")}
         icon={<BellIcon />}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -177,7 +183,7 @@ export function NotificationBell() {
             className="flex max-h-[28rem] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
           >
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <span className="text-sm font-semibold text-text">Notifications</span>
+              <span className="text-sm font-semibold text-text">{t("notifications")}</span>
               {count > 0 && (
                 <Button
                   variant="ghost"
@@ -185,7 +191,7 @@ export function NotificationBell() {
                   isLoading={markingAll}
                   onClick={() => void markAllRead()}
                 >
-                  Mark all read
+                  {t("markAllRead")}
                 </Button>
               )}
             </div>
@@ -196,7 +202,7 @@ export function NotificationBell() {
                   <Skeleton className="h-14 w-full" />
                 </>
               ) : notifications.length === 0 ? (
-                <p className="px-3 py-6 text-center text-sm text-text-muted">You&apos;re all caught up.</p>
+                <p className="px-3 py-6 text-center text-sm text-text-muted">{t("allCaughtUp")}</p>
               ) : (
                 notifications.map((notification) => (
                   <NotificationRow
@@ -210,13 +216,13 @@ export function NotificationBell() {
                 ))
               )}
             </div>
-            <NextLink
+            <Link
               href="/notifications"
               onClick={closePanel}
               className="border-t border-border px-3 py-2 text-center text-sm text-primary hover:underline"
             >
-              View all
-            </NextLink>
+              {t("viewAll")}
+            </Link>
           </div>
         </Portal>
       )}

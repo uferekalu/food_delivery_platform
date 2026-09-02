@@ -1,4 +1,5 @@
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FavoriteButton } from "@/components/favorite-button";
@@ -18,10 +19,11 @@ export function PlateIcon({ className = "size-12" }: { className?: string }) {
 }
 
 export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+  const t = useTranslations("RestaurantCard");
   return (
     <Card className="relative h-full overflow-hidden transition-colors duration-150 hover:border-border-strong">
       <FavoriteButton restaurantId={restaurant._id} className="absolute top-3 right-3 z-10" />
-      <NextLink href={`/restaurants/${restaurant.slug}`} className="block h-full">
+      <Link href={`/restaurants/${restaurant.slug}`} className="block h-full">
         <div className="relative h-36 w-full bg-secondary">
           {restaurant.coverUrl ? (
             // A restaurant card photo doesn't warrant next/image's layout machinery here.
@@ -46,18 +48,22 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
           <CardDescription>
             {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)} •{" "}
             {priceLevelLabel(restaurant.priceLevel)}
-            {restaurant.estimatedDeliveryMinutes ? ` • ~${restaurant.estimatedDeliveryMinutes} min` : ""}
+            {restaurant.estimatedDeliveryMinutes
+              ? ` • ${t("estimatedMinutes", { minutes: restaurant.estimatedDeliveryMinutes })}`
+              : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
-          <Badge variant={restaurant.isOpen ? "success" : "neutral"}>{restaurant.isOpen ? "Open" : "Closed"}</Badge>
+          <Badge variant={restaurant.isOpen ? "success" : "neutral"}>
+            {restaurant.isOpen ? t("open") : t("closed")}
+          </Badge>
           {restaurant.cuisineTypes.slice(0, 3).map((cuisine) => (
             <Badge key={cuisine} variant="primary">
               {cuisine}
             </Badge>
           ))}
         </CardContent>
-      </NextLink>
+      </Link>
     </Card>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { SmartLink } from "./smart-link";
 import { Logo } from "./logo";
 import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/cn";
@@ -18,9 +19,9 @@ function FooterNav({ label, links }: { label: string; links: FooterLink[] }) {
       <ul className="flex flex-col gap-2">
         {links.map((link) => (
           <li key={link.href}>
-            <NextLink href={link.href} className="text-sm text-text-muted hover:text-text hover:underline">
+            <SmartLink href={link.href} className="text-sm text-text-muted hover:text-text hover:underline">
               {link.label}
-            </NextLink>
+            </SmartLink>
           </li>
         ))}
       </ul>
@@ -29,6 +30,7 @@ function FooterNav({ label, links }: { label: string; links: FooterLink[] }) {
 }
 
 export function Footer() {
+  const t = useTranslations("Footer");
   const { user, status } = useAppSelector((state) => state.auth);
   const authenticated = status === "authenticated" && !!user;
   const year = new Date().getFullYear();
@@ -40,24 +42,24 @@ export function Footer() {
   // sync with (only the header was ever updated as roles/routes were added).
   const customerLinks: FooterLink[] = authenticated
     ? [
-        { href: "/restaurants", label: "Browse restaurants" },
-        { href: "/orders", label: "My orders" },
-        { href: "/account", label: "My account" },
+        { href: "/restaurants", label: t("browseRestaurants") },
+        { href: "/orders", label: t("myOrders") },
+        { href: "/account", label: t("myAccount") },
       ]
     : [
-        { href: "/restaurants", label: "Browse restaurants" },
-        { href: "/register", label: "Create an account" },
-        { href: "/login", label: "Log in" },
+        { href: "/restaurants", label: t("browseRestaurants") },
+        { href: "/register", label: t("createAccount") },
+        { href: "/login", label: t("logIn") },
       ];
 
   const restaurantLinks: FooterLink[] =
     authenticated && user.role === "restaurant_owner"
-      ? [{ href: "/dashboard/restaurants", label: "My restaurants" }]
+      ? [{ href: "/dashboard/restaurants", label: t("myRestaurants") }]
       : authenticated
-        ? [{ href: "/register?role=restaurant_owner", label: "Partner with us" }]
+        ? [{ href: "/register?role=restaurant_owner", label: t("partnerWithUs") }]
         : [
-            { href: "/register?role=restaurant_owner", label: "Partner with us" },
-            { href: "/login", label: "Log in" },
+            { href: "/register?role=restaurant_owner", label: t("partnerWithUs") },
+            { href: "/login", label: t("logIn") },
           ];
 
   // restaurant_owner and admin accounts can never become riders (RidersService.apply()
@@ -65,14 +67,14 @@ export function Footer() {
   // "For riders" section below rather than pointing them at an application that'd 400.
   const riderLinks: FooterLink[] =
     authenticated && user.role === "rider"
-      ? [{ href: "/rider", label: "Rider dashboard" }]
+      ? [{ href: "/rider", label: t("riderDashboard") }]
       : authenticated && (user.role === "restaurant_owner" || user.role === "admin")
         ? []
         : authenticated
-          ? [{ href: "/rider/apply", label: "Become a rider" }]
+          ? [{ href: "/rider/apply", label: t("becomeARider") }]
           : [
-              { href: "/rider/apply", label: "Become a rider" },
-              { href: "/login", label: "Log in" },
+              { href: "/rider/apply", label: t("becomeARider") },
+              { href: "/login", label: t("logIn") },
             ];
 
   return (
@@ -80,14 +82,11 @@ export function Footer() {
       <Container className="flex flex-col gap-8 py-8">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="flex max-w-sm flex-col gap-3">
-            <NextLink href="/restaurants" className="flex items-center gap-2">
+            <SmartLink href="/restaurants" className="flex items-center gap-2">
               <Logo className="size-8" />
-              <span className="text-lg font-semibold text-text">Food Delivery Platform</span>
-            </NextLink>
-            <p className="text-sm text-text-muted">
-              Ordering great food from local restaurants, delivered fast and tracked live — from
-              checkout to your door.
-            </p>
+              <span className="text-lg font-semibold text-text">{t("siteName")}</span>
+            </SmartLink>
+            <p className="text-sm text-text-muted">{t("tagline")}</p>
           </div>
 
           <div
@@ -96,15 +95,15 @@ export function Footer() {
               riderLinks.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2",
             )}
           >
-            <FooterNav label="For customers" links={customerLinks} />
-            <FooterNav label="For restaurants" links={restaurantLinks} />
-            {riderLinks.length > 0 && <FooterNav label="For riders" links={riderLinks} />}
+            <FooterNav label={t("forCustomers")} links={customerLinks} />
+            <FooterNav label={t("forRestaurants")} links={restaurantLinks} />
+            {riderLinks.length > 0 && <FooterNav label={t("forRiders")} links={riderLinks} />}
           </div>
         </div>
 
         <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-text-muted">© {year} Food Delivery Platform. All rights reserved.</p>
-          <p className="text-xs text-text-muted">Built for fast, reliable delivery — everywhere we operate.</p>
+          <p className="text-xs text-text-muted">{t("copyright", { year })}</p>
+          <p className="text-xs text-text-muted">{t("footerTagline")}</p>
         </div>
       </Container>
     </footer>

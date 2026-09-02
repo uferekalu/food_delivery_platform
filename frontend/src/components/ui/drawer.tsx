@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Portal } from "./portal";
 import { IconButton } from "./icon-button";
 
@@ -28,6 +29,7 @@ const FOCUSABLE_SELECTOR =
  * completely hidden behind that backdrop. Prefer an inline control over a nested overlay.
  */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
+  const t = useTranslations("Common");
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -110,7 +112,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
               {title}
             </h2>
             <IconButton
-              label="Close menu"
+              label={t("closeMenu")}
               onClick={onClose}
               icon={
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4">

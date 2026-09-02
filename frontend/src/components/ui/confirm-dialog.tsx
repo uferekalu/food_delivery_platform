@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Modal } from "./modal";
 import { Button } from "./button";
 
@@ -29,11 +30,12 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   isLoading = false,
   variant = "danger",
 }: ConfirmDialogProps) {
+  const t = useTranslations("Common");
   return (
     <Modal
       open={open}
@@ -44,14 +46,14 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
-            {cancelLabel}
+            {cancelLabel ?? t("cancel")}
           </Button>
           <Button
             variant={variant === "danger" ? "destructive" : "primary"}
             isLoading={isLoading}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("confirm")}
           </Button>
         </>
       }

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
-import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Fragment } from "react";
 
 export interface BreadcrumbItem {
@@ -13,8 +14,9 @@ export interface BreadcrumbsProps {
 }
 
 export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
+  const t = useTranslations("Common");
   return (
-    <nav aria-label="Breadcrumb" className={className}>
+    <nav aria-label={t("breadcrumb")} className={className}>
       <ol className="flex flex-wrap items-center gap-1.5 text-sm text-text-muted">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;

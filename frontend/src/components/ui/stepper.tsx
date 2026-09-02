@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 
 export interface StepperStep {
@@ -24,12 +25,13 @@ function CheckIcon() {
  * roving-tabindex/ARIA-widget bar (frontend/CLAUDE.md); a plain ordered list with visually
  * hidden state text is enough for screen readers. */
 export function Stepper({ steps, currentIndex, className }: StepperProps) {
+  const t = useTranslations("Common");
   return (
     <ol className={cn("flex flex-col gap-6 sm:flex-row sm:gap-0", className)}>
       {steps.map((step, index) => {
         const completed = index < currentIndex;
         const current = index === currentIndex;
-        const status = completed ? "Completed" : current ? "Current" : "Upcoming";
+        const status = completed ? t("completed") : current ? t("current") : t("upcoming");
 
         return (
           <li key={step.key} className="relative flex flex-1 items-start gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center">

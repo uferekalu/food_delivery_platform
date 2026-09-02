@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { routing } from "@/i18n/routing";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -29,20 +30,35 @@ async function fetchAllApprovedSlugs(): Promise<string[]> {
   return slugs;
 }
 
+// English is unprefixed (localePrefix: "as-needed"), French lives under /fr — every in-scope
+// route needs both language variants listed via hreflang alternates so search engines serve the
+// right locale instead of indexing only the default one (docs/ROADMAP.md FDP-55).
+function localizedEntry(
+  path: string,
+  options: Pick<MetadataRoute.Sitemap[number], "changeFrequency" | "priority">,
+): MetadataRoute.Sitemap[number] {
+  const languages = Object.fromEntries(
+    routing.locales.map((locale) => [locale, locale === routing.defaultLocale ? `${SITE_URL}${path}` : `${SITE_URL}/${locale}${path}`]),
+  );
+  return {
+    url: `${SITE_URL}${path}`,
+    alternates: { languages },
+    ...options,
+  };
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
-    { url: SITE_URL, changeFrequency: "daily", priority: 1 },
-    { url: `${SITE_URL}/restaurants`, changeFrequency: "hourly", priority: 0.9 },
-    { url: `${SITE_URL}/register`, changeFrequency: "monthly", priority: 0.3 },
-    { url: `${SITE_URL}/login`, changeFrequency: "monthly", priority: 0.3 },
+    localizedEntry("", { changeFrequency: "daily", priority: 1 }),
+    localizedEntry("/restaurants", { changeFrequency: "hourly", priority: 0.9 }),
+    localizedEntry("/register", { changeFrequency: "monthly", priority: 0.3 }),
+    localizedEntry("/login", { changeFrequency: "monthly", priority: 0.3 }),
   ];
 
   const slugs = await fetchAllApprovedSlugs();
-  const restaurantRoutes: MetadataRoute.Sitemap = slugs.map((slug) => ({
-    url: `${SITE_URL}/restaurants/${slug}`,
-    changeFrequency: "daily",
-    priority: 0.7,
-  }));
+  const restaurantRoutes: MetadataRoute.Sitemap = slugs.map((slug) =>
+    localizedEntry(`/restaurants/${slug}`, { changeFrequency: "daily", priority: 0.7 }),
+  );
 
   return [...staticRoutes, ...restaurantRoutes];
 }

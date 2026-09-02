@@ -1,6 +1,7 @@
 "use client";
 
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { SmartLink } from "./smart-link";
 import { cn } from "@/lib/cn";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useLogoutMutation } from "@/lib/redux/services/auth-api";
@@ -15,6 +16,7 @@ export interface AuthStatusProps {
 }
 
 export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) {
+  const t = useTranslations("AuthStatus");
   const { user, status } = useAppSelector((state) => state.auth);
   const [logout, { isLoading }] = useLogoutMutation();
   const stacked = variant === "stacked";
@@ -28,40 +30,40 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
     return (
       <div className={cn("flex gap-3", stacked ? "flex-col items-stretch" : "items-center")}>
         {(user.role === "restaurant_owner" || user.role === "admin") && (
-          <NextLink
+          <SmartLink
             href="/dashboard/restaurants"
             onClick={onNavigate}
             className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
           >
-            My restaurants
-          </NextLink>
+            {t("myRestaurants")}
+          </SmartLink>
         )}
         {user.role === "rider" && (
-          <NextLink
+          <SmartLink
             href="/rider"
             onClick={onNavigate}
             className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
           >
-            Rider dashboard
-          </NextLink>
+            {t("riderDashboard")}
+          </SmartLink>
         )}
         {user.role === "admin" && (
-          <NextLink
+          <SmartLink
             href="/admin"
             onClick={onNavigate}
             className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
           >
-            Admin dashboard
-          </NextLink>
+            {t("adminDashboard")}
+          </SmartLink>
         )}
-        <NextLink
+        <SmartLink
           href="/orders"
           onClick={onNavigate}
           className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
         >
-          My orders
-        </NextLink>
-        <NextLink
+          {t("myOrders")}
+        </SmartLink>
+        <SmartLink
           href="/account"
           onClick={onNavigate}
           className={cn("flex min-w-0 items-center gap-2 text-sm text-text-muted hover:text-text", stacked && "py-1")}
@@ -69,9 +71,9 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
           <Avatar src={user.avatarUrl} name={user.name} size="sm" />
           <span className="truncate">
             {user.name}
-            {!user.isEmailVerified && <span className="ml-1 text-warning">(unverified)</span>}
+            {!user.isEmailVerified && <span className="ml-1 text-warning">{t("unverified")}</span>}
           </span>
-        </NextLink>
+        </SmartLink>
         <Button
           variant="ghost"
           size="sm"
@@ -82,7 +84,7 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
           }}
           className={stacked ? "w-full justify-start" : undefined}
         >
-          Log out
+          {t("logOut")}
         </Button>
       </div>
     );
@@ -90,20 +92,20 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
 
   return (
     <div className={cn("flex gap-2", stacked ? "flex-col items-stretch" : "items-center")}>
-      <NextLink
+      <SmartLink
         href="/login"
         onClick={onNavigate}
         className={cn(buttonVariants({ variant: "ghost", size: "sm" }), stacked && "w-full justify-center")}
       >
-        Log in
-      </NextLink>
-      <NextLink
+        {t("logIn")}
+      </SmartLink>
+      <SmartLink
         href="/register"
         onClick={onNavigate}
         className={cn(buttonVariants({ variant: "primary", size: "sm" }), stacked && "w-full justify-center")}
       >
-        Sign up
-      </NextLink>
+        {t("signUp")}
+      </SmartLink>
     </div>
   );
 }

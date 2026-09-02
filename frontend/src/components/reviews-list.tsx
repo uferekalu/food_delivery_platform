@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Rating } from "@/components/ui/rating";
 import { Avatar } from "@/components/ui/avatar";
@@ -16,6 +17,7 @@ export interface ReviewsListProps {
 }
 
 export function ReviewsList({ targetType, targetId }: ReviewsListProps) {
+  const t = useTranslations("ReviewsList");
   const [page, setPage] = useState(1);
   const { data, isLoading } = useListReviewsQuery({ targetType, targetId, page, limit: 10 });
 
@@ -29,7 +31,7 @@ export function ReviewsList({ targetType, targetId }: ReviewsListProps) {
   }
 
   if (!data || data.items.length === 0) {
-    return <EmptyState title="No reviews yet" description="Be the first to share your experience." />;
+    return <EmptyState title={t("noReviewsTitle")} description={t("noReviewsDescription")} />;
   }
 
   return (
