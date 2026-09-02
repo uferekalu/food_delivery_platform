@@ -18,14 +18,18 @@ function mockScrollableTrack(track: HTMLElement, { scrollWidth, clientWidth }: {
     },
     configurable: true,
   });
+  // Element.scrollBy/scrollTo are overloaded ((options?) => void) | ((x, y) => void)) — the
+  // component only ever calls the options-object form, so the mock only implements that one;
+  // cast to the full overloaded type rather than widening the mock's own signature to a form
+  // it would never actually receive.
   track.scrollBy = vi.fn(({ left = 0 }: ScrollToOptions = {}) => {
     scrollLeft = Math.max(0, Math.min(scrollWidth - clientWidth, scrollLeft + left));
     track.dispatchEvent(new Event("scroll"));
-  });
+  }) as Element["scrollBy"];
   track.scrollTo = vi.fn(({ left = 0 }: ScrollToOptions = {}) => {
     scrollLeft = Math.max(0, Math.min(scrollWidth - clientWidth, left));
     track.dispatchEvent(new Event("scroll"));
-  });
+  }) as Element["scrollTo"];
   fireEvent.scroll(track); // let the component's mount-time edge measurement pick this up
 }
 
