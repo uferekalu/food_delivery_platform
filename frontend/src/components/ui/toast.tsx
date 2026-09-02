@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import { Portal } from "./portal";
 
 export type ToastVariant = "neutral" | "success" | "warning" | "danger";
@@ -46,6 +47,7 @@ const variantClasses: Record<ToastVariant, string> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const t = useTranslations("Common");
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -76,26 +78,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <Portal>
         <ol
           aria-live="polite"
-          aria-label="Notifications"
+          aria-label={t("notifications")}
           style={{ zIndex: "var(--z-toast)" }}
           className="fixed bottom-4 right-4 flex w-full max-w-sm flex-col gap-2"
         >
-          {toasts.map((t) => (
+          {toasts.map((toastItem) => (
             <li
-              key={t.id}
+              key={toastItem.id}
               className={cn(
                 "flex items-start justify-between gap-3 rounded-lg border p-4 text-sm shadow-lg",
-                variantClasses[t.variant ?? "neutral"],
+                variantClasses[toastItem.variant ?? "neutral"],
               )}
             >
               <div className="flex flex-col gap-0.5">
-                <p className="font-medium">{t.title}</p>
-                {t.description && <p className="text-text-muted">{t.description}</p>}
+                <p className="font-medium">{toastItem.title}</p>
+                {toastItem.description && <p className="text-text-muted">{toastItem.description}</p>}
               </div>
               <button
                 type="button"
-                aria-label="Dismiss notification"
-                onClick={() => dismiss(t.id)}
+                aria-label={t("dismissNotification")}
+                onClick={() => dismiss(toastItem.id)}
                 className="shrink-0 text-text-muted hover:text-text"
               >
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4">

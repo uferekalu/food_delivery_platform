@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 
 export interface PaginationProps {
@@ -24,16 +25,17 @@ function getPageList(page: number, totalPages: number): (number | "ellipsis")[] 
 }
 
 export function Pagination({ page, totalPages, onChange, className }: PaginationProps) {
+  const t = useTranslations("Common");
   if (totalPages <= 1) return null;
   const pages = getPageList(page, totalPages);
 
   return (
-    <nav aria-label="Pagination" className={cn("flex items-center gap-1", className)}>
+    <nav aria-label={t("pagination")} className={cn("flex items-center gap-1", className)}>
       <button
         type="button"
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
-        aria-label="Previous page"
+        aria-label={t("previousPage")}
         className="flex h-10 min-w-10 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
       >
         ‹
@@ -47,7 +49,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
           <button
             key={p}
             type="button"
-            aria-label={`Page ${p}`}
+            aria-label={t("page", { page: p })}
             aria-current={p === page ? "page" : undefined}
             onClick={() => onChange(p)}
             className={cn(
@@ -63,7 +65,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
         type="button"
         onClick={() => onChange(page + 1)}
         disabled={page >= totalPages}
-        aria-label="Next page"
+        aria-label={t("nextPage")}
         className="flex h-10 min-w-10 items-center justify-center rounded-md px-2 text-sm text-text hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
       >
         ›

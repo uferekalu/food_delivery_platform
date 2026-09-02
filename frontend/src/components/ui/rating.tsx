@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 
 export interface RatingProps {
@@ -40,6 +41,7 @@ function StarIcon({ filled, className }: { filled: boolean; className?: string }
 
 /** Read-only star display — used on restaurant cards/detail, rider dashboards, review lists. */
 export function Rating({ value, onChange, label, size = "md", className }: RatingProps) {
+  const t = useTranslations("Common");
   const name = useId();
   const [hovered, setHovered] = useState<number | null>(null);
   const interactive = !!onChange;
@@ -50,7 +52,7 @@ export function Rating({ value, onChange, label, size = "md", className }: Ratin
       <div
         className={cn("inline-flex items-center gap-0.5", className)}
         role="img"
-        aria-label={`${label ? `${label}: ` : ""}${value.toFixed(1)} out of 5 stars`}
+        aria-label={`${label ? `${label}: ` : ""}${t("outOfFiveStars", { value: value.toFixed(1) })}`}
       >
         {[1, 2, 3, 4, 5].map((n) => (
           <StarIcon key={n} filled={n <= Math.round(value)} className={starClass} />
@@ -78,7 +80,7 @@ export function Rating({ value, onChange, label, size = "md", className }: Ratin
               checked={value === n}
               onChange={() => onChange(n)}
               className="peer sr-only"
-              aria-label={label ? `${label}: ${n} star${n > 1 ? "s" : ""}` : `${n} star${n > 1 ? "s" : ""}`}
+              aria-label={`${label ? `${label}: ` : ""}${t("starCount", { count: n })}`}
             />
             <StarIcon
               filled={n <= displayValue}

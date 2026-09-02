@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Drawer } from "@/components/ui/drawer";
 import { IconButton } from "@/components/ui/icon-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -34,6 +35,7 @@ function CartIcon() {
 }
 
 function CartLineItem({ item, currency }: { item: CartItem; currency: string }) {
+  const t = useTranslations("CartDrawer");
   const [updateItem] = useUpdateCartItemMutation();
   const [removeItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
   const { toast } = useToast();
@@ -64,7 +66,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
           {item.notes && <span className="text-xs text-text-muted italic">&quot;{item.notes}&quot;</span>}
         </div>
         <IconButton
-          label="Remove item"
+          label={t("removeItem")}
           size="sm"
           variant="ghost"
           disabled={isRemoving}
@@ -72,7 +74,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
             void removeItem(item._id)
               .unwrap()
               .catch((err: unknown) =>
-                toast({ title: "Couldn't remove item", description: getErrorMessage(err), variant: "danger" }),
+                toast({ title: t("couldNotRemoveItem"), description: getErrorMessage(err), variant: "danger" }),
               );
           }}
           icon={
@@ -85,7 +87,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <IconButton
-            label="Decrease quantity"
+            label={t("decreaseQuantity")}
             size="sm"
             variant="outline"
             disabled={item.qty <= 1}
@@ -93,7 +95,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
               void updateItem({ cartItemId: item._id, body: { qty: item.qty - 1 } })
                 .unwrap()
                 .catch((err: unknown) =>
-                  toast({ title: "Couldn't update quantity", description: getErrorMessage(err), variant: "danger" }),
+                  toast({ title: t("couldNotUpdateQuantity"), description: getErrorMessage(err), variant: "danger" }),
                 )
             }
             icon={
@@ -104,7 +106,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
           />
           <span className="w-5 text-center text-sm text-text">{item.qty}</span>
           <IconButton
-            label="Increase quantity"
+            label={t("increaseQuantity")}
             size="sm"
             variant="outline"
             disabled={item.qty >= 20}
@@ -112,7 +114,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
               void updateItem({ cartItemId: item._id, body: { qty: item.qty + 1 } })
                 .unwrap()
                 .catch((err: unknown) =>
-                  toast({ title: "Couldn't update quantity", description: getErrorMessage(err), variant: "danger" }),
+                  toast({ title: t("couldNotUpdateQuantity"), description: getErrorMessage(err), variant: "danger" }),
                 )
             }
             icon={
@@ -132,6 +134,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
 }
 
 export function CartDrawer() {
+  const t = useTranslations("CartDrawer");
   const [open, setOpen] = useState(false);
   const { status } = useAppSelector((state) => state.auth);
   const { data: cart, isLoading } = useGetCartQuery(undefined, { skip: status !== "authenticated" });
@@ -143,20 +146,20 @@ export function CartDrawer() {
   return (
     <>
       <div className="relative">
-        <IconButton label="Open cart" icon={<CartIcon />} onClick={() => setOpen(true)} />
+        <IconButton label={t("openCart")} icon={<CartIcon />} onClick={() => setOpen(true)} />
         {itemCount > 0 && (
           <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
             {itemCount > 9 ? "9+" : itemCount}
           </span>
         )}
       </div>
-      <Drawer open={open} onClose={() => setOpen(false)} title="Your cart">
+      <Drawer open={open} onClose={() => setOpen(false)} title={t("yourCart")}>
         {isLoading ? (
           <div className="flex justify-center py-8">
             <Spinner />
           </div>
         ) : !cart || cart.items.length === 0 ? (
-          <EmptyState title="Your cart is empty" description="Add items from a restaurant to get started." />
+          <EmptyState title={t("emptyCartTitle")} description={t("emptyCartDescription")} />
         ) : (
           <>
             <p className="text-sm font-medium text-text">{cart.restaurantName}</p>
@@ -167,18 +170,18 @@ export function CartDrawer() {
             </div>
             <div className="mt-auto flex flex-col gap-3 border-t border-border pt-4">
               <div className="flex items-center justify-between text-sm font-semibold text-text">
-                <span>Subtotal</span>
+                <span>{t("subtotal")}</span>
                 <span>
                   {cart.currency} {cart.subtotal.toFixed(2)}
                 </span>
               </div>
-              <NextLink
+              <Link
                 href="/checkout"
                 onClick={() => setOpen(false)}
                 className={buttonVariants({ className: "w-full" })}
               >
-                Checkout
-              </NextLink>
+                {t("checkout")}
+              </Link>
             </div>
           </>
         )}

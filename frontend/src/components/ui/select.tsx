@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useTranslations } from "next-intl";
 import { Portal } from "./portal";
 import { useFormFieldContext } from "./form-field";
 
@@ -42,7 +43,7 @@ export function Select({
   options,
   value,
   onChange,
-  placeholder = "Select…",
+  placeholder,
   disabled,
   invalid,
   id,
@@ -50,8 +51,11 @@ export function Select({
   "aria-describedby": describedByProp,
   "aria-label": ariaLabel,
   searchable = false,
-  searchPlaceholder = "Search…",
+  searchPlaceholder,
 }: SelectProps) {
+  const t = useTranslations("Common");
+  const effectivePlaceholder = placeholder ?? t("selectPlaceholder");
+  const effectiveSearchPlaceholder = searchPlaceholder ?? t("searchPlaceholder");
   const field = useFormFieldContext();
   const selectId = id ?? field?.id;
   const describedBy = describedByProp ?? field?.describedBy;
@@ -230,7 +234,7 @@ export function Select({
           className,
         )}
       >
-        <span className="truncate">{selected ? selected.label : placeholder}</span>
+        <span className="truncate">{selected ? selected.label : effectivePlaceholder}</span>
         <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="ml-2 size-4 shrink-0 text-text-muted">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -250,8 +254,8 @@ export function Select({
                 value={query}
                 onChange={handleSearchChange}
                 onKeyDown={handleSearchKeyDown}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
+                placeholder={effectiveSearchPlaceholder}
+                aria-label={effectiveSearchPlaceholder}
                 aria-controls={`${selectId}-listbox`}
                 aria-activedescendant={activeId}
                 className="w-full border-b border-border bg-transparent px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none"

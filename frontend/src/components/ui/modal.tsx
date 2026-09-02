@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Portal } from "./portal";
 import { IconButton } from "./icon-button";
 
@@ -25,6 +26,7 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ open, onClose, title, description, children, footer, size = "md" }: ModalProps) {
+  const t = useTranslations("Common");
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -108,7 +110,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
               )}
             </div>
             <IconButton
-              label="Close"
+              label={t("close")}
               onClick={onClose}
               icon={
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4">

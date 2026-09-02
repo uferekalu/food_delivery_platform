@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,12 +16,6 @@ import { useCreateReviewMutation } from "@/lib/redux/services/reviews-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { ReviewTargetType } from "@/lib/redux/restaurant-types";
 
-const schema = z.object({
-  rating: z.number().min(1, "Pick a rating").max(5),
-  comment: z.string().max(1000).optional(),
-});
-type FormValues = z.infer<typeof schema>;
-
 export interface ReviewFormProps {
   orderId: string;
   targetType: ReviewTargetType;
@@ -28,9 +23,17 @@ export interface ReviewFormProps {
 }
 
 export function ReviewForm({ orderId, targetType, title }: ReviewFormProps) {
+  const t = useTranslations("ReviewForm");
   const { toast } = useToast();
   const [createReview, { isLoading }] = useCreateReviewMutation();
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+
+  const schema = z.object({
+    rating: z.number().min(1, t("pickARating")).max(5),
+    comment: z.string().max(1000).optional(),
+  });
+  type FormValues = z.infer<typeof schema>;
+
   const {
     handleSubmit,
     setValue,
@@ -48,9 +51,9 @@ export function ReviewForm({ orderId, targetType, title }: ReviewFormProps) {
         comment: values.comment?.trim() || undefined,
         images: imageUrl ? [imageUrl] : undefined,
       }).unwrap();
-      toast({ title: "Thanks for your review!", variant: "success" });
+      toast({ title: t("thanksForReview"), variant: "success" });
     } catch (err) {
-      toast({ title: "Couldn't submit your review", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotSubmitReview"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
@@ -61,7 +64,7 @@ export function ReviewForm({ orderId, targetType, title }: ReviewFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-4" noValidate>
-          <FormField label="Rating" error={errors.rating?.message} required>
+          <FormField label={t("rating")} error={errors.rating?.message} required>
             <Rating
               label={title}
               value={rating}
@@ -69,16 +72,16 @@ export function ReviewForm({ orderId, targetType, title }: ReviewFormProps) {
               size="lg"
             />
           </FormField>
-          <FormField label="Comment (optional)" error={errors.comment?.message}>
+          <FormField label={t("commentOptional")} error={errors.comment?.message}>
             <Textarea
               rows={3}
-              placeholder="Share details about your experience"
+              placeholder={t("commentPlaceholder")}
               onChange={(e) => setValue("comment", e.target.value)}
             />
           </FormField>
-          <ImageUpload label="Photo (optional)" folder="reviews" value={imageUrl} onChange={setImageUrl} />
+          <ImageUpload label={t("photoOptional")} folder="reviews" value={imageUrl} onChange={setImageUrl} />
           <Button type="submit" isLoading={isLoading} className="self-start">
-            Submit review
+            {t("submitReview")}
           </Button>
         </form>
       </CardContent>

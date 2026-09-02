@@ -1,16 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { setThemeMode } from "@/lib/redux/slices/theme-slice";
-import { useSystemPrefersDark, type ThemeMode } from "@/lib/theme";
+import { useSystemPrefersDark } from "@/lib/theme";
 import { DropdownMenu, type DropdownMenuItem } from "./dropdown-menu";
 import { IconButton } from "./icon-button";
-
-const MODE_LABELS: Record<ThemeMode, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
 
 function SunIcon() {
   return (
@@ -40,13 +35,14 @@ function MoonIcon() {
 }
 
 export function ThemeToggle() {
+  const t = useTranslations("Theme");
   const dispatch = useAppDispatch();
   const mode = useAppSelector((state) => state.theme.mode);
   const systemPrefersDark = useSystemPrefersDark();
   const resolvedDark = mode === "dark" || (mode === "system" && systemPrefersDark);
 
   const items: DropdownMenuItem[] = (["light", "dark", "system"] as const).map((value) => ({
-    label: mode === value ? `${MODE_LABELS[value]} ✓` : MODE_LABELS[value],
+    label: mode === value ? `${t(value)} ✓` : t(value),
     onSelect: () => dispatch(setThemeMode(value)),
   }));
 
@@ -55,7 +51,7 @@ export function ThemeToggle() {
       align="end"
       trigger={(triggerProps) => (
         <IconButton
-          label={`Theme: ${MODE_LABELS[mode]}`}
+          label={t("ariaLabel", { mode: t(mode) })}
           icon={resolvedDark ? <MoonIcon /> : <SunIcon />}
           {...triggerProps}
         />

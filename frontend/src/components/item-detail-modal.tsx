@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +34,7 @@ function ModifierGroupFields({
   selected: string[];
   onToggle: (optionName: string) => void;
 }) {
+  const t = useTranslations("ItemDetailModal");
   const isSingleChoice = group.max === 1;
 
   return (
@@ -41,7 +43,9 @@ function ModifierGroupFields({
         {group.name}
         {group.min > 0 && <span className="ml-1 text-danger">*</span>}
         <span className="ml-2 text-xs font-normal text-text-muted">
-          {group.min === group.max ? `Choose ${group.min}` : `Choose ${group.min}–${group.max}`}
+          {group.min === group.max
+            ? t("chooseExact", { count: group.min })
+            : t("chooseRange", { min: group.min, max: group.max })}
         </span>
       </legend>
       {group.options.map((option) => {
@@ -74,6 +78,7 @@ function ModifierGroupFields({
 }
 
 export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailModalProps) {
+  const t = useTranslations("ItemDetailModal");
   const { status } = useAppSelector((state) => state.auth);
   const [addCartItem, { isLoading }] = useAddCartItemMutation();
   const { toast } = useToast();
@@ -127,7 +132,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
         notes: notes.trim() || undefined,
         replace,
       }).unwrap();
-      toast({ title: "Added to cart", variant: "success" });
+      toast({ title: t("addedToCart"), variant: "success" });
       setConfirmingReplace(false);
       onClose();
     } catch (err) {
@@ -135,7 +140,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
         setConfirmingReplace(true);
         return;
       }
-      toast({ title: "Couldn't add to cart", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotAddToCart"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
@@ -144,15 +149,15 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
       <Modal
         open={open}
         onClose={() => setConfirmingReplace(false)}
-        title="Start a new cart?"
-        description="Your cart has items from a different restaurant. Adding this item will clear it."
+        title={t("startNewCartTitle")}
+        description={t("startNewCartDescription")}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmingReplace(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button variant="destructive" isLoading={isLoading} onClick={() => void submit(true)}>
-              Clear cart and add
+              {t("clearCartAndAdd")}
             </Button>
           </>
         }
@@ -177,20 +182,20 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
           />
         ))}
 
-        <FormField label="Notes (optional)">
+        <FormField label={t("notesOptional")}>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="E.g. no onions"
+            placeholder={t("notesPlaceholder")}
           />
         </FormField>
 
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-text">Quantity</span>
+          <span className="text-sm font-medium text-text">{t("quantity")}</span>
           <div className="flex items-center gap-3">
             <IconButton
-              label="Decrease quantity"
+              label={t("decreaseQuantity")}
               size="sm"
               variant="outline"
               disabled={qty <= 1}
@@ -203,7 +208,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
             />
             <span className="w-6 text-center text-sm font-medium text-text">{qty}</span>
             <IconButton
-              label="Increase quantity"
+              label={t("increaseQuantity")}
               size="sm"
               variant="outline"
               disabled={qty >= 20}
@@ -219,12 +224,12 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
 
         {status === "authenticated" ? (
           <Button disabled={!allGroupsValid} isLoading={isLoading} onClick={() => void submit(false)}>
-            Add to cart — {currency} {(unitPrice * qty).toFixed(2)}
+            {t("addToCartWithPrice", { currency, amount: (unitPrice * qty).toFixed(2) })}
           </Button>
         ) : (
-          <NextLink href="/login" className={buttonVariants({ className: "w-full" })}>
-            Log in to order
-          </NextLink>
+          <Link href="/login" className={buttonVariants({ className: "w-full" })}>
+            {t("logInToOrder")}
+          </Link>
         )}
       </div>
     </Modal>

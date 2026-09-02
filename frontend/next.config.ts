@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -21,4 +22,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Reads src/i18n/request.ts by default (docs/ROADMAP.md FDP-55).
+const withNextIntl = createNextIntlPlugin();
+
+export default withNextIntl(nextConfig);

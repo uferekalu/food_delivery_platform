@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { IconButton } from "@/components/ui/icon-button";
 import { useToast } from "@/components/ui/toast";
 import { useAppSelector } from "@/lib/redux/hooks";
@@ -30,6 +31,7 @@ export interface FavoriteButtonProps {
  * Callers position this absolutely over a link-wrapped card instead.
  */
 export function FavoriteButton({ restaurantId, className }: FavoriteButtonProps) {
+  const t = useTranslations("FavoriteButton");
   const { status } = useAppSelector((state) => state.auth);
   const { data: favorites } = useListFavoritesQuery(undefined, { skip: status !== "authenticated" });
   const [addFavorite, { isLoading: isAdding }] = useAddFavoriteMutation();
@@ -42,7 +44,7 @@ export function FavoriteButton({ restaurantId, className }: FavoriteButtonProps)
 
   return (
     <IconButton
-      label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+      label={isFavorite ? t("removeFromFavorites") : t("addToFavorites")}
       variant="secondary"
       size="sm"
       disabled={isAdding || isRemoving}
@@ -52,7 +54,7 @@ export function FavoriteButton({ restaurantId, className }: FavoriteButtonProps)
         e.stopPropagation();
         const action = isFavorite ? removeFavorite(restaurantId) : addFavorite(restaurantId);
         void action.unwrap().catch((err: unknown) =>
-          toast({ title: "Couldn't update favorites", description: getErrorMessage(err), variant: "danger" }),
+          toast({ title: t("couldNotUpdateFavorites"), description: getErrorMessage(err), variant: "danger" }),
         );
       }}
       icon={<HeartIcon filled={isFavorite} />}
