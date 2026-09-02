@@ -4,6 +4,7 @@ import { Container } from "@/components/ui/container";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Carousel } from "@/components/ui/carousel";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { cn } from "@/lib/cn";
 import NextLink from "next/link";
@@ -260,9 +261,9 @@ export default function Home() {
         </Container>
       </div>
 
-      {/* Top restaurants comes right after the hero — a horizontal, snap-scrolling rail rather
-          than a static grid — so the thing customers actually want (real restaurants to order
-          from) is immediately reachable, not buried below the category tiles. */}
+      {/* Top restaurants comes right after the hero — an auto-advancing carousel rather than a
+          static grid — so the thing customers actually want (real restaurants to order from) is
+          immediately reachable, not buried below the category tiles (docs/ROADMAP.md FDP-66). */}
       {(isLoading || topRestaurants.length > 0) && (
         <section className="bg-surface-subtle">
           <Container className="flex flex-col gap-6 py-14 lg:pt-8">
@@ -275,17 +276,19 @@ export default function Home() {
                 See all restaurants →
               </NextLink>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
-              {isLoading
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-48 w-72 shrink-0" />
-                  ))
-                : topRestaurants.map((restaurant) => (
-                    <div key={restaurant._id} className="w-72 shrink-0 snap-start">
-                      <RestaurantCard restaurant={restaurant} />
-                    </div>
-                  ))}
-            </div>
+            {isLoading ? (
+              <div className="flex gap-4 overflow-x-hidden pb-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-48 w-72 shrink-0" />
+                ))}
+              </div>
+            ) : (
+              <Carousel aria-label="Top restaurants" itemClassName="w-72">
+                {topRestaurants.map((restaurant) => (
+                  <RestaurantCard key={restaurant._id} restaurant={restaurant} />
+                ))}
+              </Carousel>
+            )}
           </Container>
         </section>
       )}

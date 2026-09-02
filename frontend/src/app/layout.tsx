@@ -60,10 +60,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ToastProvider>
             <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-surface">
               <Container className="flex flex-wrap items-center gap-3 py-3">
-                <NextLink href="/restaurants" className="flex shrink-0 items-center gap-2 text-sm font-semibold text-primary">
+                {/* Logo alone is the "go home" control (docs/ROADMAP.md FDP-66) — it used to
+                    link to /restaurants with no separate way back to the homepage. Restaurants
+                    is now a normal nav link, alongside future routes in the same inline group;
+                    MobileNav's drawer carries the equivalent link below `sm`. */}
+                <NextLink href="/" aria-label="Food Delivery Platform home" className="flex shrink-0 items-center">
                   <Logo className="size-8" />
-                  Restaurants
                 </NextLink>
+                <nav className="hidden items-center gap-4 text-sm font-medium text-text sm:flex">
+                  <NextLink href="/restaurants" className="hover:text-primary">
+                    Restaurants
+                  </NextLink>
+                </nav>
                 {/* Full-width row of its own below `sm` (order-3 + w-full forces the wrap);
                     a normal flex-1 middle column at `sm` and up — see frontend/CLAUDE.md
                     "Responsive design" and docs/ROADMAP.md FDP-46. */}
