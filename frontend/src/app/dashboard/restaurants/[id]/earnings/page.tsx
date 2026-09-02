@@ -19,6 +19,9 @@ import {
   useListPaystackBanksQuery,
   useResolvePaystackAccountMutation,
   useSetupPaystackPayoutMutation,
+  useListFlutterwaveBanksQuery,
+  useResolveFlutterwaveAccountMutation,
+  useSetupFlutterwavePayoutMutation,
 } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
@@ -33,10 +36,11 @@ function EarningsStat({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) — only the Paystack path is real so
- * far, hence gating this on the restaurant's currency actually supporting Paystack (checked via
- * the existing /payments/providers endpoint) rather than showing a setup form that would just
- * fail for a USD-only restaurant waiting on FDP-54's Stripe Connect.
+ * Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) — gated on the restaurant's currency
+ * actually supporting Paystack (checked via the existing /payments/providers endpoint) rather
+ * than showing a setup form that would just fail, e.g. for a USD-only restaurant waiting on
+ * FDP-54's Stripe Connect. Flutterwave's equivalent (FDP-53) is the FlutterwavePayoutSetup
+ * component below — both can render together for a currency that supports both providers.
  */
 function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
   const { toast } = useToast();
@@ -79,7 +83,116 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connect a payout account</CardTitle>
+        <CardTitle>Connect a Paystack payout account</CardTitle>
+        <CardDescription>
+          Add your bank details so future orders settle straight to your account, minus the
+          platform fee.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error && <Alert variant="danger">{error}</Alert>}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Bank" required>
+            <Select
+              options={bankOptions}
+              value={bankCode}
+              onChange={(value) => {
+                setBankCode(value);
+                resetVerification();
+              }}
+              placeholder={banksLoading ? "Loading banks…" : "Choose your bank"}
+              disabled={banksLoading}
+              searchable
+              searchPlaceholder="Search banks…"
+            />
+          </FormField>
+          <FormField label="Account number" required>
+            <Input
+              value={accountNumber}
+              onChange={(e) => {
+                setAccountNumber(e.target.value);
+                resetVerification();
+              }}
+              placeholder="0123456789"
+              inputMode="numeric"
+            />
+          </FormField>
+        </div>
+
+        {verifiedName ? (
+          <Alert variant="success" title="Account verified">
+            {verifiedName} — if this isn&apos;t right, change the details above and verify again.
+          </Alert>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            isLoading={resolving}
+            disabled={!bankCode || accountNumber.trim().length < 10}
+            onClick={() => void handleVerify()}
+          >
+            Verify account
+          </Button>
+        )}
+
+        {verifiedName && (
+          <Button size="sm" className="w-fit" isLoading={connecting} onClick={() => void handleConnect()}>
+            Connect payout account
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) — mirrors PaystackPayoutSetup
+ * exactly; the two providers can both be offered side by side for a currency that supports
+ * both (e.g. NGN), letting the owner pick either.
+ */
+function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
+  const { toast } = useToast();
+  const { data: banks, isLoading: banksLoading } = useListFlutterwaveBanksQuery();
+  const [resolveAccount, { isLoading: resolving }] = useResolveFlutterwaveAccountMutation();
+  const [setupPayout, { isLoading: connecting }] = useSetupFlutterwavePayoutMutation();
+
+  const [bankCode, setBankCode] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const bankOptions: SelectOption[] = (banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }));
+
+  function resetVerification() {
+    setVerifiedName(null);
+    setError(null);
+  }
+
+  async function handleVerify() {
+    setError(null);
+    try {
+      const result = await resolveAccount({ restaurantId, bankCode, accountNumber }).unwrap();
+      setVerifiedName(result.accountName);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't verify that account number"));
+    }
+  }
+
+  async function handleConnect() {
+    setError(null);
+    try {
+      await setupPayout({ restaurantId, bankCode, accountNumber }).unwrap();
+      toast({ title: "Payout account connected", variant: "success" });
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't connect this payout account"));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect a Flutterwave payout account</CardTitle>
         <CardDescription>
           Add your bank details so future orders settle straight to your account, minus the
           platform fee.
@@ -146,6 +259,7 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
   const { data, isLoading } = useGetRestaurantEarningsQuery(restaurant._id);
   const { data: providers } = useGetPaymentProvidersQuery(restaurant.currency);
   const paystackAvailable = providers?.includes("paystack") ?? false;
+  const flutterwaveAvailable = providers?.includes("flutterwave") ?? false;
 
   return (
     <Container className="flex flex-col gap-6 py-10">
@@ -160,7 +274,7 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
         <>
           {!data.payoutSetupComplete && (
             <Alert variant="warning" title="Payout setup required">
-              {paystackAvailable
+              {paystackAvailable || flutterwaveAvailable
                 ? "Connect a payout account below so your earnings settle automatically."
                 : "Automated payouts aren't available for this restaurant's currency yet — your earnings below are informational for now."}
             </Alert>
@@ -192,6 +306,9 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
 
           {!data.payoutSetupComplete && paystackAvailable && (
             <PaystackPayoutSetup restaurantId={restaurant._id} />
+          )}
+          {!data.payoutSetupComplete && flutterwaveAvailable && (
+            <FlutterwavePayoutSetup restaurantId={restaurant._id} />
           )}
         </>
       )}

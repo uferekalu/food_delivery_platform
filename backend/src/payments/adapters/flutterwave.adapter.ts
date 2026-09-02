@@ -27,6 +27,29 @@ interface FlutterwaveWebhookPayload {
   data: { id: number; status: string; tx_ref: string };
 }
 
+export interface FlutterwaveBank {
+  name: string;
+  code: string;
+}
+
+interface FlutterwaveListBanksResponse {
+  status: string;
+  data?: { id: number; code: string; name: string }[];
+  message?: string;
+}
+
+interface FlutterwaveResolveAccountResponse {
+  status: string;
+  data?: { account_number: string; account_name: string };
+  message?: string;
+}
+
+interface FlutterwaveCreateSubaccountResponse {
+  status: string;
+  data?: { subaccount_id: string };
+  message?: string;
+}
+
 // Flutterwave's "Standard" hosted checkout — see stripe.adapter.ts for why a hosted redirect.
 // Covers the African-currency leg of docs/ARCHITECTURE.md §4's routing table not handled by
 // Paystack (GHS/KES/ZAR/UGX/...). Unlike Stripe/Paystack, Flutterwave's webhook auth is a
@@ -69,6 +92,28 @@ export class FlutterwaveAdapter implements PaymentAdapter {
           redirect_url: params.successUrl,
           customer: { email: params.customerEmail },
           meta: { orderId: params.orderId },
+          // Vendor payouts epic (docs/ROADMAP.md FDP-53) — mirrors PaystackAdapter.initiate's
+          // split, but Flutterwave's shape is a `subaccounts` array rather than a single
+          // `subaccount` field, and its "flat_subaccount" charge type is the inverse of
+          // Paystack's `transaction_charge`: here `transaction_charge` is the flat amount the
+          // *subaccount* (restaurant) receives, with the platform automatically keeping
+          // whatever's left — confirmed against Flutterwave's split-payments docs, since this
+          // codebase had no prior reference for the field's direction and getting it backwards
+          // would misroute real money. No ×100 — unlike Paystack (kobo), Flutterwave's `amount`
+          // (and therefore `transaction_charge`) is already in the currency's major unit, same
+          // as everywhere else in this adapter.
+          ...(params.restaurantPayoutAccountReference &&
+          params.restaurantPayoutAmount != null
+            ? {
+                subaccounts: [
+                  {
+                    id: params.restaurantPayoutAccountReference,
+                    transaction_charge_type: 'flat_subaccount',
+                    transaction_charge: params.restaurantPayoutAmount,
+                  },
+                ],
+              }
+            : {}),
         }),
       },
     );
@@ -126,5 +171,88 @@ export class FlutterwaveAdapter implements PaymentAdapter {
       method: 'POST',
       body: JSON.stringify({}),
     });
+  }
+
+  // --- Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) ---
+  // Same subaccount-and-split pattern as PaystackAdapter (FDP-52): a restaurant picks their
+  // bank + enters an account number, we resolve it to a name for them to confirm, then create a
+  // subaccount. None of this is part of the shared PaymentAdapter interface — Stripe Connect
+  // (FDP-54) has its own, differently-shaped onboarding.
+
+  /** NGN banks only for now, same scope as Paystack's listBanks — this project's primary
+   * currency. Unlike Paystack, no test-mode workaround is needed here: nothing in this
+   * codebase or Flutterwave's docs indicates a comparable daily cap on account resolution. */
+  async listBanks(): Promise<FlutterwaveBank[]> {
+    const result =
+      await this.request<FlutterwaveListBanksResponse>('/banks/NG');
+    if (result.status !== 'success' || !result.data) {
+      throw new Error(result.message ?? 'Could not load the bank list');
+    }
+    return result.data.map((bank) => ({ name: bank.name, code: bank.code }));
+  }
+
+  /** Confirms an account number actually belongs to the name the restaurant expects, before we
+   * ever create a subaccount against it — same reasoning as Paystack's resolveAccount. */
+  async resolveAccount(
+    accountNumber: string,
+    bankCode: string,
+  ): Promise<{ accountNumber: string; accountName: string }> {
+    const result = await this.request<FlutterwaveResolveAccountResponse>(
+      '/accounts/resolve',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          account_number: accountNumber,
+          account_bank: bankCode,
+        }),
+      },
+    );
+    if (result.status !== 'success' || !result.data) {
+      throw new Error(result.message ?? "Couldn't verify that account number");
+    }
+    return {
+      accountNumber: result.data.account_number,
+      accountName: result.data.account_name,
+    };
+  }
+
+  /**
+   * `splitValue` is a fraction (0-1), not a 0-100 percentage like Paystack's
+   * `percentageCharge` — confirmed live against the Flutterwave sandbox (a 0.15 `split_value`
+   * with `split_type: 'percentage'` was accepted and echoed back unchanged). Like Paystack, this
+   * is only the subaccount's stored default; every real transaction (see `initiate()` above)
+   * overrides it with an exact `transaction_charge` computed from that specific order's numbers.
+   * `businessEmail` is required by Flutterwave's subaccount API — there's no restaurant-level
+   * email in this schema, so callers pass the owning user's account email. No separate transfer
+   * call is needed for this provider: Flutterwave settles both sides of the split directly.
+   */
+  async createSubaccount(params: {
+    businessName: string;
+    businessEmail: string;
+    bankCode: string;
+    accountNumber: string;
+    splitValue: number;
+  }): Promise<{ subaccountId: string }> {
+    const result = await this.request<FlutterwaveCreateSubaccountResponse>(
+      '/subaccounts',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          account_bank: params.bankCode,
+          account_number: params.accountNumber,
+          business_name: params.businessName,
+          business_email: params.businessEmail,
+          country: 'NG',
+          split_type: 'percentage',
+          split_value: params.splitValue,
+        }),
+      },
+    );
+    if (result.status !== 'success' || !result.data) {
+      throw new Error(
+        result.message ?? 'Could not create the payout subaccount',
+      );
+    }
+    return { subaccountId: result.data.subaccount_id };
   }
 }

@@ -438,7 +438,19 @@ fee's eventual trip to the rider is a separate, not-yet-automated concern (rider
 see it reflected in their own earnings view, docs/ROADMAP.md FDP-16); this split only concerns
 restaurant payouts.
 
-**Flutterwave (FDP-53) and Stripe Connect (FDP-54)** are not yet built. Flutterwave's subaccount
-model is expected to mirror Paystack's shape closely; Stripe Connect is structurally different
-(a hosted onboarding redirect rather than a single API call, and an `account.updated` webhook to
-know onboarding actually finished) and will need its own design pass when picked up.
+**Flutterwave (FDP-53)** follows the same subaccount-and-split shape as Paystack, with two
+provider-specific differences confirmed live against the Flutterwave sandbox (nothing in this
+codebase referenced Flutterwave's actual field names before this ticket): the split lives in a
+`subaccounts` array on the payment payload rather than a single `subaccount` field, and its
+`flat_subaccount` charge type is the *inverse* of Paystack's `transaction_charge` direction —
+`transaction_charge` is the flat amount the **subaccount** (restaurant) receives, with the
+platform automatically keeping whatever's left, rather than Paystack's "what the platform keeps"
+framing. `transaction_charge` is therefore set directly to `restaurantPayoutAmount`, in the
+currency's major unit (Flutterwave, unlike Paystack, never multiplies by 100). Flutterwave's
+subaccount-creation `split_value` is also a fraction (0–1), not Paystack's 0–100 percentage.
+Flutterwave's subaccount API requires a `business_email`; since there's no restaurant-level email
+field, the onboarding endpoint looks up the restaurant owner's own account email for it.
+
+**Stripe Connect (FDP-54)** is not yet built — structurally different (a hosted onboarding
+redirect rather than a single API call, and an `account.updated` webhook to know onboarding
+actually finished) and will need its own design pass when picked up.

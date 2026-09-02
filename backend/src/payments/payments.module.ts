@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { OrdersModule } from '../orders/orders.module';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { UsersModule } from '../users/users.module';
 import { PaymentProviderResolver } from './provider-resolver';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 import { PaystackPayoutsController } from './paystack-payouts.controller';
+import { FlutterwavePayoutsController } from './flutterwave-payouts.controller';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
 import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
@@ -21,8 +23,15 @@ import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
   // is likewise safe (imports RealtimeModule, which imports nothing back toward Payments) —
   // used to email a restaurant owner whenever their payout account changes, so a compromised
   // account silently redirecting future payouts doesn't go unnoticed (docs/ROADMAP.md FDP-58).
-  imports: [OrdersModule, RestaurantsModule, NotificationsModule],
-  controllers: [PaymentsController, PaystackPayoutsController],
+  // UsersModule (imports only RestaurantsModule, also non-circular) is needed by
+  // FlutterwavePayoutsController — Flutterwave's subaccount API requires a business email, and
+  // there's no restaurant-level email field, only the owning user's (docs/ROADMAP.md FDP-53).
+  imports: [OrdersModule, RestaurantsModule, NotificationsModule, UsersModule],
+  controllers: [
+    PaymentsController,
+    PaystackPayoutsController,
+    FlutterwavePayoutsController,
+  ],
   providers: [
     PaymentsService,
     PaymentProviderResolver,
