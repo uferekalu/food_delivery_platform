@@ -99,6 +99,15 @@ export class Order {
   @Prop({ type: String, default: null })
   paymentRef: string | null;
 
+  // Every reference ever issued for this order, not just the current one (docs/ROADMAP.md
+  // FDP-65) — initiatePayment can be called more than once for the same PENDING_PAYMENT order
+  // (a retry, or switching provider), and `paymentRef` above only ever holds the latest. Without
+  // this, a webhook for an *earlier*, now-orphaned checkout session that the customer actually
+  // completed would look up a reference findByPaymentRef can no longer find, silently stranding
+  // an order that was genuinely paid for.
+  @Prop({ type: [String], default: [] })
+  paymentRefs: string[];
+
   @Prop({ type: AddressSchema, required: true })
   deliveryAddress: Address;
 

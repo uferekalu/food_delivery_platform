@@ -18,8 +18,11 @@ import { UpdateDeliveryZoneDto } from './dto/update-delivery-zone.dto';
 // with, kept so checkout never breaks for an unzoned/ungeocoded address.
 export const FALLBACK_DELIVERY_FEE_RATE = 0.1;
 
+// Same fix as OrdersService's round2 (docs/ROADMAP.md FDP-65) — `+ Number.EPSILON` before
+// rounding corrects IEEE-754 double-precision cases (e.g. 1.5 * 0.15 === 0.22499999999999998)
+// that a plain `Math.round(value * 100) / 100` silently rounds down a full cent.
 function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 @Injectable()

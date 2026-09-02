@@ -14,10 +14,26 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { csvRow } from '../common/utils/csv';
-import { OrdersService } from './orders.service';
+import { OrdersService, round2 } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
+
+/**
+ * A bare date-only `to` value ("2026-09-30", the shape a native `<input type="date">` sends)
+ * parses to that day's midnight UTC — used as-is for an *inclusive upper bound*, that silently
+ * excludes the entire last day of a report (docs/ROADMAP.md FDP-65: an owner requesting a
+ * natural "full month" range lost almost a full day of revenue/COGS with no indication anything
+ * was dropped). Only a bare date gets nudged to end-of-day; a caller that already passed a full
+ * datetime is used exactly as given. `from` needs no equivalent treatment — a bare date's
+ * midnight UTC is already the correct inclusive lower bound.
+ */
+function parseRangeTo(value?: string): Date | undefined {
+  if (!value) return undefined;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T23:59:59.999Z`)
+    : new Date(value);
+}
 
 @ApiTags('orders')
 @Controller('orders')
@@ -69,7 +85,7 @@ export class OrdersController {
       user,
       restaurantId,
       query.from ? new Date(query.from) : undefined,
-      query.to ? new Date(query.to) : undefined,
+      parseRangeTo(query.to),
     );
   }
 
@@ -88,7 +104,7 @@ export class OrdersController {
       user,
       restaurantId,
       query.from ? new Date(query.from) : undefined,
-      query.to ? new Date(query.to) : undefined,
+      parseRangeTo(query.to),
     );
 
     const header = csvRow([
@@ -122,8 +138,8 @@ export class OrdersController {
         order.total,
         order.platformFeeAmount,
         order.restaurantPayoutAmount,
-        Math.round(cogs * 100) / 100,
-        Math.round((order.subtotal - cogs) * 100) / 100,
+        round2(cogs),
+        round2(order.subtotal - cogs),
         order.promoCode ?? '',
       ]);
     });

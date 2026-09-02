@@ -8,7 +8,9 @@ import type { OrderStatus } from './schemas/order-status';
  * `READY_FOR_PICKUP` → `ASSIGNED_TO_RIDER` is a claim (`OrdersService.assignToRider`), not a
  * plain transition — it also sets `riderId`, so it isn't in `RIDER_TRIGGERABLE_TRANSITIONS`
  * below either. `ASSIGNED_TO_RIDER`/`PICKED_UP`/`OUT_FOR_DELIVERY` are rider-triggered
- * (`docs/ROADMAP.md` FDP-16).
+ * (`docs/ROADMAP.md` FDP-16). `CANCELLED` → `REFUNDED` (FDP-65) mirrors `DELIVERED` →
+ * `REFUNDED` — a payment can still need reversing after a post-payment cancellation, not just
+ * after delivery; see `OrdersService.REFUNDABLE_STATUSES`/`PaymentsService.refundOrder`.
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -20,7 +22,7 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PICKED_UP: ['OUT_FOR_DELIVERY'],
   OUT_FOR_DELIVERY: ['DELIVERED'],
   DELIVERED: ['REFUNDED'],
-  CANCELLED: [],
+  CANCELLED: ['REFUNDED'],
   REFUNDED: [],
 };
 

@@ -22,6 +22,11 @@ interface PaystackVerifyResponse {
   data?: { status: string; reference: string };
 }
 
+interface PaystackRefundResponse {
+  status: boolean;
+  message?: string;
+}
+
 interface PaystackWebhookPayload {
   event: string;
   data: { reference: string; status: string };
@@ -162,10 +167,18 @@ export class PaystackAdapter implements PaymentAdapter {
   }
 
   async refund(paymentRef: string): Promise<void> {
-    await this.request('/refund', {
+    // Unlike every other method in this file, this used to discard the response entirely — a
+    // rejected refund (e.g. Paystack returning 200 { status: false, message: 'Insufficient
+    // balance in main account' }) was silently treated as success, letting
+    // PaymentsService.refundOrder mark the order REFUNDED (terminal) with no money actually
+    // returned (docs/ROADMAP.md FDP-65).
+    const result = await this.request<PaystackRefundResponse>('/refund', {
       method: 'POST',
       body: JSON.stringify({ transaction: paymentRef }),
     });
+    if (!result.status) {
+      throw new Error(result.message ?? 'Paystack refund failed');
+    }
   }
 
   // --- Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) ---

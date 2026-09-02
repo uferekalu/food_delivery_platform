@@ -24,7 +24,9 @@ interface FlutterwaveVerifyResponse {
 
 interface FlutterwaveWebhookPayload {
   event: string;
-  data: { id: number; status: string; tx_ref: string };
+  // Optional, not required — this is untrusted external input parsed via a bare `as` cast, and
+  // handleWebhook must not assume the network actually sent this shape (docs/ROADMAP.md FDP-65).
+  data?: { id: number; status: string; tx_ref: string };
 }
 
 export interface FlutterwaveBank {
@@ -47,6 +49,11 @@ interface FlutterwaveResolveAccountResponse {
 interface FlutterwaveCreateSubaccountResponse {
   status: string;
   data?: { subaccount_id: string };
+  message?: string;
+}
+
+interface FlutterwaveRefundResponse {
+  status: string;
   message?: string;
 }
 
@@ -153,9 +160,26 @@ export class FlutterwaveAdapter implements PaymentAdapter {
       return Promise.resolve(null);
     }
 
-    const payload = JSON.parse(
-      rawBody.toString('utf8'),
-    ) as FlutterwaveWebhookPayload;
+    // docs/ROADMAP.md FDP-65 — two real gaps found in the same audit pass, both fixed here:
+    // (1) unlike Stripe (`event.type !== 'checkout.session.completed'`) and Paystack
+    // (`payload.event !== 'charge.success'`), this never checked `event` at all, so *any*
+    // correctly-signed webhook whose body happens to contain a `data.tx_ref`/`data.status` shape
+    // — a non-charge event type, or an unexpected retry — was processed as an authoritative
+    // charge result. (2) a malformed/unexpected body (e.g. missing `data`) threw an uncaught
+    // TypeError all the way up through PaymentsController's webhook route, surfacing as a raw
+    // 500 that could trip Flutterwave's own retry/auto-disable logic — the interface's own doc
+    // comment says this method returns `null` for "an event this adapter doesn't act on", never
+    // throws.
+    let payload: FlutterwaveWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody.toString('utf8')) as FlutterwaveWebhookPayload;
+    } catch {
+      return Promise.resolve(null);
+    }
+    if (payload.event !== 'charge.completed' || !payload.data) {
+      return Promise.resolve(null);
+    }
+
     return Promise.resolve({
       reference: payload.data.tx_ref,
       success: payload.data.status === 'successful',
@@ -166,11 +190,22 @@ export class FlutterwaveAdapter implements PaymentAdapter {
     const verification = await this.request<FlutterwaveVerifyResponse>(
       `/transactions/verify_by_reference?tx_ref=${encodeURIComponent(paymentRef)}`,
     );
-    if (!verification.data) return;
-    await this.request(`/transactions/${verification.data.id}/refund`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
+    if (verification.status !== 'success' || !verification.data) {
+      // Previously a silent `return` — treated as success even though nothing was found to
+      // refund (docs/ROADMAP.md FDP-65), e.g. a transient verify_by_reference propagation delay.
+      throw new Error(
+        'Could not find the original Flutterwave transaction to refund',
+      );
+    }
+    const result = await this.request<FlutterwaveRefundResponse>(
+      `/transactions/${verification.data.id}/refund`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+    if (result.status !== 'success') {
+      // Previously unchecked entirely — a provider-side rejection here (e.g. already refunded,
+      // insufficient balance) was indistinguishable from success.
+      throw new Error(result.message ?? 'Flutterwave refund failed');
+    }
   }
 
   // --- Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) ---

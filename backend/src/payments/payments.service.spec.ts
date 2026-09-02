@@ -20,7 +20,9 @@ describe('PaymentsService', () => {
       | 'markPaidFromWebhook'
       | 'markPaymentFailed'
       | 'adminFindOrThrow'
-      | 'markRefunded'
+      | 'claimForRefund'
+      | 'finalizeRefund'
+      | 'revertFailedRefundClaim'
     >
   >;
   let restaurantsService: jest.Mocked<
@@ -54,7 +56,9 @@ describe('PaymentsService', () => {
       markPaidFromWebhook: jest.fn(),
       markPaymentFailed: jest.fn(),
       adminFindOrThrow: jest.fn(),
-      markRefunded: jest.fn(),
+      claimForRefund: jest.fn(),
+      finalizeRefund: jest.fn(),
+      revertFailedRefundClaim: jest.fn(),
     };
     restaurantsService = { findByIdOrThrow: jest.fn() };
     // Default: no active payout account for any provider — the pre-FDP-52 behavior every
@@ -223,6 +227,37 @@ describe('PaymentsService', () => {
         expect.objectContaining({
           restaurantPayoutAccountReference: 'ACCT_test123',
           restaurantPayoutAmount: 85,
+        }),
+      );
+    });
+
+    it("clamps the split amount sent to the adapter to the order's total (docs/ROADMAP.md FDP-65) — a big enough promo discount can otherwise push total below restaurantPayoutAmount, asking a live provider for an invalid split", async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        restaurantId: { toString: () => 'restaurant-1' },
+        status: 'PENDING_PAYMENT',
+        paymentProvider: 'paystack',
+        orderNumber: 'ORD-1',
+        total: 58, // subtotal 100, deliveryFee 3, serviceFee 5, a 50-off promo
+        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
+        currency: 'NGN',
+      };
+      ordersService.findOne.mockResolvedValue(order as never);
+      restaurantsService.findByIdOrThrow.mockResolvedValue({
+        payoutAccounts: [
+          { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
+        ],
+      } as never);
+      paystackAdapter.initiate.mockResolvedValue({
+        redirectUrl: 'https://checkout.paystack.com/abc',
+        reference: 'ORD-1-abcd',
+      });
+
+      await service.initiatePayment(user, 'order-1');
+
+      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurantPayoutAmount: 58, // clamped to total, never exceeds what's actually charged
         }),
       );
     });
@@ -399,6 +434,7 @@ describe('PaymentsService', () => {
       });
       ordersService.findByPaymentRef.mockResolvedValue({
         _id: { toString: () => 'order-1' },
+        paymentProvider: 'stripe',
       } as never);
 
       await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
@@ -414,6 +450,7 @@ describe('PaymentsService', () => {
       });
       ordersService.findByPaymentRef.mockResolvedValue({
         _id: { toString: () => 'order-1' },
+        paymentProvider: 'stripe',
       } as never);
 
       await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
@@ -421,10 +458,38 @@ describe('PaymentsService', () => {
       expect(ordersService.markPaymentFailed).toHaveBeenCalledWith('order-1');
       expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
     });
+
+    it("ignores a correctly-signed webhook whose reference belongs to a *different* provider's order (docs/ROADMAP.md FDP-65) — a real provider only ever fires events for its own references", async () => {
+      // A stripe-signed event claims a reference that actually belongs to a paystack order.
+      stripeAdapter.handleWebhook.mockResolvedValue({
+        reference: 'shared-ref',
+        success: true,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        paymentProvider: 'paystack',
+      } as never);
+
+      await service.handleWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.markPaidFromWebhook).not.toHaveBeenCalled();
+      expect(ordersService.markPaymentFailed).not.toHaveBeenCalled();
+    });
+
+    it('never lets an adapter throwing (e.g. a malformed webhook body) surface past this method as an uncaught error', async () => {
+      stripeAdapter.handleWebhook.mockRejectedValue(
+        new TypeError("Cannot read properties of undefined (reading 'tx_ref')"),
+      );
+
+      await expect(
+        service.handleWebhook('stripe', Buffer.from('not json'), 'sig'),
+      ).resolves.toBeUndefined();
+      expect(ordersService.findByPaymentRef).not.toHaveBeenCalled();
+    });
   });
 
   describe('refundOrder', () => {
-    it("refunds via the order's provider adapter and marks the order refunded", async () => {
+    it("refunds via the order's provider adapter and finalizes the refund", async () => {
       const order = {
         _id: { toString: () => 'order-1' },
         status: 'DELIVERED',
@@ -433,19 +498,47 @@ describe('PaymentsService', () => {
         paymentRef: 'cs_test_abc',
       };
       ordersService.adminFindOrThrow.mockResolvedValue(order as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
       stripeAdapter.refund.mockResolvedValue(undefined);
-      ordersService.markRefunded.mockResolvedValue({
+      ordersService.finalizeRefund.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      const result = await service.refundOrder('order-1');
+
+      expect(ordersService.claimForRefund).toHaveBeenCalledWith('order-1');
+      expect(stripeAdapter.refund).toHaveBeenCalledWith('cs_test_abc');
+      expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+      expect(ordersService.revertFailedRefundClaim).not.toHaveBeenCalled();
+      expect(result).toEqual({ status: 'REFUNDED' });
+    });
+
+    it("allows refunding a CANCELLED order with a succeeded payment (docs/ROADMAP.md FDP-65) — previously the only refundable status was DELIVERED, so a paid-then-cancelled order's charge could never be reversed", async () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        status: 'CANCELLED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      };
+      ordersService.adminFindOrThrow.mockResolvedValue(order as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'CANCELLED',
+      } as never);
+      stripeAdapter.refund.mockResolvedValue(undefined);
+      ordersService.finalizeRefund.mockResolvedValue({
         status: 'REFUNDED',
       } as never);
 
       const result = await service.refundOrder('order-1');
 
       expect(stripeAdapter.refund).toHaveBeenCalledWith('cs_test_abc');
-      expect(ordersService.markRefunded).toHaveBeenCalledWith('order-1');
       expect(result).toEqual({ status: 'REFUNDED' });
     });
 
-    it('rejects a refund for an order that is not DELIVERED', async () => {
+    it('rejects a refund for an order that is neither DELIVERED nor CANCELLED', async () => {
       ordersService.adminFindOrThrow.mockResolvedValue({
         status: 'PREPARING',
         paymentStatus: 'succeeded',
@@ -456,6 +549,7 @@ describe('PaymentsService', () => {
       await expect(service.refundOrder('order-1')).rejects.toThrow(
         BadRequestException,
       );
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
       expect(stripeAdapter.refund).not.toHaveBeenCalled();
     });
 
@@ -473,13 +567,32 @@ describe('PaymentsService', () => {
       expect(stripeAdapter.refund).not.toHaveBeenCalled();
     });
 
-    it('wraps a raw adapter refund error as a BadRequestException, and never marks the order refunded', async () => {
+    it("rejects when the order can't be atomically claimed (docs/ROADMAP.md FDP-65) — e.g. a concurrent second refund attempt that already won the race — and never calls the provider", async () => {
       ordersService.adminFindOrThrow.mockResolvedValue({
         _id: { toString: () => 'order-1' },
         status: 'DELIVERED',
         paymentStatus: 'succeeded',
         paymentProvider: 'stripe',
         paymentRef: 'cs_test_abc',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue(null);
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(stripeAdapter.refund).not.toHaveBeenCalled();
+    });
+
+    it('wraps a raw adapter refund error as a BadRequestException, reverts the claim, and never finalizes the refund', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
       } as never);
       stripeAdapter.refund.mockRejectedValue(
         new Error('Charge already refunded'),
@@ -488,7 +601,11 @@ describe('PaymentsService', () => {
       await expect(service.refundOrder('order-1')).rejects.toThrow(
         BadRequestException,
       );
-      expect(ordersService.markRefunded).not.toHaveBeenCalled();
+      expect(ordersService.revertFailedRefundClaim).toHaveBeenCalledWith(
+        'order-1',
+        'DELIVERED',
+      );
+      expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
     });
   });
 });

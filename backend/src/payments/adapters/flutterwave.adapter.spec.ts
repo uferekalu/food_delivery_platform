@@ -62,6 +62,40 @@ describe('FlutterwaveAdapter', () => {
 
       expect(result).toEqual({ reference: 'ORD-1-abcd', success: false });
     });
+
+    it("ignores a correctly-signed event whose type isn't a charge result (docs/ROADMAP.md FDP-65) — unlike Stripe/Paystack, this previously never checked `event` at all", async () => {
+      const body = JSON.stringify({
+        event: 'transfer.completed',
+        data: { id: 1, tx_ref: 'ORD-1-abcd', status: 'successful' },
+      });
+
+      const result = await adapter.handleWebhook(
+        Buffer.from(body),
+        TEST_WEBHOOK_HASH,
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null (never throws) for a correctly-signed event whose body has no data field (docs/ROADMAP.md FDP-65) — previously threw an uncaught TypeError', async () => {
+      const body = JSON.stringify({ event: 'charge.completed' });
+
+      const result = await adapter.handleWebhook(
+        Buffer.from(body),
+        TEST_WEBHOOK_HASH,
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null (never throws) for a correctly-signed event whose body is not valid JSON', async () => {
+      const result = await adapter.handleWebhook(
+        Buffer.from('not json'),
+        TEST_WEBHOOK_HASH,
+      );
+
+      expect(result).toBeNull();
+    });
   });
 
   describe('initiate', () => {
@@ -319,6 +353,72 @@ describe('FlutterwaveAdapter', () => {
           splitValue: 0.15,
         }),
       ).rejects.toThrow('Invalid account number');
+    });
+  });
+
+  describe('refund', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('verifies the transaction then refunds it on success', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: 'success',
+              data: { id: 42, status: 'successful', tx_ref: 'ORD-1-abcd' },
+            }),
+        })
+        .mockResolvedValueOnce({
+          json: () => Promise.resolve({ status: 'success' }),
+        });
+      global.fetch = fetchMock as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await adapter.refund('ORD-1-abcd');
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [refundUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect(refundUrl).toContain('/transactions/42/refund');
+    });
+
+    it("throws (docs/ROADMAP.md FDP-65) rather than silently succeeding when the original transaction can't be found — previously a bare `return` treated as success", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () => Promise.resolve({ status: 'error', data: null }),
+      }) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.refund('ORD-missing')).rejects.toThrow(
+        'Could not find the original Flutterwave transaction to refund',
+      );
+    });
+
+    it('throws (docs/ROADMAP.md FDP-65) when Flutterwave rejects the refund itself — previously the response was never checked at all', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: 'success',
+              data: { id: 42, status: 'successful', tx_ref: 'ORD-1-abcd' },
+            }),
+        })
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: 'error',
+              message: 'Transaction already refunded',
+            }),
+        });
+      global.fetch = fetchMock as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.refund('ORD-1-abcd')).rejects.toThrow(
+        'Transaction already refunded',
+      );
     });
   });
 });
