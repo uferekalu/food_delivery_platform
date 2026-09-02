@@ -26,56 +26,70 @@ export interface CarouselProps {
   /** Applied to each slide's wrapper — set a width here (e.g. "w-72") since children scroll
    * horizontally at their own intrinsic/assigned width, not stretched to fill the track. */
   itemClassName?: string;
-  /** ms between auto-advances; 0 disables auto-advance (manual arrows/swipe only). */
-  autoAdvanceMs?: number;
+  /** Pixels/second of continuous drift — a slow, gentle news-ticker-style glide rather than
+   * periodic large jumps (docs/ROADMAP.md FDP-68: the original setInterval-jump version read as
+   * fast and jarring, not appealing). 0 disables auto-scroll (manual arrows/swipe only). */
+  speed?: number;
   "aria-label": string;
 }
 
+// Small, frequent steps rather than one rAF loop — keeps this trivially testable with fake
+// timers (no requestAnimationFrame mocking needed) while still reading as continuous motion at
+// 30ms granularity.
+const TICK_MS = 30;
+
 /**
- * A horizontally auto-advancing carousel (docs/ROADMAP.md FDP-66) — native scroll-snap + touch
- * scrolling under the hood (so drag/swipe and keyboard scrolling work for free, no reinventing
- * gesture handling) with a `setInterval` nudging `scrollBy` on top for the "moving on its own"
- * feel, plus prev/next buttons for discoverable manual control. Pauses auto-advance on
- * hover/focus/touch (a carousel that fights the user's own scroll attempt is worse than a
- * static rail) and respects `prefers-reduced-motion` entirely (no auto-advance at all).
+ * A horizontally auto-scrolling carousel (docs/ROADMAP.md FDP-66, motion redesigned in FDP-68)
+ * — native touch/drag scrolling under the hood (so swipe and keyboard scrolling work for free,
+ * no reinventing gesture handling) with a continuous slow `scrollLeft` drift on top for the
+ * "moving on its own" feel, plus prev/next buttons for discoverable manual paging. No
+ * scroll-snap: snap points fight a slow continuous programmatic drift (each tiny step gets
+ * fought/corrected by the browser's own snap behavior), so this trades snap-to-card for a
+ * smooth glide instead. Pauses on hover/focus/touch (a carousel that fights the user's own
+ * scroll attempt is worse than a static rail) and respects `prefers-reduced-motion` entirely
+ * (no auto-scroll at all).
  */
-export function Carousel({ children, className, itemClassName, autoAdvanceMs = 4000, ...props }: CarouselProps) {
+export function Carousel({ children, className, itemClassName, speed = 30, ...props }: CarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
   const [edge, setEdge] = useState({ atStart: true, atEnd: false });
 
+  function syncEdge(track: HTMLDivElement) {
+    setEdge({
+      atStart: track.scrollLeft <= 4,
+      atEnd: track.scrollLeft + track.clientWidth >= track.scrollWidth - 4,
+    });
+  }
+
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const updateEdge = () => {
-      setEdge({
-        atStart: track.scrollLeft <= 4,
-        atEnd: track.scrollLeft + track.clientWidth >= track.scrollWidth - 4,
-      });
-    };
-    updateEdge();
-    track.addEventListener("scroll", updateEdge, { passive: true });
-    window.addEventListener("resize", updateEdge);
+    const onScroll = () => syncEdge(track);
+    onScroll();
+    track.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
     return () => {
-      track.removeEventListener("scroll", updateEdge);
-      window.removeEventListener("resize", updateEdge);
+      track.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
     };
   }, [children.length]);
 
   useEffect(() => {
-    if (!autoAdvanceMs || paused) return;
+    if (!speed || paused) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
+    const pxPerTick = (speed * TICK_MS) / 1000;
     const id = setInterval(() => {
       const track = trackRef.current;
       if (!track) return;
-      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
-      track.scrollTo(
-        atEnd ? { left: 0, behavior: "smooth" } : { left: track.scrollLeft + track.clientWidth * 0.85, behavior: "smooth" },
-      );
-    }, autoAdvanceMs);
+      const maxScroll = track.scrollWidth - track.clientWidth;
+      if (maxScroll <= 0) return;
+      const next = track.scrollLeft + pxPerTick;
+      track.scrollLeft = next >= maxScroll ? 0 : next;
+      syncEdge(track);
+    }, TICK_MS);
     return () => clearInterval(id);
-  }, [autoAdvanceMs, paused]);
+  }, [speed, paused]);
 
   function scrollByPage(direction: 1 | -1) {
     trackRef.current?.scrollBy({ left: trackRef.current.clientWidth * 0.85 * direction, behavior: "smooth" });
@@ -94,10 +108,10 @@ export function Carousel({ children, className, itemClassName, autoAdvanceMs = 4
         ref={trackRef}
         role="region"
         aria-label={props["aria-label"]}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {children.map((child, i) => (
-          <div key={i} className={cn("shrink-0 snap-start", itemClassName)}>
+          <div key={i} className={cn("shrink-0", itemClassName)}>
             {child}
           </div>
         ))}
