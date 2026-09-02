@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrdersService } from '../orders/orders.service';
+import { OrdersService, REFUNDABLE_STATUSES } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import type { OrderDocument } from '../orders/schemas/order.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -77,6 +77,26 @@ export class PaymentsService {
       (account) => account.provider === provider && account.status === 'active',
     );
 
+    // The split sent to a payment provider can never exceed what's actually being charged this
+    // transaction (docs/ROADMAP.md FDP-65). order.restaurantPayoutAmount is computed on the
+    // pre-discount subtotal by design (the platform, not the restaurant, absorbs a promo's
+    // cost — see OrdersService.createOrder) — but a big enough discount can push `order.total`
+    // below it, which would otherwise ask Paystack for a negative `transaction_charge` or ask a
+    // Flutterwave subaccount to receive more than the whole charge, both invalid requests to a
+    // live payment API. Clamping only protects the transaction split; it does not change what
+    // the restaurant is contractually owed (order.restaurantPayoutAmount, shown as-is in
+    // earnings/sales-report) — a clamped order means the platform must settle the shortfall to
+    // the restaurant outside this transaction.
+    const splitAmount = Math.min(
+      Math.max(order.restaurantPayoutAmount, 0),
+      order.total,
+    );
+    if (splitAmount !== order.restaurantPayoutAmount) {
+      this.logger.warn(
+        `Order ${order._id.toString()}: discount pushed the payable total (${order.total}) below its restaurant payout (${order.restaurantPayoutAmount}) — clamped the ${provider} split to ${splitAmount}; the platform still owes the restaurant the full amount`,
+      );
+    }
+
     let result: InitiatePaymentResult;
     try {
       result = await adapter.initiate({
@@ -88,7 +108,7 @@ export class PaymentsService {
         successUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}`,
         cancelUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}&cancelled=true`,
         restaurantPayoutAccountReference: payoutAccount?.reference ?? undefined,
-        restaurantPayoutAmount: order.restaurantPayoutAmount,
+        restaurantPayoutAmount: splitAmount,
       });
     } catch (error) {
       // A raw adapter error (a provider's own API error — e.g. Stripe rejecting a charge below
@@ -122,7 +142,17 @@ export class PaymentsService {
     signature: string | undefined,
   ): Promise<void> {
     const adapter = this.getAdapter(providerName);
-    const event = await adapter.handleWebhook(rawBody, signature);
+    let event: Awaited<ReturnType<PaymentAdapter['handleWebhook']>>;
+    try {
+      event = await adapter.handleWebhook(rawBody, signature);
+    } catch (error) {
+      // Defense in depth alongside each adapter's own parsing safety (docs/ROADMAP.md FDP-65) —
+      // a webhook body that doesn't match the shape an adapter expects must never surface as an
+      // uncaught 500 through this @Public() route: repeated 500s risk a provider auto-disabling
+      // the endpoint, breaking payment confirmation for every future order on that provider.
+      this.logger.error(`${providerName} webhook handling threw`, error);
+      return;
+    }
     if (!event) {
       this.logger.warn(`Rejected an unverifiable ${providerName} webhook`);
       return;
@@ -132,6 +162,19 @@ export class PaymentsService {
     if (!order) {
       this.logger.warn(
         `${providerName} webhook referenced an unknown payment ref: ${event.reference}`,
+      );
+      return;
+    }
+    // An order only ever has one live paymentProvider (order.paymentProvider — the provider its
+    // *current* checkout attempt is using) — a webhook arriving on a *different* provider's
+    // route for that same reference can only mean the reference collided or was spoofed, since a
+    // real provider only ever fires its own events for its own references (docs/ROADMAP.md
+    // FDP-65: this was previously unchecked, so a correctly-signed webhook on the wrong
+    // provider's route could mark a Stripe/Paystack order paid with no charge ever collected
+    // anywhere).
+    if (order.paymentProvider !== providerName) {
+      this.logger.warn(
+        `${providerName} webhook referenced order ${order._id.toString()}, which belongs to ${order.paymentProvider} — ignoring`,
       );
       return;
     }
@@ -184,17 +227,27 @@ export class PaymentsService {
   }
 
   /**
-   * Admin-triggered post-delivery refund (docs/ROADMAP.md FDP-20's "dispute/refund handling").
-   * The `DELIVERED` → `REFUNDED` state-machine edge has existed since FDP-13 and every adapter
-   * has implemented `refund()` since FDP-14, but nothing called either until now. Only reachable
-   * for a `DELIVERED` order with a `succeeded` payment — anything else means there's no charge to
-   * reverse (or it was never actually collected).
+   * Admin-triggered refund (docs/ROADMAP.md FDP-20's "dispute/refund handling", extended by
+   * FDP-65). Reachable for a `DELIVERED` order (the normal post-delivery dispute case) or a
+   * `CANCELLED` one (an order cancelled *after* payment already succeeded but before delivery —
+   * previously had no refund path at all, since `CANCELLED` was terminal) with a `succeeded`
+   * payment; anything else means there's no charge to reverse, or it was never collected.
+   *
+   * Two-phase to survive concurrent calls (docs/ROADMAP.md FDP-65) — `claimForRefund` atomically
+   * flips the order to `REFUNDED` *before* the provider is asked to reverse anything, so a
+   * second near-simultaneous call (admin double-click, client retry) sees the order already
+   * claimed and stops here rather than firing a second live refund at the provider. If the
+   * provider call then fails, `revertFailedRefundClaim` puts the order back exactly where it
+   * was — the claim is never left standing over a refund that didn't actually happen.
    */
   async refundOrder(orderId: string): Promise<OrderDocument> {
     const order = await this.ordersService.adminFindOrThrow(orderId);
-    if (order.status !== 'DELIVERED' || order.paymentStatus !== 'succeeded') {
+    if (
+      !REFUNDABLE_STATUSES.includes(order.status) ||
+      order.paymentStatus !== 'succeeded'
+    ) {
       throw new BadRequestException(
-        'Only a delivered order with a successful payment can be refunded',
+        'Only a delivered or cancelled order with a successful payment can be refunded',
       );
     }
     if (!order.paymentRef) {
@@ -203,10 +256,18 @@ export class PaymentsService {
       );
     }
 
+    const claimed = await this.ordersService.claimForRefund(orderId);
+    if (!claimed) {
+      throw new BadRequestException(
+        'This order cannot be refunded — it may already be refunded, or was just changed by someone else',
+      );
+    }
+
     const adapter = this.getAdapter(order.paymentProvider);
     try {
       await adapter.refund(order.paymentRef);
     } catch (error) {
+      await this.ordersService.revertFailedRefundClaim(orderId, claimed.status);
       this.logger.error(
         `${order.paymentProvider} refund failed for order ${orderId}`,
         error,
@@ -218,6 +279,6 @@ export class PaymentsService {
       );
     }
 
-    return this.ordersService.markRefunded(orderId);
+    return this.ordersService.finalizeRefund(orderId);
   }
 }

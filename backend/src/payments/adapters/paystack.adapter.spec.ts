@@ -377,4 +377,35 @@ describe('PaystackAdapter', () => {
       ).rejects.toThrow('Invalid account number');
     });
   });
+
+  describe('refund', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('resolves on a successful refund', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () => Promise.resolve({ status: true }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.refund('ref_123')).resolves.toBeUndefined();
+    });
+
+    it("throws (docs/ROADMAP.md FDP-65) rather than silently succeeding when Paystack rejects the refund — previously the response was discarded entirely", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: false,
+            message: 'Insufficient balance in main account',
+          }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.refund('ref_123')).rejects.toThrow(
+        'Insufficient balance in main account',
+      );
+    });
+  });
 });

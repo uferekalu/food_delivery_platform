@@ -17,7 +17,7 @@ import {
   DeliveryZoneSchema,
 } from '../delivery-zones/schemas/delivery-zone.schema';
 import { Order, OrderDocument, OrderSchema } from './schemas/order.schema';
-import type { OrderStatus } from './schemas/order-status';
+import type { OrderStatus, OrderPaymentStatus } from './schemas/order-status';
 import { Cart, CartDocument, CartSchema } from '../cart/schemas/cart.schema';
 import {
   Restaurant,
@@ -420,6 +420,7 @@ describe('OrdersService', () => {
       }[];
       subtotal?: number;
       deliveredAt?: Date;
+      paymentStatus?: OrderPaymentStatus;
     } = {},
   ) {
     const items = overrides.items ?? [
@@ -458,7 +459,7 @@ describe('OrdersService', () => {
       deliveredAt:
         status === 'DELIVERED' ? (overrides.deliveredAt ?? new Date()) : null,
       paymentProvider: 'paystack',
-      paymentStatus: 'pending',
+      paymentStatus: overrides.paymentStatus ?? 'pending',
       deliveryAddress: validAddress,
     });
   }
@@ -886,6 +887,32 @@ describe('OrdersService', () => {
       expect(notFound).toBeNull();
     });
 
+    it("findByPaymentRef still finds an order by an *earlier* reference after a retry issues a new one (docs/ROADMAP.md FDP-65) — previously overwriting paymentRef stranded a webhook for a session the customer actually completed before retrying", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+      await ordersService.setPaymentRef(order, 'stripe', 'cs_test_first');
+      const updated = await ordersService.setPaymentRef(
+        order,
+        'stripe',
+        'cs_test_second',
+      );
+
+      expect(updated.paymentRef).toBe('cs_test_second'); // the current/latest ref
+      expect(updated.paymentRefs).toEqual([
+        'cs_test_first',
+        'cs_test_second',
+      ]);
+
+      const foundFirst = await ordersService.findByPaymentRef('cs_test_first');
+      expect(foundFirst?._id.toString()).toBe(order._id.toString());
+      const foundSecond =
+        await ordersService.findByPaymentRef('cs_test_second');
+      expect(foundSecond?._id.toString()).toBe(order._id.toString());
+    });
+
     it('markPaidFromWebhook moves PENDING_PAYMENT to PLACED and is idempotent on replay', async () => {
       const restaurant = await createApprovedRestaurant();
       const order = await createOrderAtStatus(
@@ -912,6 +939,26 @@ describe('OrdersService', () => {
       expect(second?.statusHistory).toHaveLength(2); // PENDING_PAYMENT, PLACED — not 3
 
       expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it("markPaidFromWebhook's atomic status filter means only one of two concurrent calls actually transitions the order (docs/ROADMAP.md FDP-65) — the scenario a non-atomic findById-then-save let race: webhook and the client's verifyPayment poll arriving within milliseconds of each other", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      const [first, second] = await Promise.all([
+        ordersService.markPaidFromWebhook(order._id.toString()),
+        ordersService.markPaidFromWebhook(order._id.toString()),
+      ]);
+
+      expect(first?.status).toBe('PLACED');
+      expect(second?.status).toBe('PLACED');
+      // Exactly one PLACED entry was ever pushed — not two — proving only one of the two calls
+      // actually won the atomic transition.
+      const finalOrder = await orderModel.findById(order._id).exec();
+      expect(finalOrder?.statusHistory).toHaveLength(2); // PENDING_PAYMENT, PLACED
     });
 
     it('markPaidFromWebhook returns null for an unknown order id', async () => {
@@ -948,6 +995,26 @@ describe('OrdersService', () => {
       );
       expect(updated?.paymentStatus).toBe('succeeded');
     });
+
+    it("markPaymentFailed never downgrades an already-refunded payment either (docs/ROADMAP.md FDP-65) — a late/duplicate 'failed' event for a refunded order previously slipped through and left status REFUNDED with paymentStatus 'failed', an inconsistent combination", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      const claimed = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      await ordersService.finalizeRefund(order._id.toString());
+      expect(claimed?.status).toBe('DELIVERED');
+
+      const updated = await ordersService.markPaymentFailed(
+        order._id.toString(),
+      );
+      expect(updated?.paymentStatus).toBe('refunded');
+      expect(updated?.status).toBe('REFUNDED');
+    });
   });
 
   describe('admin dispute/refund handling (FDP-20)', () => {
@@ -969,14 +1036,22 @@ describe('OrdersService', () => {
       ).rejects.toThrow('Order not found');
     });
 
-    it('markRefunded transitions DELIVERED to REFUNDED, records history, and emits a realtime event', async () => {
+    it('claimForRefund + finalizeRefund transitions DELIVERED to REFUNDED, records history, and emits a realtime event', async () => {
       const restaurant = await createApprovedRestaurant();
       const order = await createOrderAtStatus(
         restaurant._id.toString(),
         'DELIVERED',
+        { paymentStatus: 'succeeded' },
       );
 
-      const refunded = await ordersService.markRefunded(order._id.toString());
+      const claimed = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(claimed?.status).toBe('DELIVERED'); // pre-update doc, for the caller to revert to
+
+      const refunded = await ordersService.finalizeRefund(
+        order._id.toString(),
+      );
       expect(refunded.status).toBe('REFUNDED');
       expect(refunded.paymentStatus).toBe('refunded');
       expect(refunded.statusHistory.at(-1)).toMatchObject({
@@ -984,6 +1059,99 @@ describe('OrdersService', () => {
         by: 'admin',
       });
       expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
+
+    it('claimForRefund also accepts a CANCELLED order with a succeeded payment (docs/ROADMAP.md FDP-65)', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'CANCELLED',
+        { paymentStatus: 'succeeded' },
+      );
+
+      const claimed = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(claimed?.status).toBe('CANCELLED');
+      const updated = await orderModel.findById(order._id).exec();
+      expect(updated?.status).toBe('REFUNDED');
+    });
+
+    it("claimForRefund's atomic status filter means only one of two concurrent refund attempts can claim the same order (docs/ROADMAP.md FDP-65)", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+
+      const [first, second] = await Promise.all([
+        ordersService.claimForRefund(order._id.toString()),
+        ordersService.claimForRefund(order._id.toString()),
+      ]);
+
+      const claims = [first, second].filter((c) => c !== null);
+      expect(claims).toHaveLength(1); // exactly one of the two calls won the claim
+    });
+
+    it('claimForRefund returns null for an order whose payment never succeeded', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+      );
+      await orderModel
+        .updateOne({ _id: order._id }, { paymentStatus: 'failed' })
+        .exec();
+
+      const claimed = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(claimed).toBeNull();
+    });
+
+    it("revertFailedRefundClaim puts a claimed order back to its previous status when the provider's refund call fails", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      const claimed = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(claimed?.status).toBe('DELIVERED');
+      let current = await orderModel.findById(order._id).exec();
+      expect(current?.status).toBe('REFUNDED'); // claimed
+
+      await ordersService.revertFailedRefundClaim(
+        order._id.toString(),
+        'DELIVERED',
+      );
+
+      current = await orderModel.findById(order._id).exec();
+      expect(current?.status).toBe('DELIVERED');
+      expect(current?.paymentStatus).toBe('succeeded'); // unchanged — never actually refunded
+    });
+
+    it('revertFailedRefundClaim never overwrites a refund that genuinely completed in the meantime', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.finalizeRefund(order._id.toString());
+
+      await ordersService.revertFailedRefundClaim(
+        order._id.toString(),
+        'DELIVERED',
+      );
+
+      const current = await orderModel.findById(order._id).exec();
+      expect(current?.status).toBe('REFUNDED'); // untouched — paymentStatus was already 'refunded'
+      expect(current?.paymentStatus).toBe('refunded');
     });
 
     it('getAnalyticsSummary counts orders by status and sums revenue by currency', async () => {

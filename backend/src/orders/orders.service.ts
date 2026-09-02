@@ -98,8 +98,23 @@ const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
 // platform fee unrelated to distance.
 const SERVICE_FEE_RATE = 0.05;
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+// Order statuses from which a captured payment can still be reversed (docs/ROADMAP.md FDP-65).
+// DELIVERED is the normal post-delivery dispute/refund case. CANCELLED was added after finding
+// there was previously no way to ever refund an order the restaurant cancels *after* payment
+// already succeeded but *before* delivery (PLACED/ACCEPTED_BY_RESTAURANT/PREPARING →
+// CANCELLED, allowed by OWNER_TRIGGERABLE_TRANSITIONS) — CANCELLED being terminal in
+// order-state-machine.ts meant the charge could never be reversed through this codebase at all.
+export const REFUNDABLE_STATUSES: OrderStatus[] = ['DELIVERED', 'CANCELLED'];
+
+// Money helper, exported for reuse (orders.controller.ts's CSV export) rather than
+// re-duplicated. `+ Number.EPSILON` before rounding (docs/ROADMAP.md FDP-65) — IEEE-754 doubles
+// represent many two-decimal values inexactly (1.5 * 0.15 === 0.22499999999999998, not 0.225),
+// so a plain `Math.round(value * 100) / 100` silently rounds DOWN a real fraction of monetary
+// values by a full cent instead of to the nearest cent. This is the standard, minimal mitigation
+// for that specific class of float error; it is not a general arbitrary-precision fix, but it
+// resolves every case actually reachable from this codebase's fee/discount arithmetic.
+export function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 // Sales report types (docs/ROADMAP.md FDP-64) — named interfaces rather than inlining, since
@@ -562,7 +577,12 @@ export class OrdersService {
 
   /** Records which provider/reference an in-flight payment attempt is using — called right
    * after `PaymentsService` creates the provider-hosted checkout session, before the customer
-   * has actually paid, so a later webhook delivery can look the order back up by reference. */
+   * has actually paid, so a later webhook delivery can look the order back up by reference.
+   * Appends to `paymentRefs` rather than only overwriting `paymentRef` (docs/ROADMAP.md FDP-65)
+   * — `initiatePayment` can be called more than once for the same still-`PENDING_PAYMENT` order
+   * (a retry, or switching provider), and a customer who completes payment on an *earlier*
+   * session must not become unfindable once a later attempt overwrites the single `paymentRef`
+   * field. */
   async setPaymentRef(
     order: OrderDocument,
     provider: PaymentProvider,
@@ -570,11 +590,16 @@ export class OrdersService {
   ): Promise<OrderDocument> {
     order.paymentProvider = provider;
     order.paymentRef = paymentRef;
+    order.paymentRefs.push(paymentRef);
     return order.save();
   }
 
+  /** Matches on `paymentRefs` (every reference ever issued) primarily, with a `paymentRef`
+   * fallback for orders that predate that field ever being populated — see `setPaymentRef`. */
   findByPaymentRef(reference: string): Promise<OrderDocument | null> {
-    return this.orderModel.findOne({ paymentRef: reference }).exec();
+    return this.orderModel
+      .findOne({ $or: [{ paymentRefs: reference }, { paymentRef: reference }] })
+      .exec();
   }
 
   /**
@@ -582,25 +607,34 @@ export class OrdersService {
    * called exclusively from `PaymentsService` after a webhook signature has been verified.
    * Idempotent: providers retry webhook delivery, and a second delivery for an order that's
    * already past `PENDING_PAYMENT` is a silent no-op, not an error.
+   *
+   * Uses an atomic `findOneAndUpdate` filtered on the *current* status (docs/ROADMAP.md FDP-65)
+   * rather than a plain findById-then-save — this method is deliberately designed to race the
+   * client-triggered `verifyPayment` active-poll (see that method's own doc comment: "whichever
+   * of the two arrives first wins... a safe no-op"), and a non-atomic read-then-write let both
+   * sides read `PENDING_PAYMENT` before either wrote, so both proceeded: two `PLACED`
+   * `statusHistory` entries and duplicate customer/owner notifications instead of the promised
+   * no-op. Only the update that actually flips the filtered document emits/notifies.
    */
   async markPaidFromWebhook(orderId: string): Promise<OrderDocument | null> {
-    const order = await this.orderModel.findById(orderId).exec();
-    if (!order) return null;
-    if (order.status !== 'PENDING_PAYMENT') return order;
+    const updated = await this.orderModel
+      .findOneAndUpdate(
+        { _id: orderId, status: 'PENDING_PAYMENT' },
+        {
+          $set: { paymentStatus: 'succeeded', status: 'PLACED' },
+          $push: {
+            statusHistory: { status: 'PLACED', at: new Date(), by: 'system' },
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+    if (!updated) return this.orderModel.findById(orderId).exec();
 
-    order.paymentStatus = 'succeeded';
-    order.status = 'PLACED';
-    order.statusHistory.push({
-      status: 'PLACED',
-      at: new Date(),
-      by: 'system',
-    });
-    await order.save();
-
-    this.realtimeGateway.emitOrderStatusChanged(order);
-    this.notifyOrderStatus(order);
-    this.notifyNewOrderToOwner(order);
-    return order;
+    this.realtimeGateway.emitOrderStatusChanged(updated);
+    this.notifyOrderStatus(updated);
+    this.notifyNewOrderToOwner(updated);
+    return updated;
   }
 
   /** A failed/declined payment attempt — the order stays in `PENDING_PAYMENT` so the customer
@@ -608,9 +642,15 @@ export class OrdersService {
   async markPaymentFailed(orderId: string): Promise<OrderDocument | null> {
     const order = await this.orderModel.findById(orderId).exec();
     if (!order) return null;
-    // Never downgrade a payment that another (successful) webhook already confirmed — provider
-    // webhook delivery order isn't guaranteed.
-    if (order.paymentStatus === 'succeeded') return order;
+    // Never downgrade a payment that another webhook already resolved as final — provider
+    // webhook delivery order isn't guaranteed, and this specifically must not undo a completed
+    // refund either (docs/ROADMAP.md FDP-65: a late/duplicate "failed" event for an already-
+    // refunded order previously slipped through and overwrote paymentStatus to 'failed' while
+    // status stayed REFUNDED, an inconsistent combination that also dropped the order from
+    // getAnalyticsSummary's revenue total).
+    if (order.paymentStatus === 'succeeded' || order.paymentStatus === 'refunded') {
+      return order;
+    }
 
     order.paymentStatus = 'failed';
     await order.save();
@@ -621,16 +661,36 @@ export class OrdersService {
   }
 
   /**
-   * The *only* place `DELIVERED` → `REFUNDED` happens — called exclusively from
-   * `PaymentsService.refundOrder` after the provider adapter has actually reversed the charge
-   * (see `order-state-machine.ts`'s `ORDER_TRANSITIONS`, this edge existed there since FDP-13
-   * but had nothing wired up to actually trigger it until now, docs/ROADMAP.md FDP-20).
+   * Refund flow, part 1/3 (docs/ROADMAP.md FDP-65 — replaces the old single-step `markRefunded`,
+   * called exclusively from `PaymentsService.refundOrder`). Atomically claims the order for
+   * refunding by flipping `status` straight to `REFUNDED` *before* the provider has actually
+   * been asked to reverse the charge — `findOneAndUpdate`'s single-document atomicity is the
+   * concurrency guard: of two near-simultaneous refund attempts (an admin double-click, or a
+   * client retry), only one can match `status: {$in: REFUNDABLE_STATUSES}`, since the winner's
+   * update already moved status off of it before the loser's filter is evaluated by MongoDB.
+   * The loser gets `null` back and must not call the provider. Always pair with `finalizeRefund`
+   * (provider call succeeded) or `revertFailedRefundClaim` (it didn't) — never call the provider
+   * before this resolves, and never leave a claimed order without calling one of the two.
    */
-  async markRefunded(orderId: string): Promise<OrderDocument> {
+  async claimForRefund(orderId: string): Promise<OrderDocument | null> {
+    return this.orderModel
+      .findOneAndUpdate(
+        {
+          _id: orderId,
+          status: { $in: REFUNDABLE_STATUSES },
+          paymentStatus: 'succeeded',
+        },
+        { $set: { status: 'REFUNDED' } },
+      )
+      .exec(); // default {new: false} — the caller needs the PRE-update doc's status to revert to
+  }
+
+  /** Refund flow, part 2/3 (success path) — the provider has actually reversed the charge,
+   * finalize the claim from `claimForRefund` into a real refunded order. */
+  async finalizeRefund(orderId: string): Promise<OrderDocument> {
     const order = await this.orderModel.findById(orderId).exec();
     if (!order) throw new NotFoundException('Order not found');
 
-    order.status = 'REFUNDED';
     order.paymentStatus = 'refunded';
     order.statusHistory.push({
       status: 'REFUNDED',
@@ -642,6 +702,23 @@ export class OrdersService {
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
     return order;
+  }
+
+  /** Refund flow, part 3/3 (failure path) — the provider rejected the refund *after*
+   * `claimForRefund` already flipped `status` to `REFUNDED`; put it back exactly where it was so
+   * the order isn't left permanently mislabeled as refunded when no money actually moved. Only
+   * reverts while still mid-claim (`paymentStatus` is still `'succeeded'`, i.e. `finalizeRefund`
+   * never ran) — this can never overwrite a refund that genuinely completed in the meantime. */
+  async revertFailedRefundClaim(
+    orderId: string,
+    previousStatus: OrderStatus,
+  ): Promise<void> {
+    await this.orderModel
+      .updateOne(
+        { _id: orderId, status: 'REFUNDED', paymentStatus: 'succeeded' },
+        { $set: { status: previousStatus } },
+      )
+      .exec();
   }
 
   /**

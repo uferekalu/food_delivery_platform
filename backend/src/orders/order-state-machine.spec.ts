@@ -20,9 +20,10 @@ describe('order-state-machine', () => {
     expect(canTransition('PENDING_PAYMENT', 'PLACED')).toBe(true);
   });
 
-  it('CANCELLED and REFUNDED are terminal', () => {
-    expect(isTerminal('CANCELLED')).toBe(true);
+  it('REFUNDED is terminal; CANCELLED is not — it can still move to REFUNDED (docs/ROADMAP.md FDP-65: a payment already collected before a post-payment cancellation must still be reversible)', () => {
     expect(isTerminal('REFUNDED')).toBe(true);
+    expect(isTerminal('CANCELLED')).toBe(false);
+    expect(canTransition('CANCELLED', 'REFUNDED')).toBe(true);
     expect(isTerminal('PLACED')).toBe(false);
   });
 
