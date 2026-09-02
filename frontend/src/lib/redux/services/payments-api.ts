@@ -32,6 +32,29 @@ export interface SetupPaystackPayoutResult {
   verifiedAccountName: string;
 }
 
+// Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) — same shapes as the Paystack ones
+// above, mirrored for Flutterwave.
+export interface FlutterwaveBank {
+  name: string;
+  code: string;
+}
+
+export interface ResolveFlutterwaveAccountInput {
+  restaurantId: string;
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface ResolvedFlutterwaveAccount {
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface SetupFlutterwavePayoutResult {
+  restaurant: Restaurant;
+  verifiedAccountName: string;
+}
+
 export const paymentsApi = api.injectEndpoints({
   endpoints: (builder) => ({
     initiatePayment: builder.mutation<InitiatePaymentResult, InitiatePaymentInput>({
@@ -71,6 +94,29 @@ export const paymentsApi = api.injectEndpoints({
         { type: "Order", id: `EARNINGS-${restaurantId}` },
       ],
     }),
+
+    listFlutterwaveBanks: builder.query<FlutterwaveBank[], void>({
+      query: () => "/payments/flutterwave/banks",
+    }),
+
+    resolveFlutterwaveAccount: builder.mutation<ResolvedFlutterwaveAccount, ResolveFlutterwaveAccountInput>({
+      query: ({ restaurantId, ...body }) => ({
+        url: `/restaurants/${restaurantId}/payout/flutterwave/resolve-account`,
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupFlutterwavePayout: builder.mutation<SetupFlutterwavePayoutResult, ResolveFlutterwaveAccountInput>({
+      query: ({ restaurantId, ...body }) => ({
+        url: `/restaurants/${restaurantId}/payout/flutterwave/setup`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { restaurantId }) => [
+        { type: "Order", id: `EARNINGS-${restaurantId}` },
+      ],
+    }),
   }),
 });
 
@@ -81,4 +127,7 @@ export const {
   useListPaystackBanksQuery,
   useResolvePaystackAccountMutation,
   useSetupPaystackPayoutMutation,
+  useListFlutterwaveBanksQuery,
+  useResolveFlutterwaveAccountMutation,
+  useSetupFlutterwavePayoutMutation,
 } = paymentsApi;
