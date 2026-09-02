@@ -19,6 +19,63 @@ export interface RestaurantEarnings {
   payoutSetupComplete: boolean;
 }
 
+// Detailed sales report + COGS (docs/ROADMAP.md FDP-64).
+export interface SalesReportQuery {
+  restaurantId: string;
+  /** ISO date/time — omitted means all-time. */
+  from?: string;
+  to?: string;
+}
+
+export interface SalesReportItemBreakdown {
+  menuItemId: string;
+  name: string;
+  qtySold: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  marginPct: number | null;
+  hasIncompleteCostData: boolean;
+}
+
+export interface SalesReportDayBreakdown {
+  date: string;
+  orders: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+}
+
+export interface SalesReport {
+  currency: string;
+  range: { from: string | null; to: string | null };
+  totals: {
+    orders: number;
+    revenue: number;
+    deliveryFeeTotal: number;
+    serviceFeeTotal: number;
+    discountTotal: number;
+    platformFeeTotal: number;
+    netEarned: number;
+    totalCollected: number;
+    cogs: number;
+    grossProfit: number;
+    grossMarginPct: number | null;
+    avgOrderValue: number;
+  };
+  itemsMissingCostPrice: string[];
+  byItem: SalesReportItemBreakdown[];
+  byDay: SalesReportDayBreakdown[];
+}
+
+function salesReportQueryString({ from, to }: { from?: string; to?: string }): string {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export const ordersApi = api.injectEndpoints({
   endpoints: (builder) => ({
     createOrder: builder.mutation<Order, CreateOrderInput>({
@@ -52,6 +109,12 @@ export const ordersApi = api.injectEndpoints({
       providesTags: (_result, _error, restaurantId) => [{ type: "Order", id: `EARNINGS-${restaurantId}` }],
     }),
 
+    getSalesReport: builder.query<SalesReport, SalesReportQuery>({
+      query: ({ restaurantId, ...range }) =>
+        `/orders/restaurant/${restaurantId}/sales-report${salesReportQueryString(range)}`,
+      providesTags: (_result, _error, { restaurantId }) => [{ type: "Order", id: `SALES-REPORT-${restaurantId}` }],
+    }),
+
     updateOrderStatus: builder.mutation<Order, { orderId: string; status: OrderStatus }>({
       query: ({ orderId, status }) => ({ url: `/orders/${orderId}/status`, method: "PATCH", body: { status } }),
       invalidatesTags: (result, _error, { orderId }) => [
@@ -68,5 +131,6 @@ export const {
   useGetMyOrdersQuery,
   useGetRestaurantOrdersQuery,
   useGetRestaurantEarningsQuery,
+  useGetSalesReportQuery,
   useUpdateOrderStatusMutation,
 } = ordersApi;

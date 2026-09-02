@@ -410,22 +410,38 @@ describe('OrdersService', () => {
   async function createOrderAtStatus(
     restaurantId: string,
     status: OrderStatus,
+    overrides: {
+      items?: {
+        menuItemId: string;
+        name: string;
+        price: number;
+        costPrice?: number | null;
+        qty: number;
+      }[];
+      subtotal?: number;
+      deliveredAt?: Date;
+    } = {},
   ) {
+    const items = overrides.items ?? [
+      {
+        menuItemId: restaurantId,
+        name: 'Jollof Rice',
+        price: 10,
+        costPrice: null,
+        qty: 1,
+      },
+    ];
     return orderModel.create({
       orderNumber: `ORD-TEST-${Math.random().toString(36).slice(2, 8)}`,
       customerId: userId,
       restaurantId,
-      items: [
-        {
-          menuItemId: restaurantId,
-          name: 'Jollof Rice',
-          price: 10,
-          qty: 1,
-          selectedModifiers: [],
-          notes: '',
-        },
-      ],
-      subtotal: 10,
+      items: items.map((item) => ({
+        ...item,
+        costPrice: item.costPrice ?? null,
+        selectedModifiers: [],
+        notes: '',
+      })),
+      subtotal: overrides.subtotal ?? 10,
       deliveryFee: 1,
       serviceFee: 0.5,
       tax: 0,
@@ -436,6 +452,11 @@ describe('OrdersService', () => {
       currency: 'NGN',
       status,
       statusHistory: [{ status, at: new Date(), by: userId }],
+      // Sales-report date-range filtering (docs/ROADMAP.md FDP-64) — deliveredAt only makes
+      // sense once an order has actually reached DELIVERED, matching
+      // OrdersService.updateStatusByRider's real behavior.
+      deliveredAt:
+        status === 'DELIVERED' ? (overrides.deliveredAt ?? new Date()) : null,
       paymentProvider: 'paystack',
       paymentStatus: 'pending',
       deliveryAddress: validAddress,
@@ -544,6 +565,187 @@ describe('OrdersService', () => {
       await expect(
         ordersService.getEarningsSummary(intruder, restaurant._id.toString()),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('getSalesReport / getSalesReportOrders (FDP-64)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    async function seedDeliveredOrders(restaurantId: string) {
+      // Distinct real menu items — items.menuItemId must actually differ per item name, or the
+      // sales-report aggregation's $group on menuItemId incorrectly merges different items
+      // together (caught by this test itself before this fix: reusing one id for two names
+      // silently grouped them under whichever name $first happened to see).
+      const jollof = await createItem(restaurantId, 10);
+      const chicken = await createItem(restaurantId, 15);
+
+      // Two orders on day 1: one item has a cost price, one doesn't (missing-cost coverage).
+      await createOrderAtStatus(restaurantId, 'DELIVERED', {
+        items: [
+          {
+            menuItemId: jollof._id.toString(),
+            name: 'Jollof Rice',
+            price: 10,
+            costPrice: 4,
+            qty: 2,
+          },
+        ],
+        subtotal: 20,
+        deliveredAt: new Date('2026-01-01T10:00:00.000Z'),
+      });
+      await createOrderAtStatus(restaurantId, 'DELIVERED', {
+        items: [
+          {
+            menuItemId: chicken._id.toString(),
+            name: 'Chicken',
+            price: 15,
+            costPrice: null,
+            qty: 1,
+          },
+        ],
+        subtotal: 15,
+        deliveredAt: new Date('2026-01-01T12:00:00.000Z'),
+      });
+      // One order on day 2, same item as the first (so byItem aggregates across orders/days).
+      await createOrderAtStatus(restaurantId, 'DELIVERED', {
+        items: [
+          {
+            menuItemId: jollof._id.toString(),
+            name: 'Jollof Rice',
+            price: 10,
+            costPrice: 4,
+            qty: 1,
+          },
+        ],
+        subtotal: 10,
+        deliveredAt: new Date('2026-01-02T10:00:00.000Z'),
+      });
+      // Not DELIVERED — must be excluded entirely from every figure below.
+      await createOrderAtStatus(restaurantId, 'PLACED');
+      await createOrderAtStatus(restaurantId, 'REFUNDED');
+    }
+
+    it('computes totals, per-item, and per-day breakdowns across DELIVERED orders only', async () => {
+      const restaurant = await createApprovedRestaurant();
+      await seedDeliveredOrders(restaurant._id.toString());
+
+      const report = await ordersService.getSalesReport(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(report.currency).toBe('NGN');
+      expect(report.totals.orders).toBe(3);
+      expect(report.totals.revenue).toBe(45); // 20 + 15 + 10
+      expect(report.totals.cogs).toBe(12); // (2*4) + 0 (missing) + (1*4)
+      expect(report.totals.grossProfit).toBe(33);
+      expect(report.totals.grossMarginPct).toBeCloseTo(73.33, 1);
+      expect(report.totals.avgOrderValue).toBe(15);
+
+      expect(report.itemsMissingCostPrice).toEqual(['Chicken']);
+
+      const jollof = report.byItem.find((i) => i.name === 'Jollof Rice');
+      expect(jollof).toMatchObject({
+        qtySold: 3,
+        revenue: 30,
+        cogs: 12,
+        profit: 18,
+        hasIncompleteCostData: false,
+      });
+      const chicken = report.byItem.find((i) => i.name === 'Chicken');
+      expect(chicken).toMatchObject({
+        qtySold: 1,
+        revenue: 15,
+        cogs: 0, // missing cost price contributes 0, never treated as free-and-correct
+        profit: 15,
+        hasIncompleteCostData: true,
+      });
+
+      expect(report.byDay).toEqual([
+        { date: '2026-01-01', orders: 2, revenue: 35, cogs: 8, profit: 27 },
+        { date: '2026-01-02', orders: 1, revenue: 10, cogs: 4, profit: 6 },
+      ]);
+    });
+
+    it('narrows to the given date range on deliveredAt', async () => {
+      const restaurant = await createApprovedRestaurant();
+      await seedDeliveredOrders(restaurant._id.toString());
+
+      const report = await ordersService.getSalesReport(
+        owner,
+        restaurant._id.toString(),
+        new Date('2026-01-02T00:00:00.000Z'),
+        new Date('2026-01-02T23:59:59.999Z'),
+      );
+
+      expect(report.totals.orders).toBe(1);
+      expect(report.totals.revenue).toBe(10);
+      expect(report.byDay).toEqual([
+        { date: '2026-01-02', orders: 1, revenue: 10, cogs: 4, profit: 6 },
+      ]);
+    });
+
+    it('returns zeroed totals and empty breakdowns for a restaurant with no delivered orders', async () => {
+      const restaurant = await createApprovedRestaurant();
+
+      const report = await ordersService.getSalesReport(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(report.totals).toEqual({
+        orders: 0,
+        revenue: 0,
+        deliveryFeeTotal: 0,
+        serviceFeeTotal: 0,
+        discountTotal: 0,
+        platformFeeTotal: 0,
+        netEarned: 0,
+        totalCollected: 0,
+        cogs: 0,
+        grossProfit: 0,
+        grossMarginPct: null,
+        avgOrderValue: 0,
+      });
+      expect(report.itemsMissingCostPrice).toEqual([]);
+      expect(report.byItem).toEqual([]);
+      expect(report.byDay).toEqual([]);
+    });
+
+    it('rejects a caller who does not own the restaurant', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.getSalesReport(intruder, restaurant._id.toString()),
+      ).rejects.toThrow();
+    });
+
+    it('getSalesReportOrders returns only DELIVERED orders in range, oldest first, for CSV export', async () => {
+      const restaurant = await createApprovedRestaurant();
+      await seedDeliveredOrders(restaurant._id.toString());
+
+      const orders = await ordersService.getSalesReportOrders(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(orders).toHaveLength(3);
+      expect(orders.every((o) => o.status === 'DELIVERED')).toBe(true);
+      expect(orders[0].deliveredAt!.getTime()).toBeLessThan(
+        orders[1].deliveredAt!.getTime(),
+      );
+      expect(orders[1].deliveredAt!.getTime()).toBeLessThan(
+        orders[2].deliveredAt!.getTime(),
+      );
     });
   });
 
@@ -982,6 +1184,8 @@ describe('OrdersService', () => {
         );
         expect(delivered.status).toBe('DELIVERED');
         expect(delivered.statusHistory).toHaveLength(4); // seeded + 3 transitions
+        // Sales-report date-range filtering (docs/ROADMAP.md FDP-64) relies on this being set.
+        expect(delivered.deliveredAt).toBeInstanceOf(Date);
       });
 
       it('rejects a rider who is not assigned to the order', async () => {

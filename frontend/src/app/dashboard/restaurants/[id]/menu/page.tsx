@@ -51,6 +51,15 @@ const itemSchema = z.object({
   name: z.string().min(1, "Required").max(100),
   description: z.string().max(1000).optional(),
   price: z.coerce.number().min(0, "Must be 0 or more"),
+  // A blank field submits "" (not undefined) through an uncontrolled `register()` input —
+  // z.coerce.number() would otherwise turn that into 0, indistinguishable from "this item costs
+  // nothing to make". preprocess maps blank to undefined first so "left blank" and "explicitly
+  // 0" stay distinguishable (docs/ROADMAP.md FDP-64 relies on this: a null costPrice on the
+  // backend means "unknown", not "free").
+  costPrice: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : val),
+    z.coerce.number().min(0, "Must be 0 or more").optional(),
+  ),
   modifierGroups: z.array(modifierGroupSchema).max(10).optional(),
 });
 type ItemFormInput = z.input<typeof itemSchema>;
@@ -175,8 +184,14 @@ function ItemFormModal({
   } = useForm<ItemFormInput, unknown, ItemFormValues>({
     resolver: zodResolver(itemSchema),
     defaultValues: item
-      ? { name: item.name, description: item.description, price: item.price, modifierGroups: item.modifierGroups }
-      : { name: "", description: "", price: 0, modifierGroups: [] },
+      ? {
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          costPrice: item.costPrice ?? undefined,
+          modifierGroups: item.modifierGroups,
+        }
+      : { name: "", description: "", price: 0, costPrice: undefined, modifierGroups: [] },
   });
   const {
     fields: groupFields,
@@ -233,9 +248,18 @@ function ItemFormModal({
         <FormField label="Description" error={errors.description?.message}>
           <Textarea {...register("description")} rows={3} />
         </FormField>
-        <FormField label="Price" error={errors.price?.message} required>
-          <Input type="number" step="0.01" min="0" {...register("price")} />
-        </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Price" error={errors.price?.message} required>
+            <Input type="number" step="0.01" min="0" {...register("price")} />
+          </FormField>
+          <FormField
+            label="Cost price"
+            error={errors.costPrice?.message}
+            hint="What this item costs you to make — never shown to customers, used for your sales report's profit numbers."
+          >
+            <Input type="number" step="0.01" min="0" {...register("costPrice")} />
+          </FormField>
+        </div>
 
         <div className="flex flex-col gap-3 border-t border-border pt-4">
           <div className="flex items-center justify-between">
@@ -354,11 +378,18 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-text">{item.name}</span>
                         <span className="text-sm text-text-muted">{item.price.toFixed(2)}</span>
-                        {item.modifierGroups.length > 0 && (
-                          <Badge variant="neutral" className="w-fit">
-                            {item.modifierGroups.length} modifier group{item.modifierGroups.length === 1 ? "" : "s"}
-                          </Badge>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {item.modifierGroups.length > 0 && (
+                            <Badge variant="neutral" className="w-fit">
+                              {item.modifierGroups.length} modifier group{item.modifierGroups.length === 1 ? "" : "s"}
+                            </Badge>
+                          )}
+                          {item.costPrice == null && (
+                            <Badge variant="warning" className="w-fit">
+                              No cost price set
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

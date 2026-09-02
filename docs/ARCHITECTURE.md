@@ -60,15 +60,18 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
   openingHours[], isOpen, isApproved, avgRating, priceLevel (1-4, `$`..`$$$$`, FDP-21),
   estimatedDeliveryMinutes (static owner-set estimate, not a live ETA, FDP-21)
 - **MenuCategory** — restaurantId, name, sortOrder
-- **MenuItem** — restaurantId, categoryId, name, description, price, imageUrl, isAvailable,
-  modifierGroups[]
+- **MenuItem** — restaurantId, categoryId, name, description, price, **costPrice?** (owner-only,
+  never customer-facing — sales-report COGS/margin, `docs/ROADMAP.md` FDP-64), imageUrl,
+  isAvailable, modifierGroups[]
 - **ModifierGroup** (embedded) — name, min, max, options[{ name, priceDelta }]
 - **Cart** — userId, restaurantId (one active restaurant per cart), items[{ menuItemId, qty,
   selectedModifiers, notes }]
-- **Order** — orderNumber, customerId, restaurantId, riderId?, items snapshot, subtotal,
-  deliveryFee, serviceFee, tax, discount, total, **currency** (copied from restaurant at order
-  time), status, statusHistory[{ status, at, by }], paymentProvider, paymentStatus, paymentRef,
-  deliveryAddress+geo, estimatedDeliveryAt
+- **Order** — orderNumber, customerId, restaurantId, riderId?, items snapshot (incl. **costPrice?**
+  per line, snapshotted from MenuItem at order time — FDP-64), subtotal, deliveryFee, serviceFee,
+  tax, discount, total, **currency** (copied from restaurant at order time), status,
+  statusHistory[{ status, at, by }], **deliveredAt?** (indexed; set once on the DELIVERED
+  transition so date-range sales reporting doesn't need to unwind statusHistory, FDP-64),
+  paymentProvider, paymentStatus, paymentRef, deliveryAddress+geo, estimatedDeliveryAt
 - **OrderStatus** enum — `PENDING_PAYMENT, PLACED, ACCEPTED_BY_RESTAURANT, PREPARING,
   READY_FOR_PICKUP, ASSIGNED_TO_RIDER, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED,
   REFUNDED`
