@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrdersService, REFUNDABLE_STATUSES } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { OrderDocument } from '../orders/schemas/order.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PaymentProviderResolver } from './provider-resolver';
@@ -22,6 +23,7 @@ export class PaymentsService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly restaurantsService: RestaurantsService,
+    private readonly notificationsService: NotificationsService,
     private readonly providerResolver: PaymentProviderResolver,
     private readonly config: ConfigService,
     private readonly stripeAdapter: StripeAdapter,
@@ -280,5 +282,85 @@ export class PaymentsService {
     }
 
     return this.ordersService.finalizeRefund(orderId);
+  }
+
+  /**
+   * Stripe Connect's onboarding-completion signal (docs/ROADMAP.md FDP-54) — unlike Paystack/
+   * Flutterwave's single-API-call subaccount creation, a restaurant's Express account only
+   * becomes able to actually receive a transfer once they finish Stripe's own hosted onboarding
+   * flow, and this webhook is the only reliable way to learn that happened (the browser landing
+   * back on `return_url` does not guarantee the account holder actually completed it). Called
+   * from the same `/payments/webhooks/stripe` route as `handleWebhook` above — a Stripe account
+   * has one webhook URL for every subscribed event type, and each method's own adapter-level
+   * parse safely no-ops on the other's event type.
+   */
+  async handleStripeAccountWebhook(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): Promise<void> {
+    const event = this.stripeAdapter.parseAccountWebhookEvent(
+      rawBody,
+      signature,
+    );
+    if (!event) return;
+
+    const restaurant =
+      await this.restaurantsService.findByPayoutAccountReference(
+        'stripe',
+        event.accountId,
+      );
+    if (!restaurant) {
+      this.logger.warn(
+        `Stripe account.updated webhook referenced an unknown account: ${event.accountId}`,
+      );
+      return;
+    }
+
+    const isActive = event.chargesEnabled && event.detailsSubmitted;
+    const wasActive = restaurant.payoutAccounts.some(
+      (account) => account.provider === 'stripe' && account.status === 'active',
+    );
+    if (isActive === wasActive) return; // no real change — Stripe re-sends this on any account edit
+
+    const updated = await this.restaurantsService.setPayoutAccountFromWebhook(
+      restaurant._id.toString(),
+      'stripe',
+      isActive ? 'active' : 'pending',
+      event.accountId,
+    );
+
+    // Only the pending->active transition is the security-relevant "new payout destination just
+    // went live" moment (docs/ROADMAP.md FDP-59) — a still-pending account can't receive money,
+    // so there's nothing to alert on yet, and this pass doesn't attempt a symmetric "payouts
+    // paused" notification for the reverse (active->pending) transition.
+    if (isActive) this.notifyStripeAccountActivated(updated);
+  }
+
+  private notifyStripeAccountActivated(restaurant: {
+    _id: unknown;
+    ownerId: unknown;
+    name: string;
+  }): void {
+    const body = `The Stripe payout account for ${restaurant.name} is now fully connected and can receive payouts. If you didn't set this up, contact support immediately.`;
+    this.notificationsService
+      .notify({
+        userId: String(restaurant.ownerId),
+        type: 'payout_account_changed',
+        title: 'Payout account updated',
+        body,
+        metadata: {
+          restaurantId: String(restaurant._id),
+          provider: 'stripe',
+        },
+        email: {
+          subject: `Payout account updated — ${restaurant.name}`,
+          html: `<p>${body}</p>`,
+        },
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Payout-change notification failed for restaurant ${String(restaurant._id)}: ${err.message}`,
+        ),
+      );
   }
 }

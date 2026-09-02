@@ -22,6 +22,7 @@ import {
   useListFlutterwaveBanksQuery,
   useResolveFlutterwaveAccountMutation,
   useSetupFlutterwavePayoutMutation,
+  useSetupStripePayoutMutation,
 } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
@@ -255,11 +256,62 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
   );
 }
 
+/**
+ * Vendor payouts epic, part 4 of 4 (docs/ROADMAP.md FDP-54) — structurally different from
+ * Paystack/Flutterwave: there's no bank-selection form here at all, since Stripe Connect's
+ * hosted onboarding collects bank details itself, on Stripe's own domain, never touching this
+ * app. The only action is a redirect; whether the account actually becomes usable is decided
+ * later by Stripe's `account.updated` webhook, not by anything this page can observe directly —
+ * a restaurant that already has a `pending` Stripe entry (started onboarding but didn't finish,
+ * or the account-link expired) sees "Continue onboarding" instead of "Connect", but both call
+ * the exact same endpoint — the backend reuses the existing connected account either way.
+ */
+function StripePayoutSetup({ restaurant }: { restaurant: Restaurant }) {
+  const { toast } = useToast();
+  const [setupPayout, { isLoading }] = useSetupStripePayoutMutation();
+  const hasPendingAccount = restaurant.payoutAccounts.some(
+    (account) => account.provider === "stripe" && account.status === "pending",
+  );
+
+  async function handleConnect() {
+    try {
+      const result = await setupPayout(restaurant._id).unwrap();
+      window.location.href = result.onboardingUrl;
+    } catch (err) {
+      toast({ title: "Couldn't start Stripe onboarding", description: getErrorMessage(err), variant: "danger" });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect a Stripe payout account</CardTitle>
+        <CardDescription>
+          Stripe handles your bank details directly through their own secure onboarding flow —
+          you&apos;ll be redirected there, then brought back here once you&apos;re done.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {hasPendingAccount && (
+          <Alert variant="warning">
+            You started connecting a Stripe account but haven&apos;t finished yet. Pick up where
+            you left off below.
+          </Alert>
+        )}
+        <Button size="sm" className="w-fit" isLoading={isLoading} onClick={() => void handleConnect()}>
+          {hasPendingAccount ? "Continue onboarding" : "Connect with Stripe"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Earnings({ restaurant }: { restaurant: Restaurant }) {
   const { data, isLoading } = useGetRestaurantEarningsQuery(restaurant._id);
   const { data: providers } = useGetPaymentProvidersQuery(restaurant.currency);
   const paystackAvailable = providers?.includes("paystack") ?? false;
   const flutterwaveAvailable = providers?.includes("flutterwave") ?? false;
+  const stripeAvailable = providers?.includes("stripe") ?? false;
 
   return (
     <Container className="flex flex-col gap-6 py-10">
@@ -274,7 +326,7 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
         <>
           {!data.payoutSetupComplete && (
             <Alert variant="warning" title="Payout setup required">
-              {paystackAvailable || flutterwaveAvailable
+              {paystackAvailable || flutterwaveAvailable || stripeAvailable
                 ? "Connect a payout account below so your earnings settle automatically."
                 : "Automated payouts aren't available for this restaurant's currency yet — your earnings below are informational for now."}
             </Alert>
@@ -309,6 +361,9 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
           )}
           {!data.payoutSetupComplete && flutterwaveAvailable && (
             <FlutterwavePayoutSetup restaurantId={restaurant._id} />
+          )}
+          {!data.payoutSetupComplete && stripeAvailable && (
+            <StripePayoutSetup restaurant={restaurant} />
           )}
         </>
       )}

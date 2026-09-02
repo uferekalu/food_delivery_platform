@@ -8,6 +8,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 import { PaystackPayoutsController } from './paystack-payouts.controller';
 import { FlutterwavePayoutsController } from './flutterwave-payouts.controller';
+import { StripePayoutsController } from './stripe-payouts.controller';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
 import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
@@ -31,6 +32,7 @@ import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
     PaymentsController,
     PaystackPayoutsController,
     FlutterwavePayoutsController,
+    StripePayoutsController,
   ],
   providers: [
     PaymentsService,

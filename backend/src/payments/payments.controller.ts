@@ -87,11 +87,13 @@ export class PaymentsController {
     @Req() req: RawBodyRequest<Request>,
     @Headers('stripe-signature') signature?: string,
   ) {
-    await this.paymentsService.handleWebhook(
-      'stripe',
-      req.rawBody ?? Buffer.alloc(0),
-      signature,
-    );
+    const rawBody = req.rawBody ?? Buffer.alloc(0);
+    // One Stripe webhook URL carries every subscribed event type — checkout.session.completed
+    // (payments) and account.updated (Connect onboarding, docs/ROADMAP.md FDP-54) both land
+    // here. Each handler's own adapter-level parse safely no-ops on the other's event type, so
+    // calling both unconditionally is correct, not wasteful double-processing.
+    await this.paymentsService.handleWebhook('stripe', rawBody, signature);
+    await this.paymentsService.handleStripeAccountWebhook(rawBody, signature);
     return { received: true };
   }
 

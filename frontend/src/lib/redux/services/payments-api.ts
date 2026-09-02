@@ -55,6 +55,15 @@ export interface SetupFlutterwavePayoutResult {
   verifiedAccountName: string;
 }
 
+// Vendor payouts epic, part 4 of 4 (docs/ROADMAP.md FDP-54) — structurally different from
+// Paystack/Flutterwave: no bank-list/account-resolve step, since Stripe's own hosted onboarding
+// flow collects bank details directly (never touches this backend). Setup only ever returns a
+// URL to redirect the owner to; whether the account actually becomes active is decided later by
+// Stripe's account.updated webhook, not by this response.
+export interface SetupStripePayoutResult {
+  onboardingUrl: string;
+}
+
 export const paymentsApi = api.injectEndpoints({
   endpoints: (builder) => ({
     initiatePayment: builder.mutation<InitiatePaymentResult, InitiatePaymentInput>({
@@ -117,6 +126,13 @@ export const paymentsApi = api.injectEndpoints({
         { type: "Order", id: `EARNINGS-${restaurantId}` },
       ],
     }),
+
+    setupStripePayout: builder.mutation<SetupStripePayoutResult, string>({
+      query: (restaurantId) => ({
+        url: `/restaurants/${restaurantId}/payout/stripe/setup`,
+        method: "POST",
+      }),
+    }),
   }),
 });
 
@@ -130,4 +146,5 @@ export const {
   useListFlutterwaveBanksQuery,
   useResolveFlutterwaveAccountMutation,
   useSetupFlutterwavePayoutMutation,
+  useSetupStripePayoutMutation,
 } = paymentsApi;
