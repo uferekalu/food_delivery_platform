@@ -4,6 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { OrdersService } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentProviderResolver } from './provider-resolver';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
@@ -26,14 +27,21 @@ describe('PaymentsService', () => {
     >
   >;
   let restaurantsService: jest.Mocked<
-    Pick<RestaurantsService, 'findByIdOrThrow'>
+    Pick<
+      RestaurantsService,
+      | 'findByIdOrThrow'
+      | 'findByPayoutAccountReference'
+      | 'setPayoutAccountFromWebhook'
+    >
   >;
+  let notificationsService: jest.Mocked<Pick<NotificationsService, 'notify'>>;
   let providerResolver: jest.Mocked<Pick<PaymentProviderResolver, 'resolve'>>;
   let stripeAdapter: {
     initiate: jest.Mock;
     verify: jest.Mock;
     handleWebhook: jest.Mock;
     refund: jest.Mock;
+    parseAccountWebhookEvent: jest.Mock;
   };
   let paystackAdapter: {
     initiate: jest.Mock;
@@ -60,19 +68,25 @@ describe('PaymentsService', () => {
       finalizeRefund: jest.fn(),
       revertFailedRefundClaim: jest.fn(),
     };
-    restaurantsService = { findByIdOrThrow: jest.fn() };
+    restaurantsService = {
+      findByIdOrThrow: jest.fn(),
+      findByPayoutAccountReference: jest.fn(),
+      setPayoutAccountFromWebhook: jest.fn(),
+    };
     // Default: no active payout account for any provider — the pre-FDP-52 behavior every
     // existing initiatePayment test below exercises. Tests that need an active account
     // override this per-case.
     restaurantsService.findByIdOrThrow.mockResolvedValue({
       payoutAccounts: [],
     } as never);
+    notificationsService = { notify: jest.fn().mockResolvedValue(undefined) };
     providerResolver = { resolve: jest.fn() };
     stripeAdapter = {
       initiate: jest.fn(),
       verify: jest.fn(),
       handleWebhook: jest.fn(),
       refund: jest.fn(),
+      parseAccountWebhookEvent: jest.fn(),
     };
     paystackAdapter = {
       initiate: jest.fn(),
@@ -86,6 +100,7 @@ describe('PaymentsService', () => {
         PaymentsService,
         { provide: OrdersService, useValue: ordersService },
         { provide: RestaurantsService, useValue: restaurantsService },
+        { provide: NotificationsService, useValue: notificationsService },
         { provide: PaymentProviderResolver, useValue: providerResolver },
         {
           provide: ConfigService,
@@ -606,6 +621,119 @@ describe('PaymentsService', () => {
         'DELIVERED',
       );
       expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleStripeAccountWebhook (FDP-54)', () => {
+    it('does nothing for an unverifiable or non-account event', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue(null);
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(
+        restaurantsService.findByPayoutAccountReference,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the account references no known restaurant', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_unknown',
+        chargesEnabled: true,
+        detailsSubmitted: true,
+      });
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue(null);
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(
+        restaurantsService.setPayoutAccountFromWebhook,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('flips a pending account to active and notifies the owner on the first activation', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_123',
+        chargesEnabled: true,
+        detailsSubmitted: true,
+      });
+      const restaurant = {
+        _id: { toString: () => 'restaurant-1' },
+        ownerId: { toString: () => 'owner-1' },
+        name: 'Burgundy Kitchen',
+        payoutAccounts: [
+          { provider: 'stripe', status: 'pending', reference: 'acct_123' },
+        ],
+      };
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue(
+        restaurant as never,
+      );
+      restaurantsService.setPayoutAccountFromWebhook.mockResolvedValue(
+        restaurant as never,
+      );
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(
+        restaurantsService.setPayoutAccountFromWebhook,
+      ).toHaveBeenCalledWith('restaurant-1', 'stripe', 'active', 'acct_123');
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'owner-1',
+          type: 'payout_account_changed',
+        }),
+      );
+    });
+
+    it('is a no-op when the account is already active — Stripe re-sends account.updated on any edit', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_123',
+        chargesEnabled: true,
+        detailsSubmitted: true,
+      });
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue({
+        _id: { toString: () => 'restaurant-1' },
+        ownerId: { toString: () => 'owner-1' },
+        name: 'Burgundy Kitchen',
+        payoutAccounts: [
+          { provider: 'stripe', status: 'active', reference: 'acct_123' },
+        ],
+      } as never);
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(
+        restaurantsService.setPayoutAccountFromWebhook,
+      ).not.toHaveBeenCalled();
+      expect(notificationsService.notify).not.toHaveBeenCalled();
+    });
+
+    it('flips an active account back to pending without notifying (not the security-relevant direction)', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_123',
+        chargesEnabled: false,
+        detailsSubmitted: true,
+      });
+      const restaurant = {
+        _id: { toString: () => 'restaurant-1' },
+        ownerId: { toString: () => 'owner-1' },
+        name: 'Burgundy Kitchen',
+        payoutAccounts: [
+          { provider: 'stripe', status: 'active', reference: 'acct_123' },
+        ],
+      };
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue(
+        restaurant as never,
+      );
+      restaurantsService.setPayoutAccountFromWebhook.mockResolvedValue(
+        restaurant as never,
+      );
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(
+        restaurantsService.setPayoutAccountFromWebhook,
+      ).toHaveBeenCalledWith('restaurant-1', 'stripe', 'pending', 'acct_123');
+      expect(notificationsService.notify).not.toHaveBeenCalled();
     });
   });
 });

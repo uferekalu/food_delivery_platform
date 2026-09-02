@@ -214,7 +214,55 @@ export class RestaurantsService {
   ): Promise<RestaurantDocument> {
     const restaurant = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(restaurant, requester);
+    return this.applyPayoutAccountUpdate(
+      restaurant,
+      provider,
+      status,
+      reference,
+    );
+  }
 
+  /**
+   * Same upsert as `setPayoutAccount`, but for a caller with no requester at all — Stripe
+   * Connect's `account.updated` webhook (docs/ROADMAP.md FDP-54) is the only thing that flips a
+   * Stripe payout account from `pending` to `active`, and a webhook has no authenticated user to
+   * check ownership against. Authenticity here comes entirely from the webhook's own signature
+   * verification (`StripeAdapter.parseAccountWebhookEvent`), not `assertOwnerOrAdmin` — never
+   * call this from a user-facing route.
+   */
+  async setPayoutAccountFromWebhook(
+    id: string,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+  ): Promise<RestaurantDocument> {
+    const restaurant = await this.findByIdOrThrow(id);
+    return this.applyPayoutAccountUpdate(
+      restaurant,
+      provider,
+      status,
+      reference,
+    );
+  }
+
+  /** A restaurant has at most one payout account per provider — looked up by its account
+   * reference for Stripe Connect's `account.updated` webhook (FDP-54), which identifies the
+   * account by id but not by which restaurant it belongs to. */
+  findByPayoutAccountReference(
+    provider: PaymentProvider,
+    reference: string,
+  ): Promise<RestaurantDocument | null> {
+    return this.restaurantModel
+      .findOne({ payoutAccounts: { $elemMatch: { provider, reference } } })
+      .exec();
+  }
+
+  private applyPayoutAccountUpdate(
+    restaurant: RestaurantDocument,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+  ): Promise<RestaurantDocument> {
     const existing = restaurant.payoutAccounts.find(
       (account) => account.provider === provider,
     );

@@ -454,6 +454,22 @@ subaccount-creation `split_value` is also a fraction (0–1), not Paystack's 0�
 Flutterwave's subaccount API requires a `business_email`; since there's no restaurant-level email
 field, the onboarding endpoint looks up the restaurant owner's own account email for it.
 
-**Stripe Connect (FDP-54)** is not yet built — structurally different (a hosted onboarding
-redirect rather than a single API call, and an `account.updated` webhook to know onboarding
-actually finished) and will need its own design pass when picked up.
+**Stripe Connect (FDP-54)** — Express accounts, structurally different from the other two: no
+single API call produces a usable account. `StripePayoutsController`'s one endpoint creates a
+connected Express account (once — reused on every later call, keyed off the restaurant's
+existing `payoutAccounts` entry) and always returns a fresh Account Link (these expire within
+minutes, confirmed live against the sandbox) to redirect the owner to Stripe's own hosted
+onboarding; bank details never touch this backend. The account starts `pending` and stays that
+way — even after the owner's browser lands back on `return_url` — until Stripe's `account.updated`
+webhook confirms `charges_enabled && details_submitted`, the only reliable completion signal
+(the redirect back does not guarantee the account holder actually finished). That webhook shares
+`/payments/webhooks/stripe` with the existing `checkout.session.completed` handler — a Stripe
+account has one webhook URL for every subscribed event type — and each handler's adapter-level
+parse safely no-ops on the other's event type. At charge time, a destination charge
+(`payment_intent_data.transfer_data.destination` + `application_fee_amount`) is added only once
+`payoutAccounts` shows `active` for Stripe; `application_fee_amount` is what the platform keeps
+(same "what the platform keeps" framing as Paystack's `transaction_charge`), computed from
+`restaurantPayoutAmount` in cents — Stripe automatically transfers the rest to the connected
+account, confirmed live that a destination account missing the `transfers` capability (i.e.
+`pending`) is rejected outright by Stripe, which is exactly the gate this codebase relies on
+rather than re-checking capability status itself before charging.

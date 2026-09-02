@@ -322,6 +322,87 @@ describe('RestaurantsService', () => {
     });
   });
 
+  describe('setPayoutAccountFromWebhook / findByPayoutAccountReference (FDP-54)', () => {
+    it('upserts a payout account with no requester/ownership check — a webhook has no authenticated user', async () => {
+      const created = await service.create('owner-id', baseDto);
+
+      const updated = await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'active',
+        'acct_test123',
+      );
+
+      expect(
+        updated.payoutAccounts.map((a) => ({
+          provider: a.provider,
+          status: a.status,
+          reference: a.reference,
+        })),
+      ).toEqual([
+        { provider: 'stripe', status: 'active', reference: 'acct_test123' },
+      ]);
+    });
+
+    it('updates the existing entry in place rather than duplicating it', async () => {
+      const created = await service.create('owner-id', baseDto);
+
+      await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'pending',
+        'acct_test123',
+      );
+      const updated = await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'active',
+        'acct_test123',
+      );
+
+      expect(updated.payoutAccounts).toHaveLength(1);
+      expect(updated.payoutAccounts[0].status).toBe('active');
+    });
+
+    it('findByPayoutAccountReference finds the restaurant that reference was set on', async () => {
+      const created = await service.create('owner-id', baseDto);
+      await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'active',
+        'acct_test123',
+      );
+
+      const found = await service.findByPayoutAccountReference(
+        'stripe',
+        'acct_test123',
+      );
+      expect(found?._id.toString()).toBe(created._id.toString());
+
+      const notFound = await service.findByPayoutAccountReference(
+        'stripe',
+        'acct_unknown',
+      );
+      expect(notFound).toBeNull();
+    });
+
+    it('findByPayoutAccountReference does not cross-match a different provider using the same reference string', async () => {
+      const created = await service.create('owner-id', baseDto);
+      await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'active',
+        'shared-ref',
+      );
+
+      const found = await service.findByPayoutAccountReference(
+        'paystack',
+        'shared-ref',
+      );
+      expect(found).toBeNull();
+    });
+  });
+
   describe('approve', () => {
     it('sets isApproved to true', async () => {
       const created = await service.create('owner-id', baseDto);
