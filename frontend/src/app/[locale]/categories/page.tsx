@@ -63,7 +63,11 @@ function CuisineChips({
     )),
   ];
 
-  return <Carousel aria-label={t("cuisineFilters")}>{chips}</Carousel>;
+  return (
+    <Carousel aria-label={t("cuisineFilters")} showArrows={false}>
+      {chips}
+    </Carousel>
+  );
 }
 
 function FoodCategory() {
@@ -163,7 +167,11 @@ function TagChips({
     )),
   ];
 
-  return <Carousel aria-label={t("tagFilters")}>{chips}</Carousel>;
+  return (
+    <Carousel aria-label={t("tagFilters")} showArrows={false}>
+      {chips}
+    </Carousel>
+  );
 }
 
 function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: React.ReactNode }) {

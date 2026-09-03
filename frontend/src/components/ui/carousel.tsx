@@ -31,6 +31,11 @@ export interface CarouselProps {
    * periodic large jumps (docs/ROADMAP.md FDP-68: the original setInterval-jump version read as
    * fast and jarring, not appealing). 0 disables auto-scroll (manual arrows/swipe only). */
   speed?: number;
+  /** Set false for a short single-row rail (e.g. filter chips) where the absolutely-positioned
+   * prev/next buttons visually overlap the row's own content at the edges rather than floating
+   * clear of it the way they do over a taller card rail. Manual paging still works via touch/
+   * drag/keyboard scrolling on the track itself — this only removes the discoverable buttons. */
+  showArrows?: boolean;
   "aria-label": string;
 }
 
@@ -50,7 +55,14 @@ const TICK_MS = 30;
  * scroll attempt is worse than a static rail) and respects `prefers-reduced-motion` entirely
  * (no auto-scroll at all).
  */
-export function Carousel({ children, className, itemClassName, speed = 30, ...props }: CarouselProps) {
+export function Carousel({
+  children,
+  className,
+  itemClassName,
+  speed = 30,
+  showArrows = true,
+  ...props
+}: CarouselProps) {
   const t = useTranslations("Common");
   const trackRef = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
@@ -118,24 +130,28 @@ export function Carousel({ children, className, itemClassName, speed = 30, ...pr
           </div>
         ))}
       </div>
-      <IconButton
-        label={t("previous")}
-        icon={<ChevronLeftIcon />}
-        size="sm"
-        variant="outline"
-        disabled={edge.atStart}
-        onClick={() => scrollByPage(-1)}
-        className="absolute top-1/2 left-2 hidden -translate-y-1/2 bg-surface shadow-md disabled:opacity-0 sm:flex"
-      />
-      <IconButton
-        label={t("next")}
-        icon={<ChevronRightIcon />}
-        size="sm"
-        variant="outline"
-        disabled={edge.atEnd}
-        onClick={() => scrollByPage(1)}
-        className="absolute top-1/2 right-2 hidden -translate-y-1/2 bg-surface shadow-md disabled:opacity-0 sm:flex"
-      />
+      {showArrows && (
+        <>
+          <IconButton
+            label={t("previous")}
+            icon={<ChevronLeftIcon />}
+            size="sm"
+            variant="outline"
+            disabled={edge.atStart}
+            onClick={() => scrollByPage(-1)}
+            className="absolute top-1/2 left-2 hidden -translate-y-1/2 bg-surface shadow-md disabled:opacity-0 sm:flex"
+          />
+          <IconButton
+            label={t("next")}
+            icon={<ChevronRightIcon />}
+            size="sm"
+            variant="outline"
+            disabled={edge.atEnd}
+            onClick={() => scrollByPage(1)}
+            className="absolute top-1/2 right-2 hidden -translate-y-1/2 bg-surface shadow-md disabled:opacity-0 sm:flex"
+          />
+        </>
+      )}
     </div>
   );
 }
