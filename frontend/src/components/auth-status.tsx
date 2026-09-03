@@ -38,6 +38,15 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
             {t("myRestaurants")}
           </SmartLink>
         )}
+        {(user.role === "restaurant_owner" || user.role === "admin") && (
+          <SmartLink
+            href="/dashboard/stores"
+            onClick={onNavigate}
+            className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
+          >
+            {t("myStores")}
+          </SmartLink>
+        )}
         {user.role === "rider" && (
           <SmartLink
             href="/rider"

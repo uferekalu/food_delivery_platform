@@ -6,7 +6,9 @@ export type UploadFolder =
   | "avatars"
   | "reviews"
   | "compliance-documents"
-  | "rider-documents";
+  | "rider-documents"
+  | "stores"
+  | "products";
 
 export interface UploadSignature {
   signature: string;
