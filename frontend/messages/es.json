@@ -182,7 +182,10 @@
     "careersDescription": "Ayúdanos a construir el futuro del reparto de comida.",
     "viewCareers": "Ver empleos",
     "goToMyDashboard": "Ir a mi panel",
-    "registerHere": "Regístrate aquí"
+    "registerHere": "Regístrate aquí",
+    "arrivingSoon": "Llegando pronto",
+    "estimatedDelivery": "Entrega estimada",
+    "deliveryTimeVaries": "Varía según el pedido"
   },
   "LoginPage": {
     "enterValidEmail": "Ingresa una dirección de correo válida",

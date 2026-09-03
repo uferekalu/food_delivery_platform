@@ -182,7 +182,10 @@
     "careersDescription": "帮助我们打造外卖配送的未来。",
     "viewCareers": "查看职位",
     "goToMyDashboard": "前往我的仪表盘",
-    "registerHere": "在此注册"
+    "registerHere": "在此注册",
+    "arrivingSoon": "即将送达",
+    "estimatedDelivery": "预计送达时间",
+    "deliveryTimeVaries": "因订单而异"
   },
   "LoginPage": {
     "enterValidEmail": "请输入有效的电子邮箱地址",

@@ -182,7 +182,10 @@
     "careersDescription": "Aidez-nous à construire l'avenir de la livraison de repas.",
     "viewCareers": "Voir les carrières",
     "goToMyDashboard": "Accéder à mon tableau de bord",
-    "registerHere": "Inscrivez-vous ici"
+    "registerHere": "Inscrivez-vous ici",
+    "arrivingSoon": "Arrivée imminente",
+    "estimatedDelivery": "Livraison estimée",
+    "deliveryTimeVaries": "Variable selon la commande"
   },
   "LoginPage": {
     "enterValidEmail": "Saisissez une adresse e-mail valide",
