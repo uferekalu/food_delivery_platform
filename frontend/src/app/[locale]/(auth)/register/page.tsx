@@ -23,10 +23,22 @@ import {
 } from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { SelfRegisterableRole } from "@/lib/constants/roles";
+import type { StoreType } from "@/lib/redux/restaurant-types";
 
 interface VerifiedPhone {
   phone: string;
   token: string;
+}
+
+// What the person is actually signing up to do — a strict superset of the backend's
+// SelfRegisterableRole. Store ownership reuses the restaurant_owner role (docs/ROADMAP.md
+// FDP-56's architecture decision), so "groceries"/"pharmacy_beauty" both map to that same role;
+// this finer-grained client-only choice only decides which dashboard the person lands in right
+// after registering (and, via the `type` query param, lets a link pre-select one for them).
+type AccountChoice = "customer" | "restaurant" | StoreType;
+
+function roleForAccountChoice(choice: AccountChoice): SelfRegisterableRole {
+  return choice === "customer" ? "customer" : "restaurant_owner";
 }
 
 /**
@@ -177,11 +189,19 @@ function RegisterForm() {
   const { toast } = useToast();
   const [registerUser, { isLoading }] = useRegisterMutation();
   const [error, setError] = useState<string | null>(null);
-  // Lets the footer's "Partner with us" link (`/register?role=restaurant_owner`) preselect the
-  // right account type instead of dropping restaurant owners into the generic customer default.
-  const [role, setRole] = useState<SelfRegisterableRole>(
-    searchParams.get("role") === "restaurant_owner" ? "restaurant_owner" : "customer",
-  );
+  // Lets a link preselect the right account type instead of dropping everyone into the generic
+  // customer default: the footer/homepage's existing "Partner with us" links
+  // (`/register?role=restaurant_owner`) still preselect "restaurant", while a newer `?type=`
+  // param (`groceries`/`pharmacy_beauty`/`restaurant`) lets a more specific CTA — e.g. "Sell
+  // groceries or pharmacy items" — preselect one of those instead.
+  const typeParam = searchParams.get("type");
+  const initialAccountChoice: AccountChoice =
+    typeParam === "groceries" || typeParam === "pharmacy_beauty" || typeParam === "restaurant"
+      ? typeParam
+      : searchParams.get("role") === "restaurant_owner"
+        ? "restaurant"
+        : "customer";
+  const [accountChoice, setAccountChoice] = useState<AccountChoice>(initialAccountChoice);
   const [verifiedPhone, setVerifiedPhone] = useState<VerifiedPhone | null>(null);
   const registerSchema = z
     .object({
@@ -214,16 +234,23 @@ function RegisterForm() {
         name: values.name,
         email: values.email,
         password: values.password,
-        role,
+        role: roleForAccountChoice(accountChoice),
         ...(verifiedPhone ? { phone: verifiedPhone.phone, phoneVerificationToken: verifiedPhone.token } : {}),
       }).unwrap();
       toast({
         title: t("accountCreated"),
-        description: role === "restaurant_owner" ? t("checkEmailRestaurantOwner") : t("checkEmail"),
+        description:
+          accountChoice === "restaurant"
+            ? t("checkEmailRestaurantOwner")
+            : accountChoice === "customer"
+              ? t("checkEmail")
+              : t("checkEmailStoreOwner"),
         variant: "success",
       });
-      if (role === "restaurant_owner") {
+      if (accountChoice === "restaurant") {
         plainRouter.push("/dashboard/restaurants/new");
+      } else if (accountChoice === "groceries" || accountChoice === "pharmacy_beauty") {
+        plainRouter.push(`/dashboard/stores/new?type=${accountChoice}`);
       } else {
         router.push("/");
       }
@@ -241,9 +268,19 @@ function RegisterForm() {
       <CardContent className="flex flex-col gap-4">
         {error && <Alert variant="danger">{error}</Alert>}
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-4" noValidate>
-          <RadioGroup label={t("accountType")} value={role} onChange={(value) => setRole(value as SelfRegisterableRole)}>
+          <RadioGroup
+            label={t("accountType")}
+            value={accountChoice}
+            onChange={(value) => setAccountChoice(value as AccountChoice)}
+          >
             <RadioOption value="customer" label={t("orderingFood")} />
-            <RadioOption value="restaurant_owner" label={t("runARestaurant")} description={t("addManageRestaurant")} />
+            <RadioOption value="restaurant" label={t("runARestaurant")} description={t("addManageRestaurant")} />
+            <RadioOption value="groceries" label={t("runAGroceryStore")} description={t("addManageGroceryStore")} />
+            <RadioOption
+              value="pharmacy_beauty"
+              label={t("runAPharmacyStore")}
+              description={t("addManagePharmacyStore")}
+            />
           </RadioGroup>
           <FormField label={t("fullName")} error={errors.name?.message} required>
             <Input autoComplete="name" {...register("name")} />

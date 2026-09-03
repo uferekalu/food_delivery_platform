@@ -26,6 +26,13 @@ function MyStoresList() {
         </Link>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle p-4">
+        <p className="text-sm text-text">{t("alsoRunARestaurant")}</p>
+        <Link href="/dashboard/restaurants/new" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          {t("addRestaurant")}
+        </Link>
+      </div>
+
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : !data || data.length === 0 ? (

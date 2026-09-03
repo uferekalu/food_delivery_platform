@@ -52,6 +52,9 @@ export function Footer() {
         { href: "/login", label: t("logIn") },
       ];
 
+  // A restaurant owner already has both dashboards one click away (myRestaurants/myStores), so
+  // the explicit "sell groceries or pharmacy items" link below is only useful to someone who
+  // hasn't registered as either kind of owner yet.
   const restaurantLinks: FooterLink[] =
     authenticated && user.role === "restaurant_owner"
       ? [
@@ -59,9 +62,13 @@ export function Footer() {
           { href: "/dashboard/stores", label: t("myStores") },
         ]
       : authenticated
-        ? [{ href: "/register?role=restaurant_owner", label: t("partnerWithUs") }]
+        ? [
+            { href: "/register?role=restaurant_owner", label: t("partnerWithUs") },
+            { href: "/register?type=groceries", label: t("sellGroceriesOrPharmacy") },
+          ]
         : [
             { href: "/register?role=restaurant_owner", label: t("partnerWithUs") },
+            { href: "/register?type=groceries", label: t("sellGroceriesOrPharmacy") },
             { href: "/login", label: t("logIn") },
           ];
 

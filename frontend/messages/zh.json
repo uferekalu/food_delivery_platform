@@ -54,12 +54,13 @@
     "myRestaurants": "我的餐厅",
     "myStores": "我的店铺",
     "partnerWithUs": "成为合作伙伴",
+    "sellGroceriesOrPharmacy": "销售生鲜杂货或药妆产品",
     "riderDashboard": "骑手仪表盘",
     "becomeARider": "成为骑手",
     "siteName": "外卖配送平台",
     "tagline": "从本地餐厅点购美食，快速配送并实时追踪——从下单到送达。",
     "forCustomers": "面向顾客",
-    "forRestaurants": "面向餐厅",
+    "forRestaurants": "面向商家",
     "forRiders": "面向骑手",
     "copyright": "© {year} 外卖配送平台。保留所有权利。",
     "footerTagline": "为快速可靠的配送而打造——覆盖我们运营的每一个地方。"
@@ -188,7 +189,10 @@
     "estimatedDelivery": "预计送达时间",
     "deliveryTimeVaries": "因订单而异",
     "exploreGroceries": "探索生鲜杂货",
-    "explorePharmacy": "探索药店"
+    "explorePharmacy": "探索药店",
+    "sellGroceriesOrPharmacy": "销售生鲜杂货或药妆产品",
+    "sellGroceriesOrPharmacyDescription": "上架你的杂货店或药店，触达更多顾客。",
+    "goToMyStores": "前往我的店铺"
   },
   "LoginPage": {
     "enterValidEmail": "请输入有效的电子邮箱地址",
@@ -235,12 +239,17 @@
     "passwordsDontMatch": "两次输入的密码不一致",
     "accountCreated": "账户已创建",
     "checkEmailRestaurantOwner": "请查看邮箱以验证你的地址，然后添加你的餐厅。",
+    "checkEmailStoreOwner": "请查看邮箱以验证你的地址，然后添加你的店铺。",
     "checkEmail": "请查看邮箱以验证你的地址。",
     "couldNotCreateAccount": "无法创建你的账户",
     "accountType": "账户类型",
     "orderingFood": "我要点餐",
     "runARestaurant": "我经营一家餐厅",
     "addManageRestaurant": "在平台上添加并管理你的餐厅",
+    "runAGroceryStore": "我经营一家杂货店",
+    "addManageGroceryStore": "在平台上添加并管理你的杂货店",
+    "runAPharmacyStore": "我经营一家药店或美妆店",
+    "addManagePharmacyStore": "在平台上添加并管理你的药店或美妆店",
     "fullName": "全名",
     "email": "电子邮箱",
     "password": "密码",
@@ -591,7 +600,9 @@
     "deliveryZones": "配送区域",
     "earnings": "收益",
     "salesReport": "销售报告",
-    "close": "打烊"
+    "close": "打烊",
+    "alsoSellGroceriesOrPharmacy": "还想销售生鲜杂货或药妆产品吗？",
+    "addAStore": "添加店铺"
   },
   "NewRestaurantPage": {
     "addARestaurant": "添加一家餐厅",
@@ -721,7 +732,9 @@
     "edit": "编辑",
     "manageCatalog": "管理商品目录",
     "orderQueue": "订单队列",
-    "close": "打烊"
+    "close": "打烊",
+    "alsoRunARestaurant": "还经营着一家餐厅吗？",
+    "addRestaurant": "添加餐厅"
   },
   "NewStorePage": {
     "addAStore": "添加店铺",

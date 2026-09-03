@@ -54,12 +54,13 @@
     "myRestaurants": "Mes restaurants",
     "myStores": "Mes boutiques",
     "partnerWithUs": "Devenir partenaire",
+    "sellGroceriesOrPharmacy": "Vendre des produits d'épicerie ou de pharmacie",
     "riderDashboard": "Tableau de bord livreur",
     "becomeARider": "Devenir livreur",
     "siteName": "Plateforme de livraison de repas",
     "tagline": "Commandez d'excellents repas auprès de restaurants locaux, livrés rapidement et suivis en direct — de la commande jusqu'à votre porte.",
     "forCustomers": "Pour les clients",
-    "forRestaurants": "Pour les restaurants",
+    "forRestaurants": "Pour les entreprises",
     "forRiders": "Pour les livreurs",
     "copyright": "© {year} Plateforme de livraison de repas. Tous droits réservés.",
     "footerTagline": "Conçu pour une livraison rapide et fiable — partout où nous opérons."
@@ -188,7 +189,10 @@
     "estimatedDelivery": "Livraison estimée",
     "deliveryTimeVaries": "Variable selon la commande",
     "exploreGroceries": "Explorer l'épicerie",
-    "explorePharmacy": "Explorer la pharmacie"
+    "explorePharmacy": "Explorer la pharmacie",
+    "sellGroceriesOrPharmacy": "Vendre des produits d'épicerie ou de pharmacie",
+    "sellGroceriesOrPharmacyDescription": "Référencez votre épicerie ou pharmacie et touchez plus de clients.",
+    "goToMyStores": "Accéder à mes boutiques"
   },
   "LoginPage": {
     "enterValidEmail": "Saisissez une adresse e-mail valide",
@@ -235,12 +239,17 @@
     "passwordsDontMatch": "Les mots de passe ne correspondent pas",
     "accountCreated": "Compte créé",
     "checkEmailRestaurantOwner": "Vérifiez votre e-mail pour confirmer votre adresse, puis ajoutez votre restaurant.",
+    "checkEmailStoreOwner": "Vérifiez votre e-mail pour confirmer votre adresse, puis ajoutez votre boutique.",
     "checkEmail": "Vérifiez votre e-mail pour confirmer votre adresse.",
     "couldNotCreateAccount": "Impossible de créer votre compte",
     "accountType": "Type de compte",
     "orderingFood": "Je commande de la nourriture",
     "runARestaurant": "Je gère un restaurant",
     "addManageRestaurant": "Ajoutez et gérez votre restaurant sur la plateforme",
+    "runAGroceryStore": "Je gère une épicerie",
+    "addManageGroceryStore": "Ajoutez et gérez votre épicerie sur la plateforme",
+    "runAPharmacyStore": "Je gère une pharmacie ou une parapharmacie",
+    "addManagePharmacyStore": "Ajoutez et gérez votre pharmacie ou parapharmacie sur la plateforme",
     "fullName": "Nom complet",
     "email": "E-mail",
     "password": "Mot de passe",
@@ -591,7 +600,9 @@
     "deliveryZones": "Zones de livraison",
     "earnings": "Revenus",
     "salesReport": "Rapport de ventes",
-    "close": "Fermer"
+    "close": "Fermer",
+    "alsoSellGroceriesOrPharmacy": "Vous voulez aussi vendre des produits d'épicerie ou de pharmacie ?",
+    "addAStore": "Ajouter une boutique"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Ajouter un restaurant",
@@ -721,7 +732,9 @@
     "edit": "Modifier",
     "manageCatalog": "Gérer le catalogue",
     "orderQueue": "File d'attente des commandes",
-    "close": "Fermer"
+    "close": "Fermer",
+    "alsoRunARestaurant": "Vous gérez aussi un restaurant ?",
+    "addRestaurant": "Ajouter un restaurant"
   },
   "NewStorePage": {
     "addAStore": "Ajouter une boutique",

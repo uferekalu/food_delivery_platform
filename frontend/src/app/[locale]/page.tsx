@@ -245,6 +245,15 @@ export default function Home() {
       ? { href: "/dashboard/restaurants", label: t("goToMyRestaurants") }
       : { href: "/register?role=restaurant_owner", label: t("registerYourBusiness") };
 
+  // Store ownership reuses the restaurant_owner role (docs/ROADMAP.md FDP-56), so an existing
+  // restaurant owner is sent to their stores list rather than back through registration; anyone
+  // else gets a registration link preselecting the groceries account-type radio (the register
+  // page's own form still lets them switch to pharmacy & beauty from there).
+  const storeCta =
+    authenticated && user.role === "restaurant_owner"
+      ? { href: "/dashboard/stores", label: t("goToMyStores") }
+      : { href: "/register?type=groceries", label: t("sellGroceriesOrPharmacy") };
+
   // restaurant_owner and admin accounts can never become riders (RidersService.apply()
   // rejects them outright — see docs/ROADMAP.md FDP-61) — null hides the CTA entirely rather
   // than pointing them at an application they'd only get a 400 from.
@@ -479,7 +488,12 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-white">{t("letsDoItTogether")}</h2>
             <p className="text-white/70">{t("letsDoItTogetherDescription")}</p>
           </div>
-          <div className={cn("grid grid-cols-1 gap-8", riderCta ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-8 sm:grid-cols-2",
+              riderCta ? "lg:grid-cols-4" : "lg:grid-cols-3",
+            )}
+          >
             {riderCta && (
               <TogetherItem
                 icon={<BikeIcon />}
@@ -495,6 +509,13 @@ export default function Home() {
               description={t("registerYourBusinessDescription")}
               href={partnerCta.href}
               label={partnerCta.label}
+            />
+            <TogetherItem
+              icon={<BasketIcon />}
+              title={t("sellGroceriesOrPharmacy")}
+              description={t("sellGroceriesOrPharmacyDescription")}
+              href={storeCta.href}
+              label={storeCta.label}
             />
             <TogetherItem
               icon={<BriefcaseIcon />}
