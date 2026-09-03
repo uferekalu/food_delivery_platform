@@ -426,10 +426,11 @@ export default function Home() {
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-text">{t("groceries")}</span>
                 <span className="text-sm text-text-muted">{t("groceriesTileDescription")}</span>
+                <span className="group mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                  {t("exploreGroceries")}
+                  <ArrowIcon />
+                </span>
               </div>
-              <Badge variant="neutral" className="w-fit">
-                {t("comingSoon")}
-              </Badge>
             </BentoTile>
 
             <BentoTile href="/categories?tab=pharmacy" className="bg-surface">
@@ -439,10 +440,11 @@ export default function Home() {
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-text">{t("pharmacyAndMore")}</span>
                 <span className="text-sm text-text-muted">{t("pharmacyTileDescription")}</span>
+                <span className="group mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                  {t("explorePharmacy")}
+                  <ArrowIcon />
+                </span>
               </div>
-              <Badge variant="neutral" className="w-fit">
-                {t("comingSoon")}
-              </Badge>
             </BentoTile>
 
             {isLoading ? (

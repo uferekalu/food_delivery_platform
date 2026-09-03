@@ -164,7 +164,6 @@
     "exploreRestaurants": "Explorer les restaurants",
     "groceries": "Épicerie",
     "groceriesTileDescription": "Des produits frais, livrés rapidement.",
-    "comingSoon": "Bientôt disponible",
     "pharmacyAndMore": "Pharmacie & plus",
     "pharmacyTileDescription": "Des produits de santé du quotidien à la demande.",
     "new": "Nouveau",
@@ -185,7 +184,9 @@
     "registerHere": "Inscrivez-vous ici",
     "arrivingSoon": "Arrivée imminente",
     "estimatedDelivery": "Livraison estimée",
-    "deliveryTimeVaries": "Variable selon la commande"
+    "deliveryTimeVaries": "Variable selon la commande",
+    "exploreGroceries": "Explorer l'épicerie",
+    "explorePharmacy": "Explorer la pharmacie"
   },
   "LoginPage": {
     "enterValidEmail": "Saisissez une adresse e-mail valide",
@@ -380,7 +381,9 @@
     "couldNotLoadStores": "Impossible de charger les commerces — réessayez bientôt.",
     "noTagStoresYet": "Aucun commerce {tag} pour l'instant",
     "noStoresYet": "Aucun commerce pour l'instant",
-    "tryDifferentTag": "Essayez une autre étiquette, ou parcourez tous les commerces."
+    "tryDifferentTag": "Essayez une autre étiquette, ou parcourez tous les commerces.",
+    "cuisineFilters": "Filtres de cuisine",
+    "tagFilters": "Filtres de catégorie"
   },
   "CheckoutPage": {
     "cardStripe": "Carte (Stripe)",

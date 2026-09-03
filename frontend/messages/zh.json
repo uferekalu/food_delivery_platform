@@ -164,7 +164,6 @@
     "exploreRestaurants": "探索餐厅",
     "groceries": "生鲜杂货",
     "groceriesTileDescription": "新鲜食材，快速送达。",
-    "comingSoon": "即将上线",
     "pharmacyAndMore": "药店及更多",
     "pharmacyTileDescription": "日常健康用品，随时可购。",
     "new": "全新",
@@ -185,7 +184,9 @@
     "registerHere": "在此注册",
     "arrivingSoon": "即将送达",
     "estimatedDelivery": "预计送达时间",
-    "deliveryTimeVaries": "因订单而异"
+    "deliveryTimeVaries": "因订单而异",
+    "exploreGroceries": "探索生鲜杂货",
+    "explorePharmacy": "探索药店"
   },
   "LoginPage": {
     "enterValidEmail": "请输入有效的电子邮箱地址",
@@ -380,7 +381,9 @@
     "couldNotLoadStores": "无法加载商店 — 请稍后重试。",
     "noTagStoresYet": "暂无{tag}商店",
     "noStoresYet": "暂无商店",
-    "tryDifferentTag": "试试其他标签，或浏览所有商店。"
+    "tryDifferentTag": "试试其他标签，或浏览所有商店。",
+    "cuisineFilters": "菜系筛选",
+    "tagFilters": "分类筛选"
   },
   "CheckoutPage": {
     "cardStripe": "银行卡（Stripe）",
