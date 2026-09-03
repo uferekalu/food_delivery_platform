@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { MenuModule } from './menu/menu.module';
+import { StoresModule } from './stores/stores.module';
 import { CartModule } from './cart/cart.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { OrdersModule } from './orders/orders.module';
@@ -60,6 +61,7 @@ import { AdminModule } from './admin/admin.module';
     UploadsModule,
     RestaurantsModule,
     MenuModule,
+    StoresModule,
     CartModule,
     PromoCodesModule,
     OrdersModule,

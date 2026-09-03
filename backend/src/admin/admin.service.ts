@@ -4,7 +4,10 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { RidersService } from '../riders/riders.service';
 import { UsersService } from '../users/users.service';
 import { MenuService } from '../menu/menu.service';
+import { StoresService } from '../stores/stores.service';
+import { ProductsService } from '../stores/products.service';
 import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
+import type { StoreDocument } from '../stores/schemas/store.schema';
 import type { OrderStatus } from '../orders/schemas/order-status';
 import type { UserRole } from '../users/schemas/user.schema';
 
@@ -32,6 +35,8 @@ export class AdminService {
     private readonly ridersService: RidersService,
     private readonly usersService: UsersService,
     private readonly menuService: MenuService,
+    private readonly storesService: StoresService,
+    private readonly productsService: ProductsService,
   ) {}
 
   async getAnalytics(): Promise<AdminAnalytics> {
@@ -76,5 +81,20 @@ export class AdminService {
       );
     }
     return this.restaurantsService.approve(id);
+  }
+
+  /**
+   * Same split as approveRestaurant() above, and for the same reason — the "at least one
+   * product" check needs ProductsService, and StoresModule importing ProductsModule would
+   * create a cycle (docs/ROADMAP.md FDP-56).
+   */
+  async approveStore(id: string): Promise<StoreDocument> {
+    const catalog = await this.productsService.getCatalog(id);
+    if (catalog.products.length === 0) {
+      throw new BadRequestException(
+        'This store has no products yet — add at least one before approving',
+      );
+    }
+    return this.storesService.approve(id);
   }
 }
