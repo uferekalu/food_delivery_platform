@@ -1,7 +1,8 @@
 "use client";
 
 import { use } from "react";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link, useRouter } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useToast } from "@/components/ui/toast";
-import { useRouter } from "next/navigation";
 import {
   useApproveRestaurantMutation,
   useGetRestaurantByIdForAdminQuery,
@@ -19,9 +19,9 @@ import {
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import { getErrorMessage } from "@/lib/redux/error";
 
-const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 function AdminRestaurantReview({ id }: { id: string }) {
+  const t = useTranslations("AdminRestaurantReviewPage");
+  const DAY_LABELS = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const router = useRouter();
   const { toast } = useToast();
   const { data: restaurant, isLoading: loadingRestaurant, isError } = useGetRestaurantByIdForAdminQuery(id);
@@ -47,7 +47,7 @@ function AdminRestaurantReview({ id }: { id: string }) {
   if (isError || !restaurant) {
     return (
       <Container className="py-10">
-        <EmptyState title="Restaurant not found" description="It may have been removed." />
+        <EmptyState title={t("restaurantNotFound")} description={t("mayHaveBeenRemoved")} />
       </Container>
     );
   }
@@ -56,15 +56,15 @@ function AdminRestaurantReview({ id }: { id: string }) {
     <Container className="flex flex-col gap-6 py-10">
       <Breadcrumbs
         items={[
-          { label: "Admin", href: "/admin" },
-          { label: "Restaurants", href: "/admin" },
+          { label: t("admin"), href: "/admin" },
+          { label: t("restaurants"), href: "/admin" },
           { label: restaurant.name },
         ]}
       />
 
       {!restaurant.isApproved && (
-        <Alert variant="warning" title="Awaiting approval">
-          This restaurant isn&apos;t visible to customers yet.
+        <Alert variant="warning" title={t("awaitingApproval")}>
+          {t("notVisibleToCustomersYet")}
         </Alert>
       )}
 
@@ -72,13 +72,13 @@ function AdminRestaurantReview({ id }: { id: string }) {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-text">{restaurant.name}</h1>
           <Badge variant={restaurant.isApproved ? "success" : "warning"}>
-            {restaurant.isApproved ? "Approved" : "Pending approval"}
+            {restaurant.isApproved ? t("approved") : t("pendingApproval")}
           </Badge>
         </div>
         <p className="text-text-muted">
-          {restaurant.cuisineTypes.join(", ") || "No cuisine types listed"} • {restaurant.currency} •{" "}
+          {restaurant.cuisineTypes.join(", ") || t("noCuisineTypesListed")} • {restaurant.currency} •{" "}
           {"$".repeat(restaurant.priceLevel)}
-          {restaurant.estimatedDeliveryMinutes ? ` • ~${restaurant.estimatedDeliveryMinutes} min` : ""}
+          {restaurant.estimatedDeliveryMinutes ? ` • ${t("estimatedMinutes", { minutes: restaurant.estimatedDeliveryMinutes })}` : ""}
         </p>
         {restaurant.description && <p className="max-w-2xl text-text">{restaurant.description}</p>}
         <p className="text-sm text-text-muted">
@@ -90,28 +90,28 @@ function AdminRestaurantReview({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-          <span className="text-sm font-semibold text-text">Logo</span>
+          <span className="text-sm font-semibold text-text">{t("logo")}</span>
           {restaurant.logoUrl ? (
             // A one-off admin review page doesn't warrant next/image's layout machinery.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={restaurant.logoUrl} alt="" className="h-24 w-24 rounded-md object-cover" />
           ) : (
-            <span className="text-sm text-text-muted">Not set</span>
+            <span className="text-sm text-text-muted">{t("notSet")}</span>
           )}
         </div>
         <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-          <span className="text-sm font-semibold text-text">Cover photo</span>
+          <span className="text-sm font-semibold text-text">{t("coverPhoto")}</span>
           {restaurant.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={restaurant.coverUrl} alt="" className="h-24 w-full rounded-md object-cover" />
           ) : (
-            <span className="text-sm text-text-muted">Not set</span>
+            <span className="text-sm text-text-muted">{t("notSet")}</span>
           )}
         </div>
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-        <span className="text-sm font-semibold text-text">Business registration document</span>
+        <span className="text-sm font-semibold text-text">{t("businessRegistrationDocument")}</span>
         {restaurant.complianceDocumentUrl ? (
           <a
             href={restaurant.complianceDocumentUrl}
@@ -119,23 +119,23 @@ function AdminRestaurantReview({ id }: { id: string }) {
             rel="noopener noreferrer"
             className="w-fit text-sm text-primary hover:underline"
           >
-            View uploaded document →
+            {t("viewUploadedDocument")}
           </a>
         ) : (
-          <span className="text-sm text-danger">Not uploaded — required before this restaurant can be approved</span>
+          <span className="text-sm text-danger">{t("notUploadedRequired")}</span>
         )}
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-        <span className="text-sm font-semibold text-text">Opening hours</span>
+        <span className="text-sm font-semibold text-text">{t("openingHours")}</span>
         <div className="flex flex-col gap-1">
           {restaurant.openingHours.length === 0 ? (
-            <span className="text-sm text-text-muted">Not set</span>
+            <span className="text-sm text-text-muted">{t("notSet")}</span>
           ) : (
             restaurant.openingHours.map((hour) => (
               <div key={hour.dayOfWeek} className="flex gap-3 text-sm text-text-muted">
                 <span className="w-24 shrink-0 text-text">{DAY_LABELS[hour.dayOfWeek]}</span>
-                <span>{hour.isClosed ? "Closed" : `${hour.openTime} – ${hour.closeTime}`}</span>
+                <span>{hour.isClosed ? t("closed") : `${hour.openTime} – ${hour.closeTime}`}</span>
               </div>
             ))
           )}
@@ -145,7 +145,7 @@ function AdminRestaurantReview({ id }: { id: string }) {
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-semibold text-text">
-            Menu {!loadingMenu && `(${itemCount} item${itemCount === 1 ? "" : "s"})`}
+            {t("menu")} {!loadingMenu && t("itemCount", { count: itemCount })}
           </h2>
         </div>
         {loadingMenu ? (
@@ -154,9 +154,8 @@ function AdminRestaurantReview({ id }: { id: string }) {
             <Skeleton className="h-24 w-full" />
           </div>
         ) : !menu || itemCount === 0 ? (
-          <Alert variant="warning" title="No menu items">
-            This restaurant hasn&apos;t added any menu items yet — approving it now would give
-            customers an empty menu.
+          <Alert variant="warning" title={t("noMenuItems")}>
+            {t("noMenuItemsDescription")}
           </Alert>
         ) : (
           menu
@@ -182,7 +181,7 @@ function AdminRestaurantReview({ id }: { id: string }) {
                             {restaurant.currency} {item.price.toFixed(2)}
                           </span>
                         </div>
-                        {!item.isAvailable && <Badge variant="neutral">Unavailable</Badge>}
+                        {!item.isAvailable && <Badge variant="neutral">{t("unavailable")}</Badge>}
                       </div>
                     </div>
                   ))}
@@ -194,19 +193,19 @@ function AdminRestaurantReview({ id }: { id: string }) {
 
       <div className="flex flex-col gap-3 border-t border-border pt-6">
         {!restaurant.isApproved && !canApprove && !loadingMenu && (
-          <Alert variant="warning" title="Can't approve yet">
+          <Alert variant="warning" title={t("cantApproveYet")}>
             {!hasComplianceDocument && itemCount === 0
-              ? "This restaurant needs a business registration document and at least one menu item first."
+              ? t("needsDocumentAndMenuItem")
               : !hasComplianceDocument
-                ? "This restaurant needs a business registration document first."
-                : "This restaurant needs at least one menu item first."}
+                ? t("needsDocument")
+                : t("needsMenuItem")}
           </Alert>
         )}
         <div className="flex flex-wrap gap-3">
           {restaurant.isApproved ? (
-            <NextLink href="/admin" className={buttonVariants({ variant: "outline" })}>
-              Back to admin dashboard
-            </NextLink>
+            <Link href="/admin" className={buttonVariants({ variant: "outline" })}>
+              {t("backToAdminDashboard")}
+            </Link>
           ) : (
             <Button
               isLoading={approving}
@@ -215,15 +214,15 @@ function AdminRestaurantReview({ id }: { id: string }) {
                 void approve(restaurant._id)
                   .unwrap()
                   .then(() => {
-                    toast({ title: "Restaurant approved", variant: "success" });
+                    toast({ title: t("restaurantApproved"), variant: "success" });
                     router.push("/admin");
                   })
                   .catch((err: unknown) =>
-                    toast({ title: "Couldn't approve restaurant", description: getErrorMessage(err), variant: "danger" }),
+                    toast({ title: t("couldNotApproveRestaurant"), description: getErrorMessage(err), variant: "danger" }),
                   )
               }
             >
-              Approve restaurant
+              {t("approveRestaurant")}
             </Button>
           )}
         </div>

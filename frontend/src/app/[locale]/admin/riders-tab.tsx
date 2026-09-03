@@ -1,6 +1,7 @@
 "use client";
 
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/cn";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,30 +12,30 @@ import { useListAllRidersQuery } from "@/lib/redux/services/riders-api";
 import type { Rider } from "@/lib/redux/restaurant-types";
 
 function RiderCard({ rider }: { rider: Rider }) {
+  const t = useTranslations("AdminRidersTab");
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <span className="text-sm font-medium text-text capitalize">{rider.vehicleType}</span>
           <Badge variant={rider.isVerified ? "success" : "warning"}>
-            {rider.isVerified ? "Verified" : "Pending"}
+            {rider.isVerified ? t("verified") : t("pending")}
           </Badge>
         </div>
-        <span className="text-sm text-text-muted">
-          Applied {new Date(rider.createdAt).toLocaleDateString()}
-        </span>
-        <NextLink
+        <span className="text-sm text-text-muted">{t("applied", { date: new Date(rider.createdAt).toLocaleDateString() })}</span>
+        <Link
           href={`/admin/riders/${rider._id}`}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "self-start")}
         >
-          {rider.isVerified ? "View details" : "Review application"}
-        </NextLink>
+          {rider.isVerified ? t("viewDetails") : t("reviewApplication")}
+        </Link>
       </CardContent>
     </Card>
   );
 }
 
 export function RidersTab() {
+  const t = useTranslations("AdminRidersTab");
   const { data, isLoading } = useListAllRidersQuery();
 
   if (isLoading) {
@@ -47,7 +48,7 @@ export function RidersTab() {
   }
 
   if (!data || data.length === 0) {
-    return <EmptyState title="No riders yet" description="Rider applications will show up here." />;
+    return <EmptyState title={t("noRidersYet")} description={t("applicationsShowUpHere")} />;
   }
 
   // Pending-verification riders need attention first — sort them ahead of already-verified ones.

@@ -1,6 +1,7 @@
 "use client";
 
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +10,7 @@ import { useListPendingRestaurantsQuery } from "@/lib/redux/services/restaurants
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function PendingRestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+  const t = useTranslations("AdminRestaurantsTab");
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
@@ -22,18 +24,19 @@ function PendingRestaurantCard({ restaurant }: { restaurant: Restaurant }) {
         {/* No direct "Approve" here — an admin needs to see the restaurant's actual menu
             before approving it, not just this summary card, or an owner can get approved
             with no menu items at all. The review page has the approve action. */}
-        <NextLink
+        <Link
           href={`/admin/restaurants/${restaurant._id}`}
           className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
         >
-          Review &amp; approve
-        </NextLink>
+          {t("reviewAndApprove")}
+        </Link>
       </CardContent>
     </Card>
   );
 }
 
 export function RestaurantsTab() {
+  const t = useTranslations("AdminRestaurantsTab");
   const { data, isLoading } = useListPendingRestaurantsQuery();
 
   if (isLoading) {
@@ -46,7 +49,7 @@ export function RestaurantsTab() {
   }
 
   if (!data || data.length === 0) {
-    return <EmptyState title="No restaurants awaiting approval" description="New restaurant applications will show up here." />;
+    return <EmptyState title={t("noRestaurantsAwaitingApproval")} description={t("newApplicationsShowUpHere")} />;
   }
 
   return (

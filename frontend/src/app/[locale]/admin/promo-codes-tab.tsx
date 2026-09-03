@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,30 +22,32 @@ import {
 import { getErrorMessage } from "@/lib/redux/error";
 import { DISCOUNT_TYPES, type PromoCode } from "@/lib/redux/restaurant-types";
 
-const DISCOUNT_TYPE_OPTIONS = DISCOUNT_TYPES.map((value) => ({
-  value,
-  label: value === "percentage" ? "Percentage" : "Fixed amount",
-}));
-
 // An empty number input submits as "" — coerced to 0 by z.coerce.number() rather than treated
 // as "not provided", which would wrongly fail usageLimit's min(1) whenever it's left blank (the
 // intended way to mean "unlimited"). Preprocessing blank strings to undefined first makes
 // `.optional()` actually take effect.
 const blankToUndefined = (v: unknown) => (v === "" ? undefined : v);
 
-const promoSchema = z.object({
-  code: z.string().min(3, "At least 3 characters").toUpperCase(),
-  discountType: z.enum(DISCOUNT_TYPES),
-  discountValue: z.coerce.number().min(0),
-  minOrderAmount: z.preprocess(blankToUndefined, z.coerce.number().min(0).optional()),
-  usageLimit: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
-});
-type PromoInput = z.input<typeof promoSchema>;
-type PromoValues = z.output<typeof promoSchema>;
-
 function CreatePromoForm() {
+  const t = useTranslations("AdminPromoCodesTab");
   const { toast } = useToast();
   const [createPromo, { isLoading }] = useCreatePromoCodeMutation();
+
+  const DISCOUNT_TYPE_OPTIONS = DISCOUNT_TYPES.map((value) => ({
+    value,
+    label: value === "percentage" ? t("percentage") : t("fixedAmount"),
+  }));
+
+  const promoSchema = z.object({
+    code: z.string().min(3, t("atLeast3Chars")).toUpperCase(),
+    discountType: z.enum(DISCOUNT_TYPES),
+    discountValue: z.coerce.number().min(0),
+    minOrderAmount: z.preprocess(blankToUndefined, z.coerce.number().min(0).optional()),
+    usageLimit: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
+  });
+  type PromoInput = z.input<typeof promoSchema>;
+  type PromoValues = z.output<typeof promoSchema>;
+
   const {
     register,
     control,
@@ -66,16 +69,16 @@ function CreatePromoForm() {
         ...(values.usageLimit ? { usageLimit: values.usageLimit } : {}),
       }).unwrap();
       reset({ discountType: values.discountType, code: "", discountValue: 0 });
-      toast({ title: "Promo code created", variant: "success" });
+      toast({ title: t("promoCodeCreated"), variant: "success" });
     } catch (err) {
-      toast({ title: "Couldn't create promo code", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotCreatePromoCode"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New promo code</CardTitle>
+        <CardTitle>{t("newPromoCode")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -83,10 +86,10 @@ function CreatePromoForm() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
           noValidate
         >
-          <FormField label="Code" error={errors.code?.message} required>
+          <FormField label={t("code")} error={errors.code?.message} required>
             <Input placeholder="WELCOME10" {...register("code")} />
           </FormField>
-          <FormField label="Type" required>
+          <FormField label={t("type")} required>
             <Controller
               control={control}
               name="discountType"
@@ -95,17 +98,17 @@ function CreatePromoForm() {
               )}
             />
           </FormField>
-          <FormField label="Value" error={errors.discountValue?.message} required>
+          <FormField label={t("value")} error={errors.discountValue?.message} required>
             <Input type="number" step="0.01" min="0" {...register("discountValue")} />
           </FormField>
-          <FormField label="Min order amount" hint="Optional">
+          <FormField label={t("minOrderAmount")} hint={t("optional")}>
             <Input type="number" step="0.01" min="0" {...register("minOrderAmount")} />
           </FormField>
-          <FormField label="Usage limit" hint="Optional — blank = unlimited" className="sm:col-span-2">
+          <FormField label={t("usageLimit")} hint={t("optionalUnlimited")} className="sm:col-span-2">
             <Input type="number" min="1" {...register("usageLimit")} />
           </FormField>
           <Button type="submit" isLoading={isLoading} className="self-end">
-            Create promo code
+            {t("createPromoCode")}
           </Button>
         </form>
       </CardContent>
@@ -114,6 +117,7 @@ function CreatePromoForm() {
 }
 
 function PromoRow({ promo }: { promo: PromoCode }) {
+  const t = useTranslations("AdminPromoCodesTab");
   const { toast } = useToast();
   const [updatePromo, { isLoading }] = useUpdatePromoCodeMutation();
 
@@ -123,15 +127,17 @@ function PromoRow({ promo }: { promo: PromoCode }) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-semibold text-text">{promo.code}</span>
-            <Badge variant={promo.isActive ? "success" : "neutral"}>{promo.isActive ? "Active" : "Inactive"}</Badge>
+            <Badge variant={promo.isActive ? "success" : "neutral"}>{promo.isActive ? t("active") : t("inactive")}</Badge>
           </div>
           <span className="text-sm text-text-muted">
-            {promo.discountType === "percentage" ? `${promo.discountValue}% off` : `${promo.discountValue} off`}
-            {promo.usageLimit ? ` · used ${promo.usedCount}/${promo.usageLimit}` : ` · used ${promo.usedCount} time(s)`}
+            {promo.discountType === "percentage" ? t("percentOff", { value: promo.discountValue }) : t("amountOff", { value: promo.discountValue })}
+            {promo.usageLimit
+              ? t("usedOfLimit", { used: promo.usedCount, limit: promo.usageLimit })
+              : t("usedTimes", { count: promo.usedCount })}
           </span>
         </div>
         <Switch
-          label={`Toggle ${promo.code}`}
+          label={t("togglePromo", { code: promo.code })}
           hideLabel
           checked={promo.isActive}
           disabled={isLoading}
@@ -139,7 +145,7 @@ function PromoRow({ promo }: { promo: PromoCode }) {
             void updatePromo({ id: promo._id, body: { isActive: checked } })
               .unwrap()
               .catch((err: unknown) =>
-                toast({ title: "Couldn't update promo code", description: getErrorMessage(err), variant: "danger" }),
+                toast({ title: t("couldNotUpdatePromoCode"), description: getErrorMessage(err), variant: "danger" }),
               )
           }
         />
@@ -149,6 +155,7 @@ function PromoRow({ promo }: { promo: PromoCode }) {
 }
 
 export function PromoCodesTab() {
+  const t = useTranslations("AdminPromoCodesTab");
   const { data, isLoading } = useListPromoCodesQuery();
 
   return (
@@ -161,7 +168,7 @@ export function PromoCodesTab() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : !data || data.length === 0 ? (
-        <EmptyState title="No promo codes yet" description="Create one above to offer a discount." />
+        <EmptyState title={t("noPromoCodesYet")} description={t("createOneAboveDescription")} />
       ) : (
         <div className="flex flex-col gap-3">
           {data.map((promo) => (

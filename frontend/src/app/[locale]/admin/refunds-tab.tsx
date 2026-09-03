@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,8 @@ import { useLazyGetOrderAsAdminQuery, useRefundOrderMutation } from "@/lib/redux
 import { getErrorMessage } from "@/lib/redux/error";
 
 export function RefundsTab() {
+  const t = useTranslations("AdminRefundsTab");
+  const tStatus = useTranslations("OrderStatus");
   const [orderId, setOrderId] = useState("");
   const [lookupOrder, { data: order, isFetching, isError }] = useLazyGetOrderAsAdminQuery();
   const [refundOrder, { isLoading: refunding }] = useRefundOrderMutation();
@@ -27,11 +30,11 @@ export function RefundsTab() {
       .unwrap()
       .then(() => {
         setConfirming(false);
-        toast({ title: "Order refunded", variant: "success" });
+        toast({ title: t("orderRefunded"), variant: "success" });
       })
       .catch((err: unknown) => {
         setConfirming(false);
-        toast({ title: "Couldn't refund order", description: getErrorMessage(err), variant: "danger" });
+        toast({ title: t("couldNotRefundOrder"), description: getErrorMessage(err), variant: "danger" });
       });
   }
 
@@ -39,8 +42,8 @@ export function RefundsTab() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Look up an order</CardTitle>
-          <CardDescription>Paste an order ID to review it and issue a refund for a delivered order.</CardDescription>
+          <CardTitle>{t("lookUpAnOrder")}</CardTitle>
+          <CardDescription>{t("lookUpDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -50,34 +53,30 @@ export function RefundsTab() {
               if (orderId.trim()) void lookupOrder(orderId.trim());
             }}
           >
-            <FormField label="Order ID" className="flex-1">
+            <FormField label={t("orderId")} className="flex-1">
               <Input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="6a8c..." />
             </FormField>
             <Button type="submit" isLoading={isFetching}>
-              Look up
+              {t("lookUp")}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      {isError && <Alert variant="danger">Couldn&apos;t find an order with that ID.</Alert>}
+      {isError && <Alert variant="danger">{t("couldNotFindOrder")}</Alert>}
 
       {order && (
         <Card>
           <CardContent className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-text">{order.orderNumber}</span>
-              <Badge variant={order.status === "REFUNDED" ? "neutral" : "info"}>{order.status}</Badge>
+              <Badge variant={order.status === "REFUNDED" ? "neutral" : "info"}>{tStatus(order.status)}</Badge>
             </div>
             <p className="text-sm text-text-muted">
-              {order.currency} {order.total.toFixed(2)} · payment {order.paymentStatus}
-              {order.paymentRef ? ` · ref ${order.paymentRef}` : ""}
+              {t("orderSummary", { currency: order.currency, total: order.total.toFixed(2), paymentStatus: order.paymentStatus })}
+              {order.paymentRef ? t("refSuffix", { ref: order.paymentRef }) : ""}
             </p>
-            {!refundable && (
-              <Alert variant="warning">
-                Only a delivered order with a successful payment can be refunded.
-              </Alert>
-            )}
+            {!refundable && <Alert variant="warning">{t("onlyDeliveredCanBeRefunded")}</Alert>}
             <Button
               variant="destructive"
               className="self-start"
@@ -85,7 +84,7 @@ export function RefundsTab() {
               isLoading={refunding}
               onClick={() => setConfirming(true)}
             >
-              Refund order
+              {t("refundOrder")}
             </Button>
           </CardContent>
         </Card>
@@ -95,13 +94,9 @@ export function RefundsTab() {
         open={confirming}
         onClose={() => setConfirming(false)}
         onConfirm={confirmRefund}
-        title={order ? `Refund order ${order.orderNumber}?` : "Refund this order?"}
-        description={
-          order
-            ? `This charges back ${order.currency} ${order.total.toFixed(2)} to the customer and can't be undone.`
-            : undefined
-        }
-        confirmLabel="Refund"
+        title={order ? t("refundOrderTitle", { orderNumber: order.orderNumber }) : t("refundThisOrder")}
+        description={order ? t("refundOrderDescription", { currency: order.currency, total: order.total.toFixed(2) }) : undefined}
+        confirmLabel={t("refund")}
         isLoading={refunding}
       />
     </div>
