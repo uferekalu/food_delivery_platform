@@ -1,6 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Address, AddressSchema } from '../../common/schemas/address.schema';
+import {
+  OpeningHour,
+  OpeningHourSchema,
+} from '../../common/schemas/opening-hour.schema';
 
 // Glovo's own vertical split (docs/ROADMAP.md FDP-56) — a store belongs to exactly one, and a
 // category-listing page only ever shows stores of that one type (confirmed against the real
@@ -61,6 +65,9 @@ export class Store {
 
   @Prop({ type: AddressSchema, required: true })
   address: Address;
+
+  @Prop({ type: [OpeningHourSchema], default: [] })
+  openingHours: OpeningHour[];
 
   /** Manual "busy/closed" toggle by the owner — same as Restaurant.isOpen. */
   @Prop({ type: Boolean, default: true })

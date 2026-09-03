@@ -105,7 +105,10 @@
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Open",
-    "closed": "Closed"
+    "closed": "Closed",
+    "opensAt": "Opens at {time}",
+    "closedUntilTomorrow": "Closed until tomorrow",
+    "closedUntilDay": "Closed until {day}"
   },
   "FavoriteButton": {
     "removeFromFavorites": "Remove from favorites",
@@ -561,6 +564,9 @@
     "restaurants": "Restaurants",
     "open": "Open",
     "closed": "Closed",
+    "opensAt": "Opens at {time}",
+    "closedUntilTomorrow": "Closed until tomorrow",
+    "closedUntilDay": "Closed until {day}",
     "reviewCount": "{count, plural, one {# review} other {# reviews}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Currently closed",
@@ -784,7 +790,19 @@
     "postalCode": "Postal code",
     "latitude": "Latitude",
     "latitudeHint": "Optional — enables real distance-based delivery fees",
-    "longitude": "Longitude"
+    "longitude": "Longitude",
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "openingHours": "Opening hours",
+    "closed": "Closed",
+    "to": "to",
+    "openingTimeFor": "{day} opening time",
+    "closingTimeFor": "{day} closing time"
   },
   "CatalogManagerPage": {
     "required": "Required",
@@ -1219,7 +1237,10 @@
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Open",
-    "closed": "Closed"
+    "closed": "Closed",
+    "opensAt": "Opens at {time}",
+    "closedUntilTomorrow": "Closed until tomorrow",
+    "closedUntilDay": "Closed until {day}"
   },
   "StoreDetailPage": {
     "storeNotFound": "Store not found",
@@ -1227,6 +1248,9 @@
     "browseHome": "Categories",
     "open": "Open",
     "closed": "Closed",
+    "opensAt": "Opens at {time}",
+    "closedUntilTomorrow": "Closed until tomorrow",
+    "closedUntilDay": "Closed until {day}",
     "reviewCount": "{count, plural, one {# review} other {# reviews}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Currently closed",

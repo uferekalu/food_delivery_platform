@@ -1,8 +1,9 @@
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Store } from "@/lib/redux/restaurant-types";
+import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 
 export function BasketIcon({ className = "size-12" }: { className?: string }) {
   return (
@@ -24,7 +25,10 @@ export function PillIcon({ className = "size-12" }: { className?: string }) {
 
 export function StoreCard({ store }: { store: Store }) {
   const t = useTranslations("StoreCard");
+  const locale = useLocale();
   const icon = store.type === "groceries" ? <BasketIcon className="size-10" /> : <PillIcon className="size-10" />;
+  const scheduleStatus = getOpenStatus(store.openingHours, store.country);
+  const { label: openLabel, isOpenNow } = describeOpenStatus(store.isOpen, scheduleStatus, locale, t);
 
   return (
     <Card className="relative h-full overflow-hidden transition-colors duration-150 hover:border-border-strong">
@@ -56,7 +60,7 @@ export function StoreCard({ store }: { store: Store }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
-          <Badge variant={store.isOpen ? "success" : "neutral"}>{store.isOpen ? t("open") : t("closed")}</Badge>
+          <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           {store.tags.slice(0, 3).map((tag) => (
             <Badge key={tag} variant="primary">
               {tag}

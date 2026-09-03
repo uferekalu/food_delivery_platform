@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { useGetStoreCatalogQuery } from "@/lib/redux/services/store-catalog-api"
 import { useAddStoreItemMutation } from "@/lib/redux/services/cart-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { Product, ProductCategory } from "@/lib/redux/restaurant-types";
+import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 
 function isConflictError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "status" in err && (err as { status: unknown }).status === 409;
@@ -151,6 +152,7 @@ function CategorySection({
 
 export default function StoreDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const t = useTranslations("StoreDetailPage");
+  const locale = useLocale();
   const { slug } = use(params);
   const { data: store, isLoading: loadingStore, isError } = useGetStoreBySlugQuery(slug);
   const { data: catalog, isLoading: loadingCatalog } = useGetStoreCatalogQuery(store?._id ?? "", {
@@ -175,6 +177,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
   }
 
   const topLevelCategories = catalog?.categories.filter((c) => c.parentCategoryId === null) ?? [];
+  const scheduleStatus = getOpenStatus(store.openingHours, store.country);
+  const { label: openLabel, isOpenNow } = describeOpenStatus(store.isOpen, scheduleStatus, locale, t);
 
   return (
     <Container className="flex flex-col gap-6 py-10">
@@ -183,7 +187,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-text">{store.name}</h1>
-          <Badge variant={store.isOpen ? "success" : "neutral"}>{store.isOpen ? t("open") : t("closed")}</Badge>
+          <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
         </div>
         <p className="text-text-muted">
           ⭐ {store.avgRating.toFixed(1)} ({t("reviewCount", { count: store.reviewCount })})
@@ -195,7 +199,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
         </p>
       </div>
 
-      {!store.isOpen && (
+      {!isOpenNow && (
         <Alert variant="warning" title={t("currentlyClosed")}>
           {t("notAcceptingOrders")}
         </Alert>
@@ -218,7 +222,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
               categories={catalog.categories}
               products={catalog.products}
               currency={store.currency}
-              storeIsOpen={store.isOpen}
+              storeIsOpen={isOpenNow}
             />
           ))
         )}

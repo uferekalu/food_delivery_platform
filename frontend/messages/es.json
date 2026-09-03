@@ -105,7 +105,10 @@
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Abierto",
-    "closed": "Cerrado"
+    "closed": "Cerrado",
+    "opensAt": "Abre a las {time}",
+    "closedUntilTomorrow": "Cerrado hasta mañana",
+    "closedUntilDay": "Cerrado hasta el {day}"
   },
   "FavoriteButton": {
     "removeFromFavorites": "Quitar de favoritos",
@@ -561,6 +564,9 @@
     "restaurants": "Restaurantes",
     "open": "Abierto",
     "closed": "Cerrado",
+    "opensAt": "Abre a las {time}",
+    "closedUntilTomorrow": "Cerrado hasta mañana",
+    "closedUntilDay": "Cerrado hasta el {day}",
     "reviewCount": "{count, plural, one {# reseña} other {# reseñas}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Actualmente cerrado",
@@ -784,7 +790,19 @@
     "postalCode": "Código postal",
     "latitude": "Latitud",
     "latitudeHint": "Opcional — permite tarifas de entrega basadas en la distancia real",
-    "longitude": "Longitud"
+    "longitude": "Longitud",
+    "sunday": "Domingo",
+    "monday": "Lunes",
+    "tuesday": "Martes",
+    "wednesday": "Miércoles",
+    "thursday": "Jueves",
+    "friday": "Viernes",
+    "saturday": "Sábado",
+    "openingHours": "Horario de atención",
+    "closed": "Cerrado",
+    "to": "a",
+    "openingTimeFor": "Hora de apertura el {day}",
+    "closingTimeFor": "Hora de cierre el {day}"
   },
   "CatalogManagerPage": {
     "required": "Obligatorio",
@@ -1219,7 +1237,10 @@
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Abierto",
-    "closed": "Cerrado"
+    "closed": "Cerrado",
+    "opensAt": "Abre a las {time}",
+    "closedUntilTomorrow": "Cerrado hasta mañana",
+    "closedUntilDay": "Cerrado hasta el {day}"
   },
   "StoreDetailPage": {
     "storeNotFound": "Tienda no encontrada",
@@ -1227,6 +1248,9 @@
     "browseHome": "Categorías",
     "open": "Abierto",
     "closed": "Cerrado",
+    "opensAt": "Abre a las {time}",
+    "closedUntilTomorrow": "Cerrado hasta mañana",
+    "closedUntilDay": "Cerrado hasta el {day}",
     "reviewCount": "{count, plural, one {# reseña} other {# reseñas}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Actualmente cerrado",

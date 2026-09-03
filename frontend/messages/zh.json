@@ -105,7 +105,10 @@
   "RestaurantCard": {
     "estimatedMinutes": "约 {minutes} 分钟",
     "open": "营业中",
-    "closed": "已打烊"
+    "closed": "已打烊",
+    "opensAt": "{time}开始营业",
+    "closedUntilTomorrow": "已打烊，明天再营业",
+    "closedUntilDay": "已打烊，{day}再营业"
   },
   "FavoriteButton": {
     "removeFromFavorites": "从收藏中移除",
@@ -561,6 +564,9 @@
     "restaurants": "餐厅",
     "open": "营业中",
     "closed": "已打烊",
+    "opensAt": "{time}开始营业",
+    "closedUntilTomorrow": "已打烊，明天再营业",
+    "closedUntilDay": "已打烊，{day}再营业",
     "reviewCount": "{count} 条评价",
     "estimatedMinutes": "约 {minutes} 分钟",
     "currentlyClosed": "目前已打烊",
@@ -784,7 +790,19 @@
     "postalCode": "邮政编码",
     "latitude": "纬度",
     "latitudeHint": "可选——启用基于实际距离的配送费",
-    "longitude": "经度"
+    "longitude": "经度",
+    "sunday": "周日",
+    "monday": "周一",
+    "tuesday": "周二",
+    "wednesday": "周三",
+    "thursday": "周四",
+    "friday": "周五",
+    "saturday": "周六",
+    "openingHours": "营业时间",
+    "closed": "休息",
+    "to": "至",
+    "openingTimeFor": "{day}的开始营业时间",
+    "closingTimeFor": "{day}的结束营业时间"
   },
   "CatalogManagerPage": {
     "required": "必填",
@@ -1219,7 +1237,10 @@
   "StoreCard": {
     "estimatedMinutes": "约 {minutes} 分钟",
     "open": "营业中",
-    "closed": "已打烊"
+    "closed": "已打烊",
+    "opensAt": "{time}开始营业",
+    "closedUntilTomorrow": "已打烊，明天再营业",
+    "closedUntilDay": "已打烊，{day}再营业"
   },
   "StoreDetailPage": {
     "storeNotFound": "未找到该商店",
@@ -1227,6 +1248,9 @@
     "browseHome": "分类",
     "open": "营业中",
     "closed": "已打烊",
+    "opensAt": "{time}开始营业",
+    "closedUntilTomorrow": "已打烊，明天再营业",
+    "closedUntilDay": "已打烊，{day}再营业",
     "reviewCount": "{count} 条评价",
     "estimatedMinutes": "约 {minutes} 分钟",
     "currentlyClosed": "目前已打烊",

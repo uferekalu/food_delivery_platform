@@ -16,7 +16,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { AddressDto } from '../../common/dto/address.dto';
-import { OpeningHourDto } from './opening-hour.dto';
+import { OpeningHourDto } from '../../common/dto/opening-hour.dto';
 
 export class CreateRestaurantDto {
   @ApiProperty({ example: 'Burgundy Kitchen' })

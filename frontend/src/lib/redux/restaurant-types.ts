@@ -84,6 +84,7 @@ export interface Store {
   currency: string;
   country: string;
   address: Address;
+  openingHours: OpeningHour[];
   isOpen: boolean;
   isApproved: boolean;
   avgRating: number;

@@ -49,6 +49,7 @@ function EditStoreForm({ id }: { id: string }) {
           lng: store.address.lng,
           estimatedDeliveryMinutes: store.estimatedDeliveryMinutes ?? undefined,
         }}
+        defaultOpeningHours={store.openingHours}
         defaultLogoUrl={store.logoUrl}
         defaultCoverUrl={store.coverUrl}
         defaultComplianceDocumentUrl={store.complianceDocumentUrl}
