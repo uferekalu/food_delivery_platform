@@ -164,7 +164,6 @@
     "exploreRestaurants": "Restaurants entdecken",
     "groceries": "Lebensmittel",
     "groceriesTileDescription": "Frische Grundnahrungsmittel, schnell geliefert.",
-    "comingSoon": "Demnächst verfügbar",
     "pharmacyAndMore": "Apotheke & mehr",
     "pharmacyTileDescription": "Alltägliche Gesundheitsartikel auf Abruf.",
     "new": "Neu",
@@ -185,7 +184,9 @@
     "registerHere": "Hier registrieren",
     "arrivingSoon": "Trifft bald ein",
     "estimatedDelivery": "Geschätzte Lieferzeit",
-    "deliveryTimeVaries": "Abhängig von der Bestellung"
+    "deliveryTimeVaries": "Abhängig von der Bestellung",
+    "exploreGroceries": "Lebensmittel entdecken",
+    "explorePharmacy": "Apotheke entdecken"
   },
   "LoginPage": {
     "enterValidEmail": "Gib eine gültige E-Mail-Adresse ein",
@@ -380,7 +381,9 @@
     "couldNotLoadStores": "Shops konnten nicht geladen werden — versuche es in Kürze erneut.",
     "noTagStoresYet": "Noch keine {tag}-Shops",
     "noStoresYet": "Noch keine Shops",
-    "tryDifferentTag": "Probiere ein anderes Tag oder durchsuche alle Shops."
+    "tryDifferentTag": "Probiere ein anderes Tag oder durchsuche alle Shops.",
+    "cuisineFilters": "Küchen-Filter",
+    "tagFilters": "Kategorie-Filter"
   },
   "CheckoutPage": {
     "cardStripe": "Karte (Stripe)",

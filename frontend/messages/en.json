@@ -164,7 +164,6 @@
     "exploreRestaurants": "Explore restaurants",
     "groceries": "Groceries",
     "groceriesTileDescription": "Fresh essentials, delivered fast.",
-    "comingSoon": "Coming soon",
     "pharmacyAndMore": "Pharmacy & more",
     "pharmacyTileDescription": "Everyday health items on demand.",
     "new": "New",
@@ -185,7 +184,9 @@
     "registerHere": "Register here",
     "arrivingSoon": "Arriving soon",
     "estimatedDelivery": "Estimated delivery",
-    "deliveryTimeVaries": "Varies by order"
+    "deliveryTimeVaries": "Varies by order",
+    "exploreGroceries": "Explore groceries",
+    "explorePharmacy": "Explore pharmacy"
   },
   "LoginPage": {
     "enterValidEmail": "Enter a valid email address",
@@ -380,7 +381,9 @@
     "couldNotLoadStores": "Couldn't load stores — try again shortly.",
     "noTagStoresYet": "No {tag} stores yet",
     "noStoresYet": "No stores yet",
-    "tryDifferentTag": "Try a different tag, or browse all stores."
+    "tryDifferentTag": "Try a different tag, or browse all stores.",
+    "cuisineFilters": "Cuisine filters",
+    "tagFilters": "Category filters"
   },
   "CheckoutPage": {
     "cardStripe": "Card (Stripe)",

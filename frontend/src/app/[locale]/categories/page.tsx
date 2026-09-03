@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs";
+import { Carousel } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
@@ -33,35 +34,36 @@ function CuisineChips({
 
   if (cuisines.length === 0) return null;
 
-  return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+  const chips = [
+    <button
+      key="all"
+      type="button"
+      onClick={() => onChange(null)}
+      className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+        active === null
+          ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
+          : "border-border text-text-muted hover:text-text"
+      }`}
+    >
+      {t("all")}
+    </button>,
+    ...cuisines.map((cuisine) => (
       <button
+        key={cuisine}
         type="button"
-        onClick={() => onChange(null)}
-        className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-          active === null
+        onClick={() => onChange(cuisine)}
+        className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+          active === cuisine
             ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
             : "border-border text-text-muted hover:text-text"
         }`}
       >
-        {t("all")}
+        {cuisine}
       </button>
-      {cuisines.map((cuisine) => (
-        <button
-          key={cuisine}
-          type="button"
-          onClick={() => onChange(cuisine)}
-          className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-            active === cuisine
-              ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
-              : "border-border text-text-muted hover:text-text"
-          }`}
-        >
-          {cuisine}
-        </button>
-      ))}
-    </div>
-  );
+    )),
+  ];
+
+  return <Carousel aria-label={t("cuisineFilters")}>{chips}</Carousel>;
 }
 
 function FoodCategory() {
@@ -132,35 +134,36 @@ function TagChips({
 
   if (tags.length === 0) return null;
 
-  return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+  const chips = [
+    <button
+      key="all"
+      type="button"
+      onClick={() => onChange(null)}
+      className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+        active === null
+          ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
+          : "border-border text-text-muted hover:text-text"
+      }`}
+    >
+      {t("all")}
+    </button>,
+    ...tags.map((tag) => (
       <button
+        key={tag}
         type="button"
-        onClick={() => onChange(null)}
-        className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-          active === null
+        onClick={() => onChange(tag)}
+        className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+          active === tag
             ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
             : "border-border text-text-muted hover:text-text"
         }`}
       >
-        {t("all")}
+        {tag}
       </button>
-      {tags.map((tag) => (
-        <button
-          key={tag}
-          type="button"
-          onClick={() => onChange(tag)}
-          className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-            active === tag
-              ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
-              : "border-border text-text-muted hover:text-text"
-          }`}
-        >
-          {tag}
-        </button>
-      ))}
-    </div>
-  );
+    )),
+  ];
+
+  return <Carousel aria-label={t("tagFilters")}>{chips}</Carousel>;
 }
 
 function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: React.ReactNode }) {
