@@ -371,14 +371,16 @@
     "noRestaurantsYet": "Noch keine Restaurants",
     "tryDifferentCuisine": "Probiere eine andere Küche oder durchsuche alle Restaurants.",
     "checkBackSoon": "Schau bald wieder vorbei, neue Restaurants kommen dazu.",
-    "categoryComingSoon": "{name} kommt bald",
-    "focusedOnRestaurantsFirst": "Wir konzentrieren uns zunächst auf Restaurants — diese Kategorie wird mit unserem Wachstum eröffnet.",
     "categories": "Kategorien",
     "everythingInOnePlace": "Alles, was du bestellen kannst, an einem Ort.",
     "food": "Essen",
     "groceries": "Lebensmittel",
     "pharmacy": "Apotheke",
-    "pharmacyAndMore": "Apotheke & mehr"
+    "pharmacyAndMore": "Apotheke & mehr",
+    "couldNotLoadStores": "Shops konnten nicht geladen werden — versuche es in Kürze erneut.",
+    "noTagStoresYet": "Noch keine {tag}-Shops",
+    "noStoresYet": "Noch keine Shops",
+    "tryDifferentTag": "Probiere ein anderes Tag oder durchsuche alle Shops."
   },
   "CheckoutPage": {
     "cardStripe": "Karte (Stripe)",
@@ -420,7 +422,6 @@
     "apply": "Anwenden",
     "gotAPromoCode": "Hast du einen Rabattcode?",
     "summary": "Zusammenfassung",
-    "itemsFromRestaurant": "{count, plural, one {# Artikel} other {# Artikel}} von {restaurant}",
     "products": "Produkte",
     "promotion": "Aktion",
     "deliveryEst": "Lieferung (gesch.)",
@@ -430,7 +431,9 @@
     "checkingSession": "Deine Sitzung wird überprüft",
     "logInToCheckout": "Zum Bezahlen anmelden",
     "needAccountToOrder": "Du benötigst ein Konto, um eine Bestellung aufzugeben.",
-    "logIn": "Anmelden"
+    "logIn": "Anmelden",
+    "itemsFromSeller": "{count, plural, one {# Artikel} other {# Artikel}} von {seller}",
+    "browseOptions": "Restaurants und Shops durchsuchen"
   },
   "CheckoutCallbackPage": {
     "missingOrder": "Bestellung fehlt — gehe zurück zur Kasse und versuche es erneut.",
@@ -1084,5 +1087,31 @@
     "goToRiderDashboard": "Zum Fahrer-Dashboard",
     "adminAccountsDontNeedRiderProfile": "Administratorkonten benötigen kein Fahrerprofil.",
     "restaurantOwnersCantBecomeRiders": "Restaurantinhaber-Konten können nicht gleichzeitig Fahrer werden — Fahrer zu werden würde die Rolle deines Kontos ersetzen, und du würdest den Zugriff auf dein Restaurant-Dashboard verlieren."
+  },
+  "StoreCard": {
+    "estimatedMinutes": "~{minutes} Min.",
+    "open": "Geöffnet",
+    "closed": "Geschlossen"
+  },
+  "StoreDetailPage": {
+    "storeNotFound": "Shop nicht gefunden",
+    "unavailableOrIncorrectLink": "Es ist möglicherweise nicht verfügbar oder der Link ist falsch.",
+    "browseHome": "Kategorien",
+    "open": "Geöffnet",
+    "closed": "Geschlossen",
+    "reviewCount": "{count, plural, one {# Bewertung} other {# Bewertungen}}",
+    "estimatedMinutes": "~{minutes} Min.",
+    "currentlyClosed": "Derzeit geschlossen",
+    "notAcceptingOrders": "Dieser Shop nimmt gerade keine Bestellungen an.",
+    "catalog": "Katalog",
+    "catalogComingSoon": "Katalog demnächst verfügbar",
+    "catalogNotPublished": "Dieser Shop hat seinen Katalog noch nicht veröffentlicht.",
+    "addToCart": "Zum Warenkorb hinzufügen",
+    "outOfStock": "Nicht vorrätig",
+    "addedToCart": "Zum Warenkorb hinzugefügt",
+    "couldNotAddToCart": "Konnte nicht zum Warenkorb hinzugefügt werden",
+    "startNewCartTitle": "Neuen Warenkorb starten?",
+    "startNewCartDescription": "Dein Warenkorb enthält Artikel eines anderen Restaurants oder Shops. Das Hinzufügen dieses Artikels leert ihn.",
+    "clearCartAndAdd": "Warenkorb leeren und hinzufügen"
   }
 }

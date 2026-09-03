@@ -62,6 +62,76 @@ export interface Restaurant {
 export const RESTAURANT_SORTS = ["newest", "rating", "price_asc", "price_desc", "delivery_time"] as const;
 export type RestaurantSort = (typeof RESTAURANT_SORTS)[number];
 
+// Grocery/pharmacy marketplace (docs/ROADMAP.md FDP-56) — a close parallel of Restaurant/
+// MenuItem/MenuCategory above, not a replacement for them. `SellerType` is shared with Cart/
+// Order, which can belong to either vertical.
+export type SellerType = "restaurant" | "store";
+
+export const STORE_TYPES = ["groceries", "pharmacy_beauty"] as const;
+export type StoreType = (typeof STORE_TYPES)[number];
+
+export interface Store {
+  _id: string;
+  ownerId: string;
+  name: string;
+  slug: string;
+  type: StoreType;
+  tags: string[];
+  description: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  complianceDocumentUrl: string | null;
+  currency: string;
+  country: string;
+  address: Address;
+  isOpen: boolean;
+  isApproved: boolean;
+  avgRating: number;
+  reviewCount: number;
+  estimatedDeliveryMinutes: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const STORE_SORTS = ["newest", "rating", "delivery_time"] as const;
+export type StoreSort = (typeof STORE_SORTS)[number];
+
+export interface ProductCategory {
+  _id: string;
+  storeId: string;
+  name: string;
+  /** null = a top-level category. */
+  parentCategoryId: string | null;
+  sortOrder: number;
+}
+
+export interface Product {
+  _id: string;
+  storeId: string;
+  /** Always a leaf category. */
+  categoryId: string;
+  name: string;
+  description: string;
+  price: number;
+  /** Set only while a promo is active on this item — must be lower than price. */
+  discountedPrice: number | null;
+  costPrice: number | null;
+  imageUrl: string | null;
+  /** Free-form size/count, e.g. "550ml". */
+  unit: string | null;
+  /** null = not inventory-tracked (always orderable while isAvailable is true). */
+  stockQuantity: number | null;
+  isAvailable: boolean;
+  sortOrder: number;
+}
+
+/** Returned as two flat lists, not a pre-built tree — see backend/src/stores/products.service.ts's
+ * getCatalog for why. Walk parentCategoryId client-side to render the category tree. */
+export interface StoreCatalog {
+  categories: ProductCategory[];
+  products: Product[];
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   total: number;
@@ -114,7 +184,8 @@ export interface SelectedModifier {
 
 export interface CartItem {
   _id: string;
-  menuItemId: string;
+  menuItemId: string | null;
+  productId: string | null;
   name: string;
   price: number;
   imageUrl: string | null;
@@ -124,8 +195,11 @@ export interface CartItem {
 }
 
 export interface Cart {
+  sellerType: SellerType | null;
   restaurantId: string | null;
   restaurantName: string | null;
+  storeId: string | null;
+  storeName: string | null;
   currency: string | null;
   items: CartItem[];
   subtotal: number;
@@ -156,7 +230,8 @@ export type OrderStatus =
 export type OrderPaymentStatus = "pending" | "succeeded" | "failed" | "refunded";
 
 export interface OrderItem {
-  menuItemId: string;
+  menuItemId: string | null;
+  productId: string | null;
   name: string;
   price: number;
   imageUrl: string | null;
@@ -284,7 +359,9 @@ export interface Order {
   _id: string;
   orderNumber: string;
   customerId: string;
-  restaurantId: string;
+  sellerType: SellerType;
+  restaurantId: string | null;
+  storeId: string | null;
   riderId: string | null;
   items: OrderItem[];
   subtotal: number;

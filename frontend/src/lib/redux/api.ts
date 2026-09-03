@@ -110,6 +110,8 @@ export const api = createApi({
     "Restaurant",
     "MyRestaurants",
     "Menu",
+    "Store",
+    "StoreCatalog",
     "Cart",
     "Order",
     "SavedAddress",

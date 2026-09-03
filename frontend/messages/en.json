@@ -371,14 +371,16 @@
     "noRestaurantsYet": "No restaurants yet",
     "tryDifferentCuisine": "Try a different cuisine, or browse all restaurants.",
     "checkBackSoon": "Check back soon as new restaurants join.",
-    "categoryComingSoon": "{name} is coming soon",
-    "focusedOnRestaurantsFirst": "We're focused on restaurants first — this category will open up as we grow.",
     "categories": "Categories",
     "everythingInOnePlace": "Everything you can order, in one place.",
     "food": "Food",
     "groceries": "Groceries",
     "pharmacy": "Pharmacy",
-    "pharmacyAndMore": "Pharmacy & more"
+    "pharmacyAndMore": "Pharmacy & more",
+    "couldNotLoadStores": "Couldn't load stores — try again shortly.",
+    "noTagStoresYet": "No {tag} stores yet",
+    "noStoresYet": "No stores yet",
+    "tryDifferentTag": "Try a different tag, or browse all stores."
   },
   "CheckoutPage": {
     "cardStripe": "Card (Stripe)",
@@ -420,7 +422,6 @@
     "apply": "Apply",
     "gotAPromoCode": "Got a promo code?",
     "summary": "Summary",
-    "itemsFromRestaurant": "{count, plural, one {# item} other {# items}} from {restaurant}",
     "products": "Products",
     "promotion": "Promotion",
     "deliveryEst": "Delivery (est.)",
@@ -430,7 +431,9 @@
     "checkingSession": "Checking your session",
     "logInToCheckout": "Log in to checkout",
     "needAccountToOrder": "You'll need an account to place an order.",
-    "logIn": "Log in"
+    "logIn": "Log in",
+    "itemsFromSeller": "{count, plural, one {# item} other {# items}} from {seller}",
+    "browseOptions": "Browse restaurants & stores"
   },
   "CheckoutCallbackPage": {
     "missingOrder": "Missing order — go back to checkout and try again.",
@@ -1084,5 +1087,31 @@
     "goToRiderDashboard": "Go to rider dashboard",
     "adminAccountsDontNeedRiderProfile": "Admin accounts don't need a rider profile.",
     "restaurantOwnersCantBecomeRiders": "Restaurant owner accounts can't also become riders — becoming a rider would replace your account role and you'd lose access to your restaurant dashboard."
+  },
+  "StoreCard": {
+    "estimatedMinutes": "~{minutes} min",
+    "open": "Open",
+    "closed": "Closed"
+  },
+  "StoreDetailPage": {
+    "storeNotFound": "Store not found",
+    "unavailableOrIncorrectLink": "It may be unavailable or the link is incorrect.",
+    "browseHome": "Categories",
+    "open": "Open",
+    "closed": "Closed",
+    "reviewCount": "{count, plural, one {# review} other {# reviews}}",
+    "estimatedMinutes": "~{minutes} min",
+    "currentlyClosed": "Currently closed",
+    "notAcceptingOrders": "This store isn't accepting orders right now.",
+    "catalog": "Catalog",
+    "catalogComingSoon": "Catalog coming soon",
+    "catalogNotPublished": "This store hasn't published their catalog yet.",
+    "addToCart": "Add to cart",
+    "outOfStock": "Out of stock",
+    "addedToCart": "Added to cart",
+    "couldNotAddToCart": "Couldn't add to cart",
+    "startNewCartTitle": "Start a new cart?",
+    "startNewCartDescription": "Your cart has items from a different restaurant or store. Adding this item will clear it.",
+    "clearCartAndAdd": "Clear cart and add"
   }
 }

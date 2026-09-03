@@ -162,7 +162,7 @@ export function CartDrawer() {
           <EmptyState title={t("emptyCartTitle")} description={t("emptyCartDescription")} />
         ) : (
           <>
-            <p className="text-sm font-medium text-text">{cart.restaurantName}</p>
+            <p className="text-sm font-medium text-text">{cart.restaurantName ?? cart.storeName}</p>
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
               {cart.items.map((item) => (
                 <CartLineItem key={item._id} item={item} currency={cart.currency ?? ""} />

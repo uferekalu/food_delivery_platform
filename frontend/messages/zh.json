@@ -371,14 +371,16 @@
     "noRestaurantsYet": "暂无餐厅",
     "tryDifferentCuisine": "试试其他菜系，或浏览所有餐厅。",
     "checkBackSoon": "请稍后再来，新餐厅正陆续加入。",
-    "categoryComingSoon": "{name}即将上线",
-    "focusedOnRestaurantsFirst": "我们目前专注于餐厅业务 — 该类别将随着我们的发展逐步开放。",
     "categories": "分类",
     "everythingInOnePlace": "所有你想点的，尽在一处。",
     "food": "美食",
     "groceries": "生鲜杂货",
     "pharmacy": "药店",
-    "pharmacyAndMore": "药店及更多"
+    "pharmacyAndMore": "药店及更多",
+    "couldNotLoadStores": "无法加载商店 — 请稍后重试。",
+    "noTagStoresYet": "暂无{tag}商店",
+    "noStoresYet": "暂无商店",
+    "tryDifferentTag": "试试其他标签，或浏览所有商店。"
   },
   "CheckoutPage": {
     "cardStripe": "银行卡（Stripe）",
@@ -420,7 +422,6 @@
     "apply": "应用",
     "gotAPromoCode": "有优惠码吗？",
     "summary": "订单摘要",
-    "itemsFromRestaurant": "来自{restaurant}的 {count} 件商品",
     "products": "商品",
     "promotion": "优惠",
     "deliveryEst": "配送费（预估）",
@@ -430,7 +431,9 @@
     "checkingSession": "正在检查你的登录状态",
     "logInToCheckout": "登录后结算",
     "needAccountToOrder": "下单需要一个账户。",
-    "logIn": "登录"
+    "logIn": "登录",
+    "itemsFromSeller": "来自{seller}的 {count} 件商品",
+    "browseOptions": "浏览餐厅和商店"
   },
   "CheckoutCallbackPage": {
     "missingOrder": "缺少订单信息 — 请返回结算页面重试。",
@@ -1084,5 +1087,31 @@
     "goToRiderDashboard": "前往骑手仪表盘",
     "adminAccountsDontNeedRiderProfile": "管理员账户不需要骑手资料。",
     "restaurantOwnersCantBecomeRiders": "餐厅老板账户也不能同时成为骑手 — 成为骑手将替换你账户的角色，你将失去对餐厅仪表盘的访问权限。"
+  },
+  "StoreCard": {
+    "estimatedMinutes": "约 {minutes} 分钟",
+    "open": "营业中",
+    "closed": "已打烊"
+  },
+  "StoreDetailPage": {
+    "storeNotFound": "未找到该商店",
+    "unavailableOrIncorrectLink": "该商店可能暂不可用，或链接有误。",
+    "browseHome": "分类",
+    "open": "营业中",
+    "closed": "已打烊",
+    "reviewCount": "{count} 条评价",
+    "estimatedMinutes": "约 {minutes} 分钟",
+    "currentlyClosed": "目前已打烊",
+    "notAcceptingOrders": "该商店目前暂不接单。",
+    "catalog": "商品目录",
+    "catalogComingSoon": "商品目录即将上线",
+    "catalogNotPublished": "该商店尚未发布商品目录。",
+    "addToCart": "加入购物车",
+    "outOfStock": "缺货",
+    "addedToCart": "已加入购物车",
+    "couldNotAddToCart": "无法加入购物车",
+    "startNewCartTitle": "开始新的购物车？",
+    "startNewCartDescription": "你的购物车中有来自另一家餐厅或商店的商品。添加此商品将清空购物车。",
+    "clearCartAndAdd": "清空购物车并添加"
   }
 }

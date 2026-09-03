@@ -10,25 +10,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
+import { StoreCard, BasketIcon, PillIcon } from "@/components/store-card";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
-
-function BasketIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-10">
-      <path d="M6 12h20l-2 14H8L6 12z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M11 12V9a5 5 0 0110 0v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PillIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" className="size-10">
-      <rect x="6" y="13" width="20" height="9" rx="4.5" stroke="currentColor" strokeWidth="1.5" transform="rotate(-30 16 17.5)" />
-      <path d="M16 12.5l3 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
+import { useListStoresQuery } from "@/lib/redux/services/stores-api";
+import type { StoreType } from "@/lib/redux/restaurant-types";
 
 function CuisineChips({
   active,
@@ -128,15 +113,104 @@ function FoodCategory() {
   );
 }
 
-function ComingSoonCategory({ icon, name }: { icon: React.ReactNode; name: string }) {
+function TagChips({
+  storeType,
+  active,
+  onChange,
+}: {
+  storeType: StoreType;
+  active: string | null;
+  onChange: (tag: string | null) => void;
+}) {
   const t = useTranslations("CategoriesPage");
+  // Same "derive from real data, never a hand-maintained list" reasoning as CuisineChips.
+  const { data } = useListStoresQuery({ type: storeType, limit: 50, sort: "newest" });
+  const tags = useMemo(
+    () => Array.from(new Set((data?.items ?? []).flatMap((s) => s.tags))).sort(),
+    [data],
+  );
+
+  if (tags.length === 0) return null;
+
   return (
-    <EmptyState
-      icon={icon}
-      title={t("categoryComingSoon", { name })}
-      description={t("focusedOnRestaurantsFirst")}
-      className="py-20"
-    />
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+          active === null
+            ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
+            : "border-border text-text-muted hover:text-text"
+        }`}
+      >
+        {t("all")}
+      </button>
+      {tags.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          onClick={() => onChange(tag)}
+          className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
+            active === tag
+              ? "border-primary bg-primary-subtle text-primary-subtle-foreground"
+              : "border-border text-text-muted hover:text-text"
+          }`}
+        >
+          {tag}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: React.ReactNode }) {
+  const t = useTranslations("CategoriesPage");
+  const [tag, setTag] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isFetching, isError } = useListStoresQuery({
+    type: storeType,
+    tag: tag ?? undefined,
+    sort: "rating",
+    page,
+    limit: 12,
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <TagChips
+        storeType={storeType}
+        active={tag}
+        onChange={(value) => {
+          setTag(value);
+          setPage(1);
+        }}
+      />
+
+      {isError && <Alert variant="danger">{t("couldNotLoadStores")}</Alert>}
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 w-full" />
+          ))}
+        </div>
+      ) : data && data.items.length > 0 ? (
+        <>
+          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${isFetching ? "opacity-60" : ""}`}>
+            {data.items.map((store) => (
+              <StoreCard key={store._id} store={store} />
+            ))}
+          </div>
+          <Pagination page={page} totalPages={data.totalPages} onChange={setPage} className="self-center" />
+        </>
+      ) : (
+        <EmptyState
+          icon={icon}
+          title={tag ? t("noTagStoresYet", { tag }) : t("noStoresYet")}
+          description={tag ? t("tryDifferentTag") : t("checkBackSoon")}
+        />
+      )}
+    </div>
   );
 }
 
@@ -186,10 +260,10 @@ function CategoriesContent() {
           <FoodCategory />
         </TabPanel>
         <TabPanel value="groceries">
-          <ComingSoonCategory icon={<BasketIcon />} name={t("groceries")} />
+          <StoreTypeCategory storeType="groceries" icon={<BasketIcon />} />
         </TabPanel>
         <TabPanel value="pharmacy">
-          <ComingSoonCategory icon={<PillIcon />} name={t("pharmacy")} />
+          <StoreTypeCategory storeType="pharmacy_beauty" icon={<PillIcon />} />
         </TabPanel>
       </Tabs>
     </Container>
