@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { useLazyGetUploadSignatureQuery, type UploadFolder } from "@/lib/redux/services/uploads-api";
 import { Spinner } from "./spinner";
@@ -18,16 +19,7 @@ export interface DocumentUploadProps {
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
-const ACCEPTED_HINT = "PDF, JPG, or PNG — max 5MB.";
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png"];
-
-function fileNameFromUrl(url: string): string {
-  try {
-    return decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "Uploaded document");
-  } catch {
-    return "Uploaded document";
-  }
-}
 
 function isImageUrl(url: string): boolean {
   const lower = url.toLowerCase();
@@ -62,6 +54,7 @@ function FileIcon() {
  * (Settings → Security → allow PDF/ZIP delivery), independent of any code here.
  */
 export function DocumentUpload({ label, folder, value, onChange, hint, className }: DocumentUploadProps) {
+  const t = useTranslations("Upload");
   const [fetchSignature] = useLazyGetUploadSignatureQuery();
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +64,14 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  function fileNameFromUrl(url: string): string {
+    try {
+      return decodeURIComponent(new URL(url).pathname.split("/").pop() ?? t("uploadedDocument"));
+    } catch {
+      return t("uploadedDocument");
+    }
+  }
+
   const displayName = value ? (selectedFileName ?? fileNameFromUrl(value)) : null;
   const showImagePreview = !!value && isImageUrl(value);
 
@@ -79,12 +80,12 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setStatus("error");
-      setError("Please choose a PDF, JPG, or PNG file.");
+      setError(t("choosePdfJpgPng"));
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
       setStatus("error");
-      setError("File must be under 5MB.");
+      setError(t("fileMustBeUnder5mb"));
       return;
     }
 
@@ -111,7 +112,7 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
       setStatus("idle");
     } catch {
       setStatus("error");
-      setError("Upload failed — try again.");
+      setError(t("uploadFailedTryAgain"));
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -152,9 +153,9 @@ export function DocumentUpload({ label, folder, value, onChange, hint, className
             onClick={() => inputRef.current?.click()}
             className="self-start"
           >
-            {value ? "Replace document" : "Upload document"}
+            {value ? t("replaceDocument") : t("uploadDocument")}
           </Button>
-          <span className="text-xs text-text-muted">{ACCEPTED_HINT}</span>
+          <span className="text-xs text-text-muted">{t("acceptedHint")}</span>
           {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,15 +16,6 @@ import {
 import { getErrorMessage } from "@/lib/redux/error";
 import type { DeliveryZone } from "@/lib/redux/restaurant-types";
 
-const schema = z.object({
-  name: z.string().min(1, "Required").max(100),
-  maxDistanceKm: z.coerce.number().min(0, "Must be 0 or more").max(1000),
-  baseFee: z.coerce.number().min(0, "Must be 0 or more"),
-  perKmFee: z.coerce.number().min(0, "Must be 0 or more").optional(),
-});
-type FormInput = z.input<typeof schema>;
-type FormValues = z.output<typeof schema>;
-
 export interface ZoneFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -33,6 +25,15 @@ export interface ZoneFormModalProps {
 }
 
 export function ZoneFormModal({ open, onClose, restaurantId, editing }: ZoneFormModalProps) {
+  const t = useTranslations("DeliveryZonesPage");
+  const schema = z.object({
+    name: z.string().min(1, t("required")).max(100),
+    maxDistanceKm: z.coerce.number().min(0, t("mustBe0OrMore")).max(1000),
+    baseFee: z.coerce.number().min(0, t("mustBe0OrMore")),
+    perKmFee: z.coerce.number().min(0, t("mustBe0OrMore")).optional(),
+  });
+  type FormInput = z.input<typeof schema>;
+  type FormValues = z.output<typeof schema>;
   const { toast } = useToast();
   const [createZone, { isLoading: isCreating }] = useCreateDeliveryZoneMutation();
   const [updateZone, { isLoading: isUpdating }] = useUpdateDeliveryZoneMutation();
@@ -58,45 +59,45 @@ export function ZoneFormModal({ open, onClose, restaurantId, editing }: ZoneForm
     try {
       if (editing) {
         await updateZone({ restaurantId, zoneId: editing._id, body: values }).unwrap();
-        toast({ title: "Zone updated", variant: "success" });
+        toast({ title: t("zoneUpdated"), variant: "success" });
       } else {
         await createZone({ restaurantId, body: values }).unwrap();
-        toast({ title: "Zone added", variant: "success" });
+        toast({ title: t("zoneAdded"), variant: "success" });
       }
       onClose();
     } catch (err) {
-      toast({ title: "Couldn't save zone", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotSaveZone"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editing ? "Edit delivery zone" : "Add delivery zone"} size="md">
+    <Modal open={open} onClose={onClose} title={editing ? t("editDeliveryZone") : t("addDeliveryZone")} size="md">
       <form onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-4" noValidate>
-        <FormField label="Zone name" hint="E.g. Nearby (0-3km)" error={errors.name?.message} required>
+        <FormField label={t("zoneName")} hint={t("zoneNameHint")} error={errors.name?.message} required>
           <Input {...register("name")} />
         </FormField>
         <FormField
-          label="Up to (km)"
-          hint="Zones are matched by the nearest covering distance — set up as rings, e.g. 3, 8, 15"
+          label={t("upToKmLabel")}
+          hint={t("upToKmHint")}
           error={errors.maxDistanceKm?.message}
           required
         >
           <Input type="number" step="any" {...register("maxDistanceKm")} />
         </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Base fee" error={errors.baseFee?.message} required>
+          <FormField label={t("baseFee")} error={errors.baseFee?.message} required>
             <Input type="number" step="any" {...register("baseFee")} />
           </FormField>
-          <FormField label="Fee per km" error={errors.perKmFee?.message}>
+          <FormField label={t("feePerKm")} error={errors.perKmFee?.message}>
             <Input type="number" step="any" {...register("perKmFee")} />
           </FormField>
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            {editing ? "Save changes" : "Add zone"}
+            {editing ? t("saveChanges") : t("addZone")}
           </Button>
         </div>
       </form>

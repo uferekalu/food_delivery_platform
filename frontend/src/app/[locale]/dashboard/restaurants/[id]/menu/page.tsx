@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useForm, useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,38 +34,6 @@ import {
 import { getErrorMessage } from "@/lib/redux/error";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
 
-const modifierOptionSchema = z.object({
-  name: z.string().min(1, "Required").max(100),
-  priceDelta: z.coerce.number().min(0, "Must be 0 or more"),
-});
-
-const modifierGroupSchema = z
-  .object({
-    name: z.string().min(1, "Required").max(100),
-    min: z.coerce.number().int().min(0),
-    max: z.coerce.number().int().min(1),
-    options: z.array(modifierOptionSchema).min(1, "Add at least one option").max(20),
-  })
-  .refine((group) => group.max >= group.min, { message: "Max must be at least min", path: ["max"] });
-
-const itemSchema = z.object({
-  name: z.string().min(1, "Required").max(100),
-  description: z.string().max(1000).optional(),
-  price: z.coerce.number().min(0, "Must be 0 or more"),
-  // A blank field submits "" (not undefined) through an uncontrolled `register()` input —
-  // z.coerce.number() would otherwise turn that into 0, indistinguishable from "this item costs
-  // nothing to make". preprocess maps blank to undefined first so "left blank" and "explicitly
-  // 0" stay distinguishable (docs/ROADMAP.md FDP-64 relies on this: a null costPrice on the
-  // backend means "unknown", not "free").
-  costPrice: z.preprocess(
-    (val) => (val === "" || val === undefined ? undefined : val),
-    z.coerce.number().min(0, "Must be 0 or more").optional(),
-  ),
-  modifierGroups: z.array(modifierGroupSchema).max(10).optional(),
-});
-type ItemFormInput = z.input<typeof itemSchema>;
-type ItemFormValues = z.output<typeof itemSchema>;
-
 function PhotoIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5">
@@ -89,6 +58,28 @@ function TrashIcon() {
   );
 }
 
+// z.coerce.number()/z.preprocess accept anything as input (they run before validation/
+// coercion), so the resolver's inferred input type for these numeric fields is `unknown`, not
+// `number` — matching that here is what `useForm<ItemFormInput, unknown, ItemFormValues>()`
+// needs to type-check against the schema built inside the component below.
+interface ModifierOptionInput {
+  name: string;
+  priceDelta: unknown;
+}
+interface ModifierGroupInput {
+  name: string;
+  min: unknown;
+  max: unknown;
+  options: ModifierOptionInput[];
+}
+interface ItemFormInput {
+  name: string;
+  description?: string;
+  price: unknown;
+  costPrice?: unknown;
+  modifierGroups?: ModifierGroupInput[];
+}
+
 function ModifierGroupRow({
   control,
   register,
@@ -100,6 +91,7 @@ function ModifierGroupRow({
   groupIndex: number;
   onRemoveGroup: () => void;
 }) {
+  const t = useTranslations("MenuManagerPage");
   const {
     fields: optionFields,
     append: appendOption,
@@ -109,14 +101,14 @@ function ModifierGroupRow({
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
       <div className="flex items-center gap-2">
-        <Input placeholder="Group name (e.g. Size)" className="flex-1" {...register(`modifierGroups.${groupIndex}.name`)} />
-        <IconButton label="Remove group" size="sm" variant="ghost" onClick={onRemoveGroup} icon={<TrashIcon />} />
+        <Input placeholder={t("groupNamePlaceholder")} className="flex-1" {...register(`modifierGroups.${groupIndex}.name`)} />
+        <IconButton label={t("removeGroup")} size="sm" variant="ghost" onClick={onRemoveGroup} icon={<TrashIcon />} />
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label="Min selections">
+        <FormField label={t("minSelections")}>
           <Input type="number" min="0" {...register(`modifierGroups.${groupIndex}.min`)} />
         </FormField>
-        <FormField label="Max selections">
+        <FormField label={t("maxSelections")}>
           <Input type="number" min="1" {...register(`modifierGroups.${groupIndex}.max`)} />
         </FormField>
       </div>
@@ -124,7 +116,7 @@ function ModifierGroupRow({
         {optionFields.map((optionField, optionIndex) => (
           <div key={optionField.id} className="flex items-center gap-2">
             <Input
-              placeholder="Option name (e.g. Large)"
+              placeholder={t("optionNamePlaceholder")}
               className="flex-1"
               {...register(`modifierGroups.${groupIndex}.options.${optionIndex}.name`)}
             />
@@ -132,12 +124,12 @@ function ModifierGroupRow({
               type="number"
               step="0.01"
               min="0"
-              placeholder="+price"
+              placeholder={t("pricePlaceholder")}
               className="w-28"
               {...register(`modifierGroups.${groupIndex}.options.${optionIndex}.priceDelta`)}
             />
             <IconButton
-              label="Remove option"
+              label={t("removeOption")}
               size="sm"
               variant="ghost"
               onClick={() => removeOption(optionIndex)}
@@ -146,7 +138,7 @@ function ModifierGroupRow({
           </div>
         ))}
         <Button type="button" variant="ghost" size="sm" onClick={() => appendOption({ name: "", priceDelta: 0 })}>
-          Add option
+          {t("addOption")}
         </Button>
       </div>
     </div>
@@ -166,11 +158,42 @@ function ItemFormModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations("MenuManagerPage");
   const [createItem, { isLoading: isCreating }] = useCreateItemMutation();
   const [updateItem, { isLoading: isUpdating }] = useUpdateItemMutation();
   const { toast } = useToast();
   const isEditing = Boolean(item);
   const [imageUrl, setImageUrl] = useState<string | undefined>(item?.imageUrl ?? undefined);
+
+  const modifierOptionSchema = z.object({
+    name: z.string().min(1, t("required")).max(100),
+    priceDelta: z.coerce.number().min(0, t("mustBe0OrMore")),
+  });
+  const modifierGroupSchema = z
+    .object({
+      name: z.string().min(1, t("required")).max(100),
+      min: z.coerce.number().int().min(0),
+      max: z.coerce.number().int().min(1),
+      options: z.array(modifierOptionSchema).min(1, t("addAtLeastOneOption")).max(20),
+    })
+    .refine((group) => group.max >= group.min, { message: t("maxMustBeAtLeastMin"), path: ["max"] });
+  const itemSchema = z.object({
+    name: z.string().min(1, t("required")).max(100),
+    description: z.string().max(1000).optional(),
+    price: z.coerce.number().min(0, t("mustBe0OrMore")),
+    // A blank field submits "" (not undefined) through an uncontrolled `register()` input —
+    // z.coerce.number() would otherwise turn that into 0, indistinguishable from "this item costs
+    // nothing to make". preprocess maps blank to undefined first so "left blank" and "explicitly
+    // 0" stay distinguishable (docs/ROADMAP.md FDP-64 relies on this: a null costPrice on the
+    // backend means "unknown", not "free").
+    costPrice: z.preprocess(
+      (val) => (val === "" || val === undefined ? undefined : val),
+      z.coerce.number().min(0, t("mustBe0OrMore")).optional(),
+    ),
+    modifierGroups: z.array(modifierGroupSchema).max(10).optional(),
+  });
+  type ItemFormValues = z.output<typeof itemSchema>;
+
   // z.coerce.number() means the form's *input* shape (numeric fields: unknown, before
   // coercion) differs from its *output* shape (numeric fields: number, after) — the
   // resolver's third generic tells useForm/handleSubmit which one the submit callback
@@ -210,7 +233,7 @@ function ItemFormModal({
       onClose();
     } catch (err) {
       toast({
-        title: isEditing ? "Couldn't update item" : "Couldn't add item",
+        title: isEditing ? t("couldNotUpdateItem") : t("couldNotAddItem"),
         description: getErrorMessage(err),
         variant: "danger",
       });
@@ -221,62 +244,55 @@ function ItemFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEditing ? "Edit menu item" : "Add menu item"}
+      title={isEditing ? t("editMenuItem") : t("addMenuItem")}
       size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} type="button">
-            Cancel
+            {t("cancel")}
           </Button>
           <Button type="submit" form="item-form" isLoading={isCreating || isUpdating}>
-            Save item
+            {t("saveItem")}
           </Button>
         </>
       }
     >
       <form id="item-form" onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-4" noValidate>
         <ImageUpload
-          label="Photo"
+          label={t("photo")}
           folder="menu-items"
           value={imageUrl}
           onChange={setImageUrl}
-          hint="Customers are far more likely to order an item they can see."
+          hint={t("photoHint")}
         />
-        <FormField label="Name" error={errors.name?.message} required>
+        <FormField label={t("name")} error={errors.name?.message} required>
           <Input {...register("name")} />
         </FormField>
-        <FormField label="Description" error={errors.description?.message}>
+        <FormField label={t("description")} error={errors.description?.message}>
           <Textarea {...register("description")} rows={3} />
         </FormField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Price" error={errors.price?.message} required>
+          <FormField label={t("price")} error={errors.price?.message} required>
             <Input type="number" step="0.01" min="0" {...register("price")} />
           </FormField>
-          <FormField
-            label="Cost price"
-            error={errors.costPrice?.message}
-            hint="What this item costs you to make — never shown to customers, used for your sales report's profit numbers."
-          >
+          <FormField label={t("costPrice")} error={errors.costPrice?.message} hint={t("costPriceHint")}>
             <Input type="number" step="0.01" min="0" {...register("costPrice")} />
           </FormField>
         </div>
 
         <div className="flex flex-col gap-3 border-t border-border pt-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-text">Modifier groups (optional)</span>
+            <span className="text-sm font-medium text-text">{t("modifierGroupsOptional")}</span>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => appendGroup({ name: "", min: 0, max: 1, options: [{ name: "", priceDelta: 0 }] })}
             >
-              Add group
+              {t("addGroup")}
             </Button>
           </div>
-          <p className="text-xs text-text-muted">
-            E.g. &quot;Size&quot; (min 1, max 1 — required single choice) or &quot;Toppings&quot; (min 0, max 3 —
-            optional, up to three).
-          </p>
+          <p className="text-xs text-text-muted">{t("modifierGroupsHint")}</p>
           {groupFields.map((groupField, groupIndex) => (
             <ModifierGroupRow
               key={groupField.id}
@@ -297,6 +313,7 @@ type PendingDelete =
   | { kind: "item"; id: string; name: string };
 
 function MenuManager({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("MenuManagerPage");
   const { data: menu, isLoading, isError } = useGetMenuQuery(restaurantId);
   const [deleteCategory, { isLoading: isDeletingCategory }] = useDeleteCategoryMutation();
   const [deleteItem, { isLoading: isDeletingItem }] = useDeleteItemMutation();
@@ -318,7 +335,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
       .catch((err: unknown) => {
         setPendingDelete(null);
         toast({
-          title: `Couldn't delete ${pendingDelete.kind}`,
+          title: pendingDelete.kind === "category" ? t("couldNotDeleteCategory") : t("couldNotDeleteItem"),
           description: getErrorMessage(err),
           variant: "danger",
         });
@@ -326,14 +343,14 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
   }
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
-  if (isError) return <Alert variant="danger">Couldn&apos;t load the menu.</Alert>;
+  if (isError) return <Alert variant="danger">{t("couldNotLoadMenu")}</Alert>;
 
   return (
     <div className="flex flex-col gap-6">
       <AddCategoryForm restaurantId={restaurantId} />
 
       {!menu || menu.length === 0 ? (
-        <EmptyState title="No categories yet" description="Add a category above to start building your menu." />
+        <EmptyState title={t("noCategoriesYet")} description={t("addCategoryAbove")} />
       ) : (
         menu.map((category) => (
           <Card key={category._id}>
@@ -341,10 +358,10 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
               <CardTitle>{category.name}</CardTitle>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveCategoryId(category._id)}>
-                  Add item
+                  {t("addItem")}
                 </Button>
                 <IconButton
-                  label="Delete category"
+                  label={t("deleteCategory")}
                   size="sm"
                   variant="ghost"
                   onClick={() => setPendingDelete({ kind: "category", id: category._id, name: category.name })}
@@ -354,7 +371,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {category.items.length === 0 ? (
-                <p className="text-sm text-text-muted">No items in this category yet.</p>
+                <p className="text-sm text-text-muted">{t("noItemsInCategory")}</p>
               ) : (
                 category.items.map((item) => (
                   <div
@@ -381,12 +398,12 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                         <div className="flex flex-wrap gap-1">
                           {item.modifierGroups.length > 0 && (
                             <Badge variant="neutral" className="w-fit">
-                              {item.modifierGroups.length} modifier group{item.modifierGroups.length === 1 ? "" : "s"}
+                              {t("modifierGroupCount", { count: item.modifierGroups.length })}
                             </Badge>
                           )}
                           {item.costPrice == null && (
                             <Badge variant="warning" className="w-fit">
-                              No cost price set
+                              {t("noCostPriceSet")}
                             </Badge>
                           )}
                         </div>
@@ -396,11 +413,11 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                       <Switch
                         checked={item.isAvailable}
                         onChange={() => void toggleAvailability({ restaurantId, itemId: item._id })}
-                        label={`${item.name} available`}
+                        label={t("itemAvailable", { name: item.name })}
                         hideLabel
                       />
                       <IconButton
-                        label="Edit item"
+                        label={t("editItem")}
                         size="sm"
                         variant="ghost"
                         onClick={() => setEditingItem(item)}
@@ -417,7 +434,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                         }
                       />
                       <IconButton
-                        label="Delete item"
+                        label={t("deleteItem")}
                         size="sm"
                         variant="ghost"
                         onClick={() => setPendingDelete({ kind: "item", id: item._id, name: item.name })}
@@ -455,13 +472,11 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
         open={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmPendingDelete}
-        title={pendingDelete ? `Delete "${pendingDelete.name}"?` : ""}
+        title={pendingDelete ? t("deleteConfirmTitle", { name: pendingDelete.name }) : ""}
         description={
-          pendingDelete?.kind === "category"
-            ? "This also deletes every item in this category. This can't be undone."
-            : "This can't be undone."
+          pendingDelete?.kind === "category" ? t("deleteCategoryDescription") : t("cannotBeUndone")
         }
-        confirmLabel="Delete"
+        confirmLabel={t("delete")}
         isLoading={isDeletingCategory || isDeletingItem}
       />
     </div>
@@ -469,6 +484,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
 }
 
 function AddCategoryForm({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("MenuManagerPage");
   const [name, setName] = useState("");
   const [createCategory, { isLoading }] = useCreateCategoryMutation();
   const { toast } = useToast();
@@ -479,14 +495,14 @@ function AddCategoryForm({ restaurantId }: { restaurantId: string }) {
       await createCategory({ restaurantId, body: { name: name.trim() } }).unwrap();
       setName("");
     } catch (err) {
-      toast({ title: "Couldn't add category", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotAddCategory"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
   return (
     <div className="flex gap-2">
       <Input
-        placeholder="New category name (e.g. Starters)"
+        placeholder={t("newCategoryPlaceholder")}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -497,7 +513,7 @@ function AddCategoryForm({ restaurantId }: { restaurantId: string }) {
         }}
       />
       <Button variant="outline" isLoading={isLoading} onClick={() => void handleAdd()}>
-        Add category
+        {t("addCategory")}
       </Button>
     </div>
   );
@@ -505,10 +521,11 @@ function AddCategoryForm({ restaurantId }: { restaurantId: string }) {
 
 export default function MenuPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const t = useTranslations("MenuManagerPage");
   return (
     <RequireRole roles={["restaurant_owner", "admin"]}>
       <Container className="max-w-3xl py-10">
-        <h1 className="mb-6 text-2xl font-bold text-text">Manage menu</h1>
+        <h1 className="mb-6 text-2xl font-bold text-text">{t("manageMenu")}</h1>
         <MenuManager restaurantId={id} />
       </Container>
     </RequireRole>

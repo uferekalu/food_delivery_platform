@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -44,6 +45,7 @@ function EarningsStat({ label, value }: { label: string; value: string }) {
  * component below — both can render together for a currency that supports both providers.
  */
 function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("EarningsPage");
   const { toast } = useToast();
   const { data: banks, isLoading: banksLoading } = useListPaystackBanksQuery();
   const [resolveAccount, { isLoading: resolving }] = useResolvePaystackAccountMutation();
@@ -67,7 +69,7 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
       const result = await resolveAccount({ restaurantId, bankCode, accountNumber }).unwrap();
       setVerifiedName(result.accountName);
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't verify that account number"));
+      setError(getErrorMessage(err, t("couldNotVerifyAccount")));
     }
   }
 
@@ -75,25 +77,22 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
     setError(null);
     try {
       await setupPayout({ restaurantId, bankCode, accountNumber }).unwrap();
-      toast({ title: "Payout account connected", variant: "success" });
+      toast({ title: t("payoutAccountConnected"), variant: "success" });
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't connect this payout account"));
+      setError(getErrorMessage(err, t("couldNotConnectPayoutAccount")));
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connect a Paystack payout account</CardTitle>
-        <CardDescription>
-          Add your bank details so future orders settle straight to your account, minus the
-          platform fee.
-        </CardDescription>
+        <CardTitle>{t("connectPaystackAccount")}</CardTitle>
+        <CardDescription>{t("addBankDetailsDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error && <Alert variant="danger">{error}</Alert>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Bank" required>
+          <FormField label={t("bank")} required>
             <Select
               options={bankOptions}
               value={bankCode}
@@ -101,13 +100,13 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
                 setBankCode(value);
                 resetVerification();
               }}
-              placeholder={banksLoading ? "Loading banks…" : "Choose your bank"}
+              placeholder={banksLoading ? t("loadingBanks") : t("chooseYourBank")}
               disabled={banksLoading}
               searchable
-              searchPlaceholder="Search banks…"
+              searchPlaceholder={t("searchBanks")}
             />
           </FormField>
-          <FormField label="Account number" required>
+          <FormField label={t("accountNumber")} required>
             <Input
               value={accountNumber}
               onChange={(e) => {
@@ -121,8 +120,8 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
         </div>
 
         {verifiedName ? (
-          <Alert variant="success" title="Account verified">
-            {verifiedName} — if this isn&apos;t right, change the details above and verify again.
+          <Alert variant="success" title={t("accountVerified")}>
+            {t("accountVerifiedDescription", { name: verifiedName })}
           </Alert>
         ) : (
           <Button
@@ -133,13 +132,13 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
             disabled={!bankCode || accountNumber.trim().length < 10}
             onClick={() => void handleVerify()}
           >
-            Verify account
+            {t("verifyAccount")}
           </Button>
         )}
 
         {verifiedName && (
           <Button size="sm" className="w-fit" isLoading={connecting} onClick={() => void handleConnect()}>
-            Connect payout account
+            {t("connectPayoutAccount")}
           </Button>
         )}
       </CardContent>
@@ -153,6 +152,7 @@ function PaystackPayoutSetup({ restaurantId }: { restaurantId: string }) {
  * both (e.g. NGN), letting the owner pick either.
  */
 function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("EarningsPage");
   const { toast } = useToast();
   const { data: banks, isLoading: banksLoading } = useListFlutterwaveBanksQuery();
   const [resolveAccount, { isLoading: resolving }] = useResolveFlutterwaveAccountMutation();
@@ -176,7 +176,7 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
       const result = await resolveAccount({ restaurantId, bankCode, accountNumber }).unwrap();
       setVerifiedName(result.accountName);
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't verify that account number"));
+      setError(getErrorMessage(err, t("couldNotVerifyAccount")));
     }
   }
 
@@ -184,25 +184,22 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
     setError(null);
     try {
       await setupPayout({ restaurantId, bankCode, accountNumber }).unwrap();
-      toast({ title: "Payout account connected", variant: "success" });
+      toast({ title: t("payoutAccountConnected"), variant: "success" });
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't connect this payout account"));
+      setError(getErrorMessage(err, t("couldNotConnectPayoutAccount")));
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connect a Flutterwave payout account</CardTitle>
-        <CardDescription>
-          Add your bank details so future orders settle straight to your account, minus the
-          platform fee.
-        </CardDescription>
+        <CardTitle>{t("connectFlutterwaveAccount")}</CardTitle>
+        <CardDescription>{t("addBankDetailsDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error && <Alert variant="danger">{error}</Alert>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Bank" required>
+          <FormField label={t("bank")} required>
             <Select
               options={bankOptions}
               value={bankCode}
@@ -210,13 +207,13 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
                 setBankCode(value);
                 resetVerification();
               }}
-              placeholder={banksLoading ? "Loading banks…" : "Choose your bank"}
+              placeholder={banksLoading ? t("loadingBanks") : t("chooseYourBank")}
               disabled={banksLoading}
               searchable
-              searchPlaceholder="Search banks…"
+              searchPlaceholder={t("searchBanks")}
             />
           </FormField>
-          <FormField label="Account number" required>
+          <FormField label={t("accountNumber")} required>
             <Input
               value={accountNumber}
               onChange={(e) => {
@@ -230,8 +227,8 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
         </div>
 
         {verifiedName ? (
-          <Alert variant="success" title="Account verified">
-            {verifiedName} — if this isn&apos;t right, change the details above and verify again.
+          <Alert variant="success" title={t("accountVerified")}>
+            {t("accountVerifiedDescription", { name: verifiedName })}
           </Alert>
         ) : (
           <Button
@@ -242,13 +239,13 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
             disabled={!bankCode || accountNumber.trim().length < 10}
             onClick={() => void handleVerify()}
           >
-            Verify account
+            {t("verifyAccount")}
           </Button>
         )}
 
         {verifiedName && (
           <Button size="sm" className="w-fit" isLoading={connecting} onClick={() => void handleConnect()}>
-            Connect payout account
+            {t("connectPayoutAccount")}
           </Button>
         )}
       </CardContent>
@@ -267,6 +264,7 @@ function FlutterwavePayoutSetup({ restaurantId }: { restaurantId: string }) {
  * the exact same endpoint — the backend reuses the existing connected account either way.
  */
 function StripePayoutSetup({ restaurant }: { restaurant: Restaurant }) {
+  const t = useTranslations("EarningsPage");
   const { toast } = useToast();
   const [setupPayout, { isLoading }] = useSetupStripePayoutMutation();
   const hasPendingAccount = restaurant.payoutAccounts.some(
@@ -278,28 +276,20 @@ function StripePayoutSetup({ restaurant }: { restaurant: Restaurant }) {
       const result = await setupPayout(restaurant._id).unwrap();
       window.location.href = result.onboardingUrl;
     } catch (err) {
-      toast({ title: "Couldn't start Stripe onboarding", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotStartStripeOnboarding"), description: getErrorMessage(err), variant: "danger" });
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connect a Stripe payout account</CardTitle>
-        <CardDescription>
-          Stripe handles your bank details directly through their own secure onboarding flow —
-          you&apos;ll be redirected there, then brought back here once you&apos;re done.
-        </CardDescription>
+        <CardTitle>{t("connectStripeAccount")}</CardTitle>
+        <CardDescription>{t("stripeDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {hasPendingAccount && (
-          <Alert variant="warning">
-            You started connecting a Stripe account but haven&apos;t finished yet. Pick up where
-            you left off below.
-          </Alert>
-        )}
+        {hasPendingAccount && <Alert variant="warning">{t("stripePendingWarning")}</Alert>}
         <Button size="sm" className="w-fit" isLoading={isLoading} onClick={() => void handleConnect()}>
-          {hasPendingAccount ? "Continue onboarding" : "Connect with Stripe"}
+          {hasPendingAccount ? t("continueOnboarding") : t("connectWithStripe")}
         </Button>
       </CardContent>
     </Card>
@@ -307,6 +297,7 @@ function StripePayoutSetup({ restaurant }: { restaurant: Restaurant }) {
 }
 
 function Earnings({ restaurant }: { restaurant: Restaurant }) {
+  const t = useTranslations("EarningsPage");
   const { data, isLoading } = useGetRestaurantEarningsQuery(restaurant._id);
   const { data: providers } = useGetPaymentProvidersQuery(restaurant.currency);
   const paystackAvailable = providers?.includes("paystack") ?? false;
@@ -316,7 +307,7 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
   return (
     <Container className="flex flex-col gap-6 py-10">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-text">Earnings</h1>
+        <h1 className="text-2xl font-bold text-text">{t("earnings")}</h1>
         <p className="text-text-muted">{restaurant.name}</p>
       </div>
 
@@ -325,33 +316,27 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
       ) : (
         <>
           {!data.payoutSetupComplete && (
-            <Alert variant="warning" title="Payout setup required">
+            <Alert variant="warning" title={t("payoutSetupRequired")}>
               {paystackAvailable || flutterwaveAvailable || stripeAvailable
-                ? "Connect a payout account below so your earnings settle automatically."
-                : "Automated payouts aren't available for this restaurant's currency yet — your earnings below are informational for now."}
+                ? t("connectPayoutBelow")
+                : t("automatedPayoutsNotAvailable")}
             </Alert>
           )}
 
           {data.deliveredOrders === 0 ? (
-            <EmptyState
-              title="No earnings yet"
-              description="Earnings appear here once an order for this restaurant is delivered."
-            />
+            <EmptyState title={t("noEarningsYet")} description={t("earningsAppearHere")} />
           ) : (
             <Card>
               <CardContent className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                <EarningsStat label={t("grossRevenue")} value={`${data.currency} ${data.grossRevenue.toFixed(2)}`} />
                 <EarningsStat
-                  label="Gross revenue"
-                  value={`${data.currency} ${data.grossRevenue.toFixed(2)}`}
-                />
-                <EarningsStat
-                  label="Platform fee"
+                  label={t("platformFee")}
                   value={`-${data.currency} ${data.platformFeeTotal.toFixed(2)}`}
                 />
-                <EarningsStat label="Net earned" value={`${data.currency} ${data.netEarned.toFixed(2)}`} />
+                <EarningsStat label={t("netEarned")} value={`${data.currency} ${data.netEarned.toFixed(2)}`} />
               </CardContent>
               <CardContent className="border-t border-border pt-4 text-sm text-text-muted">
-                From {data.deliveredOrders} delivered order{data.deliveredOrders === 1 ? "" : "s"}.
+                {t("fromDeliveredOrders", { count: data.deliveredOrders })}
               </CardContent>
             </Card>
           )}
@@ -372,6 +357,7 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
 }
 
 function EarningsPage({ id }: { id: string }) {
+  const t = useTranslations("EarningsPage");
   const { data: restaurants, isLoading } = useGetMyRestaurantsQuery();
   const restaurant = restaurants?.find((r) => r._id === id);
 
@@ -386,7 +372,7 @@ function EarningsPage({ id }: { id: string }) {
   if (!restaurant) {
     return (
       <Container className="py-10">
-        <EmptyState title="Restaurant not found" description="It may not exist, or you don't have access to it." />
+        <EmptyState title={t("restaurantNotFound")} description={t("mayNotExistOrNoAccess")} />
       </Container>
     );
   }

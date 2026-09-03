@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,47 +16,12 @@ import { DocumentUpload } from "@/components/ui/document-upload";
 import { Alert } from "@/components/ui/alert";
 import type { OpeningHour } from "@/lib/redux/restaurant-types";
 import type { RestaurantInput } from "@/lib/redux/services/restaurants-api";
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, currencyForCountry } from "@/lib/countries";
+import { getLocalizedCountryOptions, getLocalizedCurrencyOptions, currencyForCountry } from "@/lib/countries";
 
-const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const PRICE_LEVEL_OPTIONS = [
-  { value: "1", label: "$ — Budget" },
-  { value: "2", label: "$$ — Moderate" },
-  { value: "3", label: "$$$ — Pricey" },
-  { value: "4", label: "$$$$ — High-end" },
-];
-
-const schema = z.object({
-  name: z.string().min(2, "Too short").max(100),
-  description: z.string().max(2000).optional(),
-  cuisineTypesRaw: z.string().min(1, "Add at least one, comma-separated"),
-  currency: z.string().length(3, "3-letter code, e.g. NGN"),
-  country: z.string().min(2).max(100),
-  line1: z.string().min(1, "Required"),
-  line2: z.string().optional(),
-  city: z.string().min(1, "Required"),
-  state: z.string().min(1, "Required"),
-  postalCode: z.string().optional(),
-  lat: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(-90, "Must be between -90 and 90").max(90).optional(),
-  ),
-  lng: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(-180, "Must be between -180 and 180").max(180).optional(),
-  ),
-  priceLevel: z.enum(["1", "2", "3", "4"]),
-  estimatedDeliveryMinutes: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(0).optional(),
-  ),
-});
-type FormInput = z.input<typeof schema>;
-type FormValues = z.output<typeof schema>;
+const DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
 
 function defaultHours(): OpeningHour[] {
-  return DAY_LABELS.map((_, dayOfWeek) => ({
+  return DAYS_OF_WEEK.map((dayOfWeek) => ({
     dayOfWeek,
     openTime: "09:00",
     closeTime: "21:00",
@@ -74,6 +40,25 @@ export interface RestaurantFormProps {
   onSubmit: (input: RestaurantInput & { logoUrl?: string; coverUrl?: string }) => void;
 }
 
+interface FormInput {
+  name: string;
+  description?: string;
+  cuisineTypesRaw: string;
+  currency: string;
+  country: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postalCode?: string;
+  // z.preprocess accepts anything as input (it runs before validation/coercion), so the
+  // resolver's inferred input type for these three fields is `unknown`, not `number | string`.
+  lat?: unknown;
+  lng?: unknown;
+  priceLevel: "1" | "2" | "3" | "4";
+  estimatedDeliveryMinutes?: unknown;
+}
+
 export function RestaurantForm({
   defaultValues,
   defaultOpeningHours,
@@ -84,6 +69,51 @@ export function RestaurantForm({
   submitLabel,
   onSubmit,
 }: RestaurantFormProps) {
+  const t = useTranslations("RestaurantForm");
+  const locale = useLocale();
+  const countryOptions = useMemo(() => getLocalizedCountryOptions(locale), [locale]);
+  const currencyOptions = useMemo(() => getLocalizedCurrencyOptions(locale), [locale]);
+  const DAY_LABELS = useMemo(
+    () => [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")],
+    [t],
+  );
+  const PRICE_LEVEL_OPTIONS = useMemo(
+    () => [
+      { value: "1", label: t("budget") },
+      { value: "2", label: t("moderate") },
+      { value: "3", label: t("pricey") },
+      { value: "4", label: t("highEnd") },
+    ],
+    [t],
+  );
+
+  const schema = z.object({
+    name: z.string().min(2, t("tooShort")).max(100),
+    description: z.string().max(2000).optional(),
+    cuisineTypesRaw: z.string().min(1, t("addAtLeastOne")),
+    currency: z.string().length(3, t("threeLetterCode")),
+    country: z.string().min(2).max(100),
+    line1: z.string().min(1, t("required")),
+    line2: z.string().optional(),
+    city: z.string().min(1, t("required")),
+    state: z.string().min(1, t("required")),
+    postalCode: z.string().optional(),
+    lat: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number().min(-90, t("mustBeBetweenMinus90And90")).max(90).optional(),
+    ),
+    lng: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number().min(-180, t("mustBeBetweenMinus180And180")).max(180).optional(),
+    ),
+    priceLevel: z.enum(["1", "2", "3", "4"]),
+    estimatedDeliveryMinutes: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number().min(0).optional(),
+    ),
+  });
+  type FormValues = z.output<typeof schema>;
+
   const {
     register,
     control,
@@ -111,7 +141,7 @@ export function RestaurantForm({
 
   const submit = (values: FormValues) => {
     if (!complianceDocumentUrl) {
-      setComplianceError("Upload a business registration document before submitting");
+      setComplianceError(t("uploadComplianceDocument"));
       return;
     }
     setComplianceError(null);
@@ -145,31 +175,31 @@ export function RestaurantForm({
   return (
     <form onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-5" noValidate>
       <div className="grid gap-5 sm:grid-cols-2">
-        <ImageUpload label="Logo" folder="restaurants" value={logoUrl} onChange={setLogoUrl} />
-        <ImageUpload label="Cover photo" folder="restaurants" value={coverUrl} onChange={setCoverUrl} />
+        <ImageUpload label={t("logo")} folder="restaurants" value={logoUrl} onChange={setLogoUrl} />
+        <ImageUpload label={t("coverPhoto")} folder="restaurants" value={coverUrl} onChange={setCoverUrl} />
       </div>
 
       {complianceError && <Alert variant="danger">{complianceError}</Alert>}
       <DocumentUpload
-        label="Business registration document"
+        label={t("businessRegistrationDocument")}
         folder="compliance-documents"
         value={complianceDocumentUrl}
         onChange={(url) => {
           setComplianceDocumentUrl(url);
           setComplianceError(null);
         }}
-        hint="Required — e.g. a CAC certificate, business license, or your country's equivalent proof of registration. An admin reviews this before your restaurant appears in the marketplace."
+        hint={t("businessRegistrationHint")}
       />
 
-      <FormField label="Restaurant name" error={errors.name?.message} required>
+      <FormField label={t("restaurantName")} error={errors.name?.message} required>
         <Input {...register("name")} />
       </FormField>
-      <FormField label="Description" error={errors.description?.message}>
+      <FormField label={t("description")} error={errors.description?.message}>
         <Textarea {...register("description")} />
       </FormField>
       <FormField
-        label="Cuisine types"
-        hint="Comma-separated, e.g. Nigerian, Grill"
+        label={t("cuisineTypes")}
+        hint={t("cuisineTypesHint")}
         error={errors.cuisineTypesRaw?.message}
         required
       >
@@ -177,43 +207,38 @@ export function RestaurantForm({
       </FormField>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField label="Country" error={errors.country?.message} required>
+        <FormField label={t("country")} error={errors.country?.message} required>
           <Controller
             control={control}
             name="country"
             render={({ field }) => (
               <Select
-                options={COUNTRY_OPTIONS}
+                options={countryOptions}
                 value={field.value}
                 onChange={(value) => {
                   field.onChange(value);
                   const suggested = currencyForCountry(value);
                   if (suggested) setValue("currency", suggested, { shouldValidate: true });
                 }}
-                placeholder="Select a country…"
+                placeholder={t("selectACountry")}
                 searchable
-                searchPlaceholder="Search countries…"
+                searchPlaceholder={t("searchCountries")}
               />
             )}
           />
         </FormField>
-        <FormField
-          label="Currency"
-          hint="Auto-filled from country — change if this restaurant charges in a different currency"
-          error={errors.currency?.message}
-          required
-        >
+        <FormField label={t("currency")} hint={t("currencyHint")} error={errors.currency?.message} required>
           <Controller
             control={control}
             name="currency"
             render={({ field }) => (
               <Select
-                options={CURRENCY_OPTIONS}
+                options={currencyOptions}
                 value={field.value}
                 onChange={field.onChange}
-                placeholder="Select a currency…"
+                placeholder={t("selectACurrency")}
                 searchable
-                searchPlaceholder="Search currencies…"
+                searchPlaceholder={t("searchCurrencies")}
               />
             )}
           />
@@ -221,7 +246,7 @@ export function RestaurantForm({
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField label="Price level" error={errors.priceLevel?.message} required>
+        <FormField label={t("priceLevel")} error={errors.priceLevel?.message} required>
           <Controller
             control={control}
             name="priceLevel"
@@ -231,53 +256,49 @@ export function RestaurantForm({
           />
         </FormField>
         <FormField
-          label="Estimated delivery time"
-          hint="Optional, in minutes — shown to customers browsing"
+          label={t("estimatedDeliveryTime")}
+          hint={t("estimatedDeliveryTimeHint")}
           error={errors.estimatedDeliveryMinutes?.message}
         >
           <Input type="number" min="0" step="1" {...register("estimatedDeliveryMinutes")} />
         </FormField>
       </div>
 
-      <FormField label="Address line 1" error={errors.line1?.message} required>
+      <FormField label={t("addressLine1")} error={errors.line1?.message} required>
         <Input {...register("line1")} />
       </FormField>
-      <FormField label="Address line 2" error={errors.line2?.message}>
+      <FormField label={t("addressLine2")} error={errors.line2?.message}>
         <Input {...register("line2")} />
       </FormField>
       <div className="grid gap-5 sm:grid-cols-3">
-        <FormField label="City" error={errors.city?.message} required>
+        <FormField label={t("city")} error={errors.city?.message} required>
           <Input {...register("city")} />
         </FormField>
-        <FormField label="State" error={errors.state?.message} required>
+        <FormField label={t("state")} error={errors.state?.message} required>
           <Input {...register("state")} />
         </FormField>
-        <FormField label="Postal code" error={errors.postalCode?.message}>
+        <FormField label={t("postalCode")} error={errors.postalCode?.message}>
           <Input {...register("postalCode")} />
         </FormField>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField
-          label="Latitude"
-          hint="Optional — enables real distance-based delivery fees"
-          error={errors.lat?.message}
-        >
+        <FormField label={t("latitude")} hint={t("latitudeHint")} error={errors.lat?.message}>
           <Input type="number" step="any" {...register("lat")} />
         </FormField>
-        <FormField label="Longitude" error={errors.lng?.message}>
+        <FormField label={t("longitude")} error={errors.lng?.message}>
           <Input type="number" step="any" {...register("lng")} />
         </FormField>
       </div>
 
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-text">Opening hours</span>
+        <span className="text-sm font-medium text-text">{t("openingHours")}</span>
         <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
           {hours.map((hour, index) => (
             <div key={hour.dayOfWeek} className="flex flex-wrap items-center gap-3 p-3">
               <span className="w-24 shrink-0 text-sm text-text">{DAY_LABELS[hour.dayOfWeek]}</span>
               <Checkbox
-                label="Closed"
+                label={t("closed")}
                 checked={hour.isClosed}
                 onChange={(e) => updateHour(index, { isClosed: e.target.checked })}
               />
@@ -288,15 +309,15 @@ export function RestaurantForm({
                     value={hour.openTime}
                     onChange={(e) => updateHour(index, { openTime: e.target.value })}
                     className="h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    aria-label={`${DAY_LABELS[hour.dayOfWeek]} opening time`}
+                    aria-label={t("openingTimeFor", { day: DAY_LABELS[hour.dayOfWeek] })}
                   />
-                  <span className="text-text-muted">to</span>
+                  <span className="text-text-muted">{t("to")}</span>
                   <input
                     type="time"
                     value={hour.closeTime}
                     onChange={(e) => updateHour(index, { closeTime: e.target.value })}
                     className="h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    aria-label={`${DAY_LABELS[hour.dayOfWeek]} closing time`}
+                    aria-label={t("closingTimeFor", { day: DAY_LABELS[hour.dayOfWeek] })}
                   />
                 </>
               )}

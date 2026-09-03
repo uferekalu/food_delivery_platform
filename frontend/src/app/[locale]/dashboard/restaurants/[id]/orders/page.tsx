@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,15 +31,8 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
   REFUNDED: "neutral",
 };
 
-function formatStatus(status: OrderStatus): string {
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function OrderActions({ order }: { order: Order }) {
+  const t = useTranslations("DashboardOrdersPage");
   const { toast } = useToast();
   const [updateStatus, { isLoading }] = useUpdateOrderStatusMutation();
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -49,7 +43,7 @@ function OrderActions({ order }: { order: Order }) {
       .then(() => setConfirmingCancel(false))
       .catch((err: unknown) => {
         setConfirmingCancel(false);
-        toast({ title: "Couldn't update the order", description: getErrorMessage(err), variant: "danger" });
+        toast({ title: t("couldNotUpdateOrder"), description: getErrorMessage(err), variant: "danger" });
       });
   }
 
@@ -58,9 +52,9 @@ function OrderActions({ order }: { order: Order }) {
       open={confirmingCancel}
       onClose={() => setConfirmingCancel(false)}
       onConfirm={() => transition("CANCELLED")}
-      title={`Cancel order ${order.orderNumber}?`}
-      description="The customer will be notified and, if already paid, this order becomes eligible for a refund. This can't be undone."
-      confirmLabel="Cancel order"
+      title={t("cancelOrderTitle", { orderNumber: order.orderNumber })}
+      description={t("cancelOrderDescription")}
+      confirmLabel={t("cancelOrder")}
       isLoading={isLoading}
     />
   );
@@ -69,10 +63,10 @@ function OrderActions({ order }: { order: Order }) {
     return (
       <div className="flex gap-2">
         <Button size="sm" isLoading={isLoading} onClick={() => transition("ACCEPTED_BY_RESTAURANT")}>
-          Accept
+          {t("accept")}
         </Button>
         <Button size="sm" variant="destructive" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
-          Reject
+          {t("reject")}
         </Button>
         {cancelDialog}
       </div>
@@ -83,10 +77,10 @@ function OrderActions({ order }: { order: Order }) {
     return (
       <div className="flex gap-2">
         <Button size="sm" isLoading={isLoading} onClick={() => transition("PREPARING")}>
-          Start preparing
+          {t("startPreparing")}
         </Button>
         <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
-          Cancel
+          {t("cancel")}
         </Button>
         {cancelDialog}
       </div>
@@ -97,10 +91,10 @@ function OrderActions({ order }: { order: Order }) {
     return (
       <div className="flex gap-2">
         <Button size="sm" isLoading={isLoading} onClick={() => transition("READY_FOR_PICKUP")}>
-          Mark ready
+          {t("markReady")}
         </Button>
         <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
-          Cancel
+          {t("cancel")}
         </Button>
         {cancelDialog}
       </div>
@@ -109,10 +103,11 @@ function OrderActions({ order }: { order: Order }) {
 
   // READY_FOR_PICKUP — waiting on rider assignment (docs/ROADMAP.md FDP-16's rider dashboard);
   // nothing left for the restaurant to do here.
-  return <span className="text-sm text-text-muted">Waiting for a rider</span>;
+  return <span className="text-sm text-text-muted">{t("waitingForARider")}</span>;
 }
 
 function OrderQueueCard({ order }: { order: Order }) {
+  const tStatus = useTranslations("OrderStatus");
   const itemsSummary = order.items.map((item) => `${item.qty}× ${item.name}`).join(", ");
 
   return (
@@ -123,7 +118,7 @@ function OrderQueueCard({ order }: { order: Order }) {
             <span className="text-sm font-medium text-text">{order.orderNumber}</span>
             <span className="text-xs text-text-muted">{new Date(order.createdAt).toLocaleTimeString()}</span>
           </div>
-          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{formatStatus(order.status)}</Badge>
+          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
         </div>
         <p className="text-sm text-text">{itemsSummary}</p>
         <p className="text-sm font-medium text-text">
@@ -136,6 +131,8 @@ function OrderQueueCard({ order }: { order: Order }) {
 }
 
 function OrderQueue({ restaurantId, restaurantName }: { restaurantId: string; restaurantName: string }) {
+  const t = useTranslations("DashboardOrdersPage");
+  const tStatus = useTranslations("OrderStatus");
   const { data: orders, isLoading, refetch } = useGetRestaurantOrdersQuery(restaurantId);
   const socket = useSocket();
   const { toast } = useToast();
@@ -146,19 +143,19 @@ function OrderQueue({ restaurantId, restaurantName }: { restaurantId: string; re
 
     const handleOrderUpdated = (order: Order) => {
       if (order.restaurantId !== restaurantId) return;
-      toast({ title: `${order.orderNumber}`, description: formatStatus(order.status), variant: "neutral" });
+      toast({ title: order.orderNumber, description: tStatus(order.status), variant: "neutral" });
       void refetch();
     };
     socket.on("restaurant:orderUpdated", handleOrderUpdated);
     return () => {
       socket.off("restaurant:orderUpdated", handleOrderUpdated);
     };
-  }, [socket, restaurantId, refetch, toast]);
+  }, [socket, restaurantId, refetch, toast, tStatus]);
 
   return (
     <Container className="flex flex-col gap-6 py-10">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-text">Order queue</h1>
+        <h1 className="text-2xl font-bold text-text">{t("orderQueue")}</h1>
         <p className="text-text-muted">{restaurantName}</p>
       </div>
 
@@ -168,7 +165,7 @@ function OrderQueue({ restaurantId, restaurantName }: { restaurantId: string; re
           <Skeleton className="h-32 w-full" />
         </div>
       ) : !orders || orders.length === 0 ? (
-        <EmptyState title="No active orders" description="New orders will appear here as soon as they come in." />
+        <EmptyState title={t("noActiveOrders")} description={t("newOrdersAppearHere")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orders.map((order) => (
@@ -181,6 +178,7 @@ function OrderQueue({ restaurantId, restaurantName }: { restaurantId: string; re
 }
 
 function OrderQueuePage({ id }: { id: string }) {
+  const t = useTranslations("DashboardOrdersPage");
   const { data: restaurants, isLoading } = useGetMyRestaurantsQuery();
   const restaurant = restaurants?.find((r) => r._id === id);
 
@@ -195,7 +193,7 @@ function OrderQueuePage({ id }: { id: string }) {
   if (!restaurant) {
     return (
       <Container className="py-10">
-        <EmptyState title="Restaurant not found" description="It may not exist, or you don't have access to it." />
+        <EmptyState title={t("restaurantNotFound")} description={t("mayNotExistOrNoAccess")} />
       </Container>
     );
   }
