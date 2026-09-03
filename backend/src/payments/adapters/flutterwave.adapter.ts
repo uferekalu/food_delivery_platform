@@ -172,7 +172,9 @@ export class FlutterwaveAdapter implements PaymentAdapter {
     // throws.
     let payload: FlutterwaveWebhookPayload;
     try {
-      payload = JSON.parse(rawBody.toString('utf8')) as FlutterwaveWebhookPayload;
+      payload = JSON.parse(
+        rawBody.toString('utf8'),
+      ) as FlutterwaveWebhookPayload;
     } catch {
       return Promise.resolve(null);
     }

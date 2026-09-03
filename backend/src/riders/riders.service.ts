@@ -18,7 +18,8 @@ function getAgeInYears(dateOfBirth: Date): number {
   let age = now.getFullYear() - dateOfBirth.getFullYear();
   const hasHadBirthdayThisYear =
     now.getMonth() > dateOfBirth.getMonth() ||
-    (now.getMonth() === dateOfBirth.getMonth() && now.getDate() >= dateOfBirth.getDate());
+    (now.getMonth() === dateOfBirth.getMonth() &&
+      now.getDate() >= dateOfBirth.getDate());
   if (!hasHadBirthdayThisYear) age -= 1;
   return age;
 }
@@ -77,7 +78,8 @@ export class RidersService {
       driversLicenseExpiry: dto.driversLicenseExpiry ?? null,
       driversLicenseDocumentUrl: dto.driversLicenseDocumentUrl ?? null,
       vehiclePlateNumber: dto.vehiclePlateNumber ?? null,
-      vehicleRegistrationDocumentUrl: dto.vehicleRegistrationDocumentUrl ?? null,
+      vehicleRegistrationDocumentUrl:
+        dto.vehicleRegistrationDocumentUrl ?? null,
       guarantor: dto.guarantor,
       nextOfKinName: dto.nextOfKinName,
       nextOfKinPhone: dto.nextOfKinPhone,
@@ -130,12 +132,15 @@ export class RidersService {
     const missing: string[] = [];
     if (!rider.dateOfBirth) missing.push('date of birth');
     if (!rider.governmentIdDocumentUrl) missing.push('government ID document');
-    if (!rider.proofOfAddressDocumentUrl) missing.push('proof of address document');
+    if (!rider.proofOfAddressDocumentUrl)
+      missing.push('proof of address document');
     if (!rider.guarantor?.fullName) missing.push('guarantor details');
     if (!rider.nextOfKinName) missing.push('next of kin details');
     if (rider.vehicleType !== 'bicycle') {
-      if (!rider.driversLicenseDocumentUrl) missing.push("driver's license document");
-      if (!rider.vehicleRegistrationDocumentUrl) missing.push('vehicle registration document');
+      if (!rider.driversLicenseDocumentUrl)
+        missing.push("driver's license document");
+      if (!rider.vehicleRegistrationDocumentUrl)
+        missing.push('vehicle registration document');
       if (!rider.vehiclePlateNumber) missing.push('vehicle plate number');
     }
     if (missing.length > 0) {

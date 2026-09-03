@@ -393,7 +393,7 @@ describe('PaystackAdapter', () => {
       await expect(adapter.refund('ref_123')).resolves.toBeUndefined();
     });
 
-    it("throws (docs/ROADMAP.md FDP-65) rather than silently succeeding when Paystack rejects the refund — previously the response was discarded entirely", async () => {
+    it('throws (docs/ROADMAP.md FDP-65) rather than silently succeeding when Paystack rejects the refund — previously the response was discarded entirely', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         json: () =>
           Promise.resolve({
