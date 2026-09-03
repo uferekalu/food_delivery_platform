@@ -21,4 +21,10 @@ export class AdminController {
   approveRestaurant(@Param('id') id: string) {
     return this.adminService.approveRestaurant(id);
   }
+
+  // Same split as restaurants/:id/approve above (docs/ROADMAP.md FDP-56).
+  @Patch('stores/:id/approve')
+  approveStore(@Param('id') id: string) {
+    return this.adminService.approveStore(id);
+  }
 }

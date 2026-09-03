@@ -6,6 +6,8 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { RidersService } from '../riders/riders.service';
 import { UsersService } from '../users/users.service';
 import { MenuService } from '../menu/menu.service';
+import { StoresService } from '../stores/stores.service';
+import { ProductsService } from '../stores/products.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -16,6 +18,8 @@ describe('AdminService', () => {
   let ridersService: jest.Mocked<Pick<RidersService, 'countByVerification'>>;
   let usersService: jest.Mocked<Pick<UsersService, 'countByRole'>>;
   let menuService: jest.Mocked<Pick<MenuService, 'getMenu'>>;
+  let storesService: jest.Mocked<Pick<StoresService, 'approve'>>;
+  let productsService: jest.Mocked<Pick<ProductsService, 'getCatalog'>>;
 
   beforeEach(async () => {
     ordersService = { getAnalyticsSummary: jest.fn() };
@@ -23,6 +27,8 @@ describe('AdminService', () => {
     ridersService = { countByVerification: jest.fn() };
     usersService = { countByRole: jest.fn() };
     menuService = { getMenu: jest.fn() };
+    storesService = { approve: jest.fn() };
+    productsService = { getCatalog: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -32,6 +38,8 @@ describe('AdminService', () => {
         { provide: RidersService, useValue: ridersService },
         { provide: UsersService, useValue: usersService },
         { provide: MenuService, useValue: menuService },
+        { provide: StoresService, useValue: storesService },
+        { provide: ProductsService, useValue: productsService },
       ],
     }).compile();
 
@@ -96,6 +104,33 @@ describe('AdminService', () => {
       const result = await service.approveRestaurant('restaurant-1');
 
       expect(restaurantsService.approve).toHaveBeenCalledWith('restaurant-1');
+      expect(result).toEqual({ isApproved: true });
+    });
+  });
+
+  describe('approveStore (FDP-56)', () => {
+    it('rejects approval when the store has no products', async () => {
+      productsService.getCatalog.mockResolvedValue({
+        categories: [],
+        products: [],
+      });
+
+      await expect(service.approveStore('store-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(storesService.approve).not.toHaveBeenCalled();
+    });
+
+    it('delegates to StoresService.approve once the catalog has at least one product', async () => {
+      productsService.getCatalog.mockResolvedValue({
+        categories: [{ _id: 'cat-1' }],
+        products: [{ _id: 'product-1' }],
+      } as never);
+      storesService.approve.mockResolvedValue({ isApproved: true } as never);
+
+      const result = await service.approveStore('store-1');
+
+      expect(storesService.approve).toHaveBeenCalledWith('store-1');
       expect(result).toEqual({ isApproved: true });
     });
   });
