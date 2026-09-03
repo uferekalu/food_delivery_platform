@@ -4,8 +4,8 @@
 // implementation to render) and LanguageSwitcher (never constructing a locale-prefixed URL for
 // one of these paths — that URL doesn't exist and previously 404'd anyone who switched language
 // while on, say, /dashboard/restaurants). `/dashboard` moved in-scope in FDP-70, `/admin` in
-// FDP-72 — this list now only covers rider/design-system.
-export const OUT_OF_SCOPE_PREFIXES = ["/rider", "/design-system"];
+// FDP-72, `/rider` in FDP-73 — this list now only covers design-system.
+export const OUT_OF_SCOPE_PREFIXES = ["/design-system"];
 
 export function isOutOfScopePath(pathname: string): boolean {
   return OUT_OF_SCOPE_PREFIXES.some(

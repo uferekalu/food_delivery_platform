@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { useRouter, Link } from "@/i18n/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,26 +22,6 @@ import { useApplyRiderMutation } from "@/lib/redux/services/riders-api";
 import { useRefreshMutation } from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { GOVERNMENT_ID_TYPES, VEHICLE_TYPES } from "@/lib/redux/restaurant-types";
-import type { GovernmentIdType, VehicleType } from "@/lib/redux/restaurant-types";
-
-const VEHICLE_LABELS: Record<VehicleType, string> = {
-  bicycle: "Bicycle",
-  motorcycle: "Motorcycle",
-  car: "Car",
-  van: "Van",
-};
-
-const GOVERNMENT_ID_LABELS: Record<GovernmentIdType, string> = {
-  national_id: "National ID",
-  passport: "International passport",
-  voters_card: "Voter's card",
-  drivers_license: "Driver's license",
-};
-
-const GOVERNMENT_ID_OPTIONS = GOVERNMENT_ID_TYPES.map((value) => ({
-  value,
-  label: GOVERNMENT_ID_LABELS[value],
-}));
 
 const MINIMUM_RIDER_AGE = 18;
 
@@ -56,61 +36,10 @@ function ageInYears(dateOfBirth: string): number {
   return age;
 }
 
-const schema = z
-  .object({
-    vehicleType: z.enum(VEHICLE_TYPES),
-    dateOfBirth: z.string().min(1, "Required"),
-    governmentIdType: z.enum(GOVERNMENT_ID_TYPES),
-    governmentIdNumber: z.string().min(4, "Too short").max(50),
-    driversLicenseNumber: z.string().max(30).optional(),
-    driversLicenseExpiry: z.string().optional(),
-    vehiclePlateNumber: z.string().max(20).optional(),
-    guarantorFullName: z.string().min(2, "Required").max(100),
-    guarantorPhone: z.string().min(7, "Required").max(20),
-    guarantorRelationship: z.string().min(2, "Required").max(100),
-    guarantorAddress: z.string().min(5, "Required").max(200),
-    nextOfKinName: z.string().min(2, "Required").max(100),
-    nextOfKinPhone: z.string().min(7, "Required").max(20),
-    nextOfKinRelationship: z.string().min(2, "Required").max(100),
-  })
-  .superRefine((values, ctx) => {
-    if (values.dateOfBirth) {
-      const age = ageInYears(values.dateOfBirth);
-      if (Number.isNaN(age) || age < MINIMUM_RIDER_AGE) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["dateOfBirth"],
-          message: `You must be at least ${MINIMUM_RIDER_AGE} years old`,
-        });
-      }
-    }
-    if (values.vehicleType !== "bicycle") {
-      if (!values.driversLicenseNumber) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["driversLicenseNumber"],
-          message: "Required for a motorized vehicle",
-        });
-      }
-      if (!values.driversLicenseExpiry) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["driversLicenseExpiry"],
-          message: "Required for a motorized vehicle",
-        });
-      }
-      if (!values.vehiclePlateNumber) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["vehiclePlateNumber"],
-          message: "Required for a motorized vehicle",
-        });
-      }
-    }
-  });
-type FormValues = z.infer<typeof schema>;
-
 function ApplyForm() {
+  const t = useTranslations("RiderApplyPage");
+  const tVehicle = useTranslations("VehicleType");
+  const tGovId = useTranslations("GovernmentIdType");
   const router = useRouter();
   const [applyRider, { isLoading }] = useApplyRiderMutation();
   const [refresh] = useRefreshMutation();
@@ -121,6 +50,50 @@ function ApplyForm() {
   const [proofOfAddressDocumentUrl, setProofOfAddressDocumentUrl] = useState<string>();
   const [driversLicenseDocumentUrl, setDriversLicenseDocumentUrl] = useState<string>();
   const [vehicleRegistrationDocumentUrl, setVehicleRegistrationDocumentUrl] = useState<string>();
+
+  const GOVERNMENT_ID_OPTIONS = GOVERNMENT_ID_TYPES.map((value) => ({ value, label: tGovId(value) }));
+
+  const schema = z
+    .object({
+      vehicleType: z.enum(VEHICLE_TYPES),
+      dateOfBirth: z.string().min(1, t("required")),
+      governmentIdType: z.enum(GOVERNMENT_ID_TYPES),
+      governmentIdNumber: z.string().min(4, t("tooShort")).max(50),
+      driversLicenseNumber: z.string().max(30).optional(),
+      driversLicenseExpiry: z.string().optional(),
+      vehiclePlateNumber: z.string().max(20).optional(),
+      guarantorFullName: z.string().min(2, t("required")).max(100),
+      guarantorPhone: z.string().min(7, t("required")).max(20),
+      guarantorRelationship: z.string().min(2, t("required")).max(100),
+      guarantorAddress: z.string().min(5, t("required")).max(200),
+      nextOfKinName: z.string().min(2, t("required")).max(100),
+      nextOfKinPhone: z.string().min(7, t("required")).max(20),
+      nextOfKinRelationship: z.string().min(2, t("required")).max(100),
+    })
+    .superRefine((values, ctx) => {
+      if (values.dateOfBirth) {
+        const age = ageInYears(values.dateOfBirth);
+        if (Number.isNaN(age) || age < MINIMUM_RIDER_AGE) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["dateOfBirth"],
+            message: t("mustBeAtLeastAge", { age: MINIMUM_RIDER_AGE }),
+          });
+        }
+      }
+      if (values.vehicleType !== "bicycle") {
+        if (!values.driversLicenseNumber) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["driversLicenseNumber"], message: t("requiredForMotorized") });
+        }
+        if (!values.driversLicenseExpiry) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["driversLicenseExpiry"], message: t("requiredForMotorized") });
+        }
+        if (!values.vehiclePlateNumber) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["vehiclePlateNumber"], message: t("requiredForMotorized") });
+        }
+      }
+    });
+  type FormValues = z.infer<typeof schema>;
 
   const {
     register,
@@ -138,14 +111,14 @@ function ApplyForm() {
 
   const submit = (values: FormValues) => {
     const missingDocs: string[] = [];
-    if (!governmentIdDocumentUrl) missingDocs.push("government ID document");
-    if (!proofOfAddressDocumentUrl) missingDocs.push("proof of address document");
+    if (!governmentIdDocumentUrl) missingDocs.push(t("governmentIdDocument"));
+    if (!proofOfAddressDocumentUrl) missingDocs.push(t("proofOfAddressDocument"));
     if (needsVehicleDocs) {
-      if (!driversLicenseDocumentUrl) missingDocs.push("driver's license document");
-      if (!vehicleRegistrationDocumentUrl) missingDocs.push("vehicle registration document");
+      if (!driversLicenseDocumentUrl) missingDocs.push(t("driversLicenseDocument"));
+      if (!vehicleRegistrationDocumentUrl) missingDocs.push(t("vehicleRegistrationDocument"));
     }
     if (missingDocs.length > 0) {
-      setDocumentError(`Please upload: ${missingDocs.join(", ")}`);
+      setDocumentError(t("pleaseUpload", { items: missingDocs.join(", ") }));
       return;
     }
     setDocumentError(null);
@@ -185,17 +158,14 @@ function ApplyForm() {
         await refresh().unwrap().catch(() => {});
         router.push("/rider");
       })
-      .catch((err: unknown) => setError(getErrorMessage(err, "Couldn't submit your application")));
+      .catch((err: unknown) => setError(getErrorMessage(err, t("couldNotSubmitApplication"))));
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Become a rider</CardTitle>
-        <CardDescription>
-          We need a few details to keep the platform and its customers safe. An admin reviews
-          everything below before you can accept deliveries.
-        </CardDescription>
+        <CardTitle>{t("becomeARider")}</CardTitle>
+        <CardDescription>{t("weNeedAFewDetails")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void handleSubmit(submit)(e)} className="flex flex-col gap-6" noValidate>
@@ -205,21 +175,21 @@ function ApplyForm() {
             control={control}
             name="vehicleType"
             render={({ field }) => (
-              <RadioGroup label="Vehicle type" value={field.value} onChange={field.onChange}>
-                {Object.entries(VEHICLE_LABELS).map(([value, label]) => (
-                  <RadioOption key={value} value={value} label={label} />
+              <RadioGroup label={t("vehicleTypeLabel")} value={field.value} onChange={field.onChange}>
+                {VEHICLE_TYPES.map((value) => (
+                  <RadioOption key={value} value={value} label={tVehicle(value)} />
                 ))}
               </RadioGroup>
             )}
           />
 
           <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-            <h2 className="text-sm font-semibold text-text">Identity</h2>
-            <FormField label="Date of birth" error={errors.dateOfBirth?.message} required>
+            <h2 className="text-sm font-semibold text-text">{t("identity")}</h2>
+            <FormField label={t("dateOfBirth")} error={errors.dateOfBirth?.message} required>
               <Input type="date" {...register("dateOfBirth")} />
             </FormField>
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Government ID type" error={errors.governmentIdType?.message} required>
+              <FormField label={t("governmentIdType")} error={errors.governmentIdType?.message} required>
                 <Controller
                   control={control}
                   name="governmentIdType"
@@ -228,45 +198,45 @@ function ApplyForm() {
                   )}
                 />
               </FormField>
-              <FormField label="ID number" error={errors.governmentIdNumber?.message} required>
+              <FormField label={t("idNumber")} error={errors.governmentIdNumber?.message} required>
                 <Input {...register("governmentIdNumber")} />
               </FormField>
             </div>
             <DocumentUpload
-              label="Government ID document"
+              label={t("governmentIdDocument")}
               folder="rider-documents"
               value={governmentIdDocumentUrl}
               onChange={(url) => {
                 setGovernmentIdDocumentUrl(url);
                 setDocumentError(null);
               }}
-              hint="A clear photo or scan of the ID you selected above."
+              hint={t("governmentIdDocumentHint")}
             />
             <DocumentUpload
-              label="Proof of address"
+              label={t("proofOfAddress")}
               folder="rider-documents"
               value={proofOfAddressDocumentUrl}
               onChange={(url) => {
                 setProofOfAddressDocumentUrl(url);
                 setDocumentError(null);
               }}
-              hint="A recent utility bill, bank statement, or tenancy agreement."
+              hint={t("proofOfAddressHint")}
             />
           </div>
 
           {needsVehicleDocs && (
             <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-              <h2 className="text-sm font-semibold text-text">Vehicle & license</h2>
+              <h2 className="text-sm font-semibold text-text">{t("vehicleAndLicense")}</h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="Driver's license number" error={errors.driversLicenseNumber?.message} required>
+                <FormField label={t("driversLicenseNumber")} error={errors.driversLicenseNumber?.message} required>
                   <Input {...register("driversLicenseNumber")} />
                 </FormField>
-                <FormField label="License expiry date" error={errors.driversLicenseExpiry?.message} required>
+                <FormField label={t("licenseExpiryDate")} error={errors.driversLicenseExpiry?.message} required>
                   <Input type="date" {...register("driversLicenseExpiry")} />
                 </FormField>
               </div>
               <DocumentUpload
-                label="Driver's license document"
+                label={t("driversLicenseDocument")}
                 folder="rider-documents"
                 value={driversLicenseDocumentUrl}
                 onChange={(url) => {
@@ -274,18 +244,18 @@ function ApplyForm() {
                   setDocumentError(null);
                 }}
               />
-              <FormField label="Vehicle plate number" error={errors.vehiclePlateNumber?.message} required>
+              <FormField label={t("vehiclePlateNumber")} error={errors.vehiclePlateNumber?.message} required>
                 <Input {...register("vehiclePlateNumber")} />
               </FormField>
               <DocumentUpload
-                label="Vehicle registration document"
+                label={t("vehicleRegistrationDocument")}
                 folder="rider-documents"
                 value={vehicleRegistrationDocumentUrl}
                 onChange={(url) => {
                   setVehicleRegistrationDocumentUrl(url);
                   setDocumentError(null);
                 }}
-                hint="Proof the vehicle is registered and roadworthy."
+                hint={t("vehicleRegistrationHint")}
               />
             </div>
           )}
@@ -293,44 +263,42 @@ function ApplyForm() {
           {documentError && <Alert variant="danger">{documentError}</Alert>}
 
           <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-            <h2 className="text-sm font-semibold text-text">Guarantor</h2>
-            <p className="text-xs text-text-muted">
-              Someone who can vouch for you — not a family member you live with.
-            </p>
+            <h2 className="text-sm font-semibold text-text">{t("guarantor")}</h2>
+            <p className="text-xs text-text-muted">{t("guarantorHint")}</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Full name" error={errors.guarantorFullName?.message} required>
+              <FormField label={t("fullName")} error={errors.guarantorFullName?.message} required>
                 <Input {...register("guarantorFullName")} />
               </FormField>
-              <FormField label="Phone number" error={errors.guarantorPhone?.message} required>
+              <FormField label={t("phoneNumber")} error={errors.guarantorPhone?.message} required>
                 <Input {...register("guarantorPhone")} />
               </FormField>
-              <FormField label="Relationship to you" error={errors.guarantorRelationship?.message} required>
+              <FormField label={t("relationshipToYou")} error={errors.guarantorRelationship?.message} required>
                 <Input {...register("guarantorRelationship")} />
               </FormField>
-              <FormField label="Address" error={errors.guarantorAddress?.message} required>
+              <FormField label={t("address")} error={errors.guarantorAddress?.message} required>
                 <Input {...register("guarantorAddress")} />
               </FormField>
             </div>
           </div>
 
           <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-            <h2 className="text-sm font-semibold text-text">Next of kin</h2>
-            <p className="text-xs text-text-muted">Who we contact in an emergency.</p>
+            <h2 className="text-sm font-semibold text-text">{t("nextOfKin")}</h2>
+            <p className="text-xs text-text-muted">{t("nextOfKinHint")}</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Full name" error={errors.nextOfKinName?.message} required>
+              <FormField label={t("fullName")} error={errors.nextOfKinName?.message} required>
                 <Input {...register("nextOfKinName")} />
               </FormField>
-              <FormField label="Phone number" error={errors.nextOfKinPhone?.message} required>
+              <FormField label={t("phoneNumber")} error={errors.nextOfKinPhone?.message} required>
                 <Input {...register("nextOfKinPhone")} />
               </FormField>
-              <FormField label="Relationship to you" error={errors.nextOfKinRelationship?.message} required>
+              <FormField label={t("relationshipToYou")} error={errors.nextOfKinRelationship?.message} required>
                 <Input {...register("nextOfKinRelationship")} />
               </FormField>
             </div>
           </div>
 
           <Button type="submit" isLoading={isLoading} className="self-start">
-            Submit application
+            {t("submitApplication")}
           </Button>
         </form>
       </CardContent>
@@ -339,12 +307,13 @@ function ApplyForm() {
 }
 
 function ApplyGate() {
+  const t = useTranslations("RiderApplyPage");
   const { user, status } = useAppSelector((state) => state.auth);
 
   if (status === "idle") {
     return (
       <Container className="flex justify-center py-24">
-        <Spinner size="lg" label="Checking your session" />
+        <Spinner size="lg" label={t("checkingSession")} />
       </Container>
     );
   }
@@ -353,12 +322,12 @@ function ApplyGate() {
     return (
       <Container className="py-10">
         <EmptyState
-          title="Log in to apply"
-          description="You'll need an account to apply as a rider."
+          title={t("logInToApply")}
+          description={t("needAccountToApply")}
           action={
-            <NextLink href="/login" className={buttonVariants({ variant: "primary" })}>
-              Log in
-            </NextLink>
+            <Link href="/login" className={buttonVariants({ variant: "primary" })}>
+              {t("logIn")}
+            </Link>
           }
         />
       </Container>
@@ -369,12 +338,12 @@ function ApplyGate() {
     return (
       <Container className="py-10">
         <EmptyState
-          title="You're already a rider"
-          description="Head to your dashboard to go online and accept deliveries."
+          title={t("youreAlreadyARider")}
+          description={t("headToYourDashboard")}
           action={
-            <NextLink href="/rider" className={buttonVariants({ variant: "primary" })}>
-              Go to rider dashboard
-            </NextLink>
+            <Link href="/rider" className={buttonVariants({ variant: "primary" })}>
+              {t("goToRiderDashboard")}
+            </Link>
           }
         />
       </Container>
@@ -384,7 +353,7 @@ function ApplyGate() {
   if (user.role === "admin") {
     return (
       <Container className="py-10">
-        <Alert variant="neutral">Admin accounts don&apos;t need a rider profile.</Alert>
+        <Alert variant="neutral">{t("adminAccountsDontNeedRiderProfile")}</Alert>
       </Container>
     );
   }
@@ -392,17 +361,14 @@ function ApplyGate() {
   if (user.role === "restaurant_owner") {
     return (
       <Container className="py-10">
-        <Alert variant="neutral">
-          Restaurant owner accounts can&apos;t also become riders — becoming a rider would
-          replace your account role and you&apos;d lose access to your restaurant dashboard.
-        </Alert>
+        <Alert variant="neutral">{t("restaurantOwnersCantBecomeRiders")}</Alert>
       </Container>
     );
   }
 
   return (
     <Container className="max-w-2xl py-10">
-      <h1 className="mb-6 text-2xl font-bold text-text">Become a rider</h1>
+      <h1 className="mb-6 text-2xl font-bold text-text">{t("becomeARider")}</h1>
       <ApplyForm />
     </Container>
   );

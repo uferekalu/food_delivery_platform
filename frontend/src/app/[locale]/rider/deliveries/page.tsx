@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,15 +24,8 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
   REFUNDED: "neutral",
 };
 
-function formatStatus(status: OrderStatus): string {
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function DeliveryRow({ order }: { order: Order }) {
+  const tStatus = useTranslations("OrderStatus");
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0">
       <div className="flex flex-col">
@@ -42,18 +36,19 @@ function DeliveryRow({ order }: { order: Order }) {
         <span className="text-sm font-medium text-text">
           {order.currency} {order.deliveryFee.toFixed(2)}
         </span>
-        <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{formatStatus(order.status)}</Badge>
+        <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
       </div>
     </div>
   );
 }
 
 function DeliveryHistory() {
+  const t = useTranslations("RiderDeliveriesPage");
   const { data: deliveries, isLoading } = useGetMyDeliveriesQuery();
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
   if (!deliveries || deliveries.length === 0) {
-    return <EmptyState title="No deliveries yet" description="Accepted orders will show up here." />;
+    return <EmptyState title={t("noDeliveriesYet")} description={t("acceptedOrdersShowUpHere")} />;
   }
 
   const delivered = deliveries.filter((o) => o.status === "DELIVERED");
@@ -65,7 +60,7 @@ function DeliveryHistory() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-text-muted">Total earnings</span>
+            <span className="text-sm text-text-muted">{t("totalEarnings")}</span>
             <span className="text-2xl font-bold text-text">
               {currency} {totalEarnings.toFixed(2)}
             </span>
@@ -73,7 +68,7 @@ function DeliveryHistory() {
         </Card>
         <Card>
           <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-text-muted">Completed deliveries</span>
+            <span className="text-sm text-text-muted">{t("completedDeliveries")}</span>
             <span className="text-2xl font-bold text-text">{delivered.length}</span>
           </CardContent>
         </Card>
@@ -91,10 +86,11 @@ function DeliveryHistory() {
 }
 
 export default function RiderDeliveriesPage() {
+  const t = useTranslations("RiderDeliveriesPage");
   return (
     <RequireRole roles={["rider"]}>
       <Container className="flex flex-col gap-6 py-10">
-        <h1 className="text-2xl font-bold text-text">Delivery history</h1>
+        <h1 className="text-2xl font-bold text-text">{t("deliveryHistory")}</h1>
         <DeliveryHistory />
       </Container>
     </RequireRole>

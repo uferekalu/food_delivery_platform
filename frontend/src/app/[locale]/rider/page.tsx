@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,15 +40,9 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
   REFUNDED: "neutral",
 };
 
-function formatStatus(status: OrderStatus): string {
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
+  const t = useTranslations("RiderDashboardPage");
+  const tStatus = useTranslations("OrderStatus");
   const { toast } = useToast();
   const [assignOrder, { isLoading }] = useAssignRiderOrderMutation();
   const itemsSummary = order.items.map((item) => `${item.qty}× ${item.name}`).join(", ");
@@ -57,14 +52,14 @@ function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <span className="text-sm font-medium text-text">{order.orderNumber}</span>
-          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{formatStatus(order.status)}</Badge>
+          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
         </div>
         <p className="text-sm text-text">{itemsSummary}</p>
         <p className="text-sm text-text-muted">
-          Deliver to {order.deliveryAddress.line1}, {order.deliveryAddress.city}
+          {t("deliverTo", { line1: order.deliveryAddress.line1, city: order.deliveryAddress.city })}
         </p>
         <p className="text-sm font-medium text-text">
-          {order.currency} {order.deliveryFee.toFixed(2)} delivery fee
+          {t("deliveryFeeAmount", { currency: order.currency, amount: order.deliveryFee.toFixed(2) })}
         </p>
         <Button
           size="sm"
@@ -73,13 +68,13 @@ function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
           onClick={() =>
             void assignOrder(order._id)
               .unwrap()
-              .then(() => toast({ title: "Order accepted", variant: "success" }))
+              .then(() => toast({ title: t("orderAccepted"), variant: "success" }))
               .catch((err: unknown) =>
-                toast({ title: "Couldn't accept the order", description: getErrorMessage(err), variant: "danger" }),
+                toast({ title: t("couldNotAcceptOrder"), description: getErrorMessage(err), variant: "danger" }),
               )
           }
         >
-          {verified ? "Accept" : "Verification required"}
+          {verified ? t("accept") : t("verificationRequired")}
         </Button>
       </CardContent>
     </Card>
@@ -88,13 +83,15 @@ function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
 
 const ACTIVE_RIDER_STATUSES: OrderStatus[] = ["ASSIGNED_TO_RIDER", "PICKED_UP", "OUT_FOR_DELIVERY"];
 
-const NEXT_RIDER_STATUS: Partial<Record<OrderStatus, { target: OrderStatus; label: string }>> = {
-  ASSIGNED_TO_RIDER: { target: "PICKED_UP", label: "Mark picked up" },
-  PICKED_UP: { target: "OUT_FOR_DELIVERY", label: "Mark out for delivery" },
-  OUT_FOR_DELIVERY: { target: "DELIVERED", label: "Mark delivered" },
+const NEXT_RIDER_STATUS: Partial<Record<OrderStatus, { target: OrderStatus; labelKey: string }>> = {
+  ASSIGNED_TO_RIDER: { target: "PICKED_UP", labelKey: "markPickedUp" },
+  PICKED_UP: { target: "OUT_FOR_DELIVERY", labelKey: "markOutForDelivery" },
+  OUT_FOR_DELIVERY: { target: "DELIVERED", labelKey: "markDelivered" },
 };
 
 function ActiveDeliveryCard({ order }: { order: Order }) {
+  const t = useTranslations("RiderDashboardPage");
+  const tStatus = useTranslations("OrderStatus");
   const { toast } = useToast();
   const [updateStatus, { isLoading }] = useUpdateRiderOrderStatusMutation();
   const itemsSummary = order.items.map((item) => `${item.qty}× ${item.name}`).join(", ");
@@ -105,11 +102,11 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <span className="text-sm font-medium text-text">{order.orderNumber}</span>
-          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{formatStatus(order.status)}</Badge>
+          <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
         </div>
         <p className="text-sm text-text">{itemsSummary}</p>
         <p className="text-sm text-text-muted">
-          Deliver to {order.deliveryAddress.line1}, {order.deliveryAddress.city}
+          {t("deliverTo", { line1: order.deliveryAddress.line1, city: order.deliveryAddress.city })}
         </p>
         {next && (
           <Button
@@ -119,11 +116,11 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
               void updateStatus({ orderId: order._id, status: next.target })
                 .unwrap()
                 .catch((err: unknown) =>
-                  toast({ title: "Couldn't update the order", description: getErrorMessage(err), variant: "danger" }),
+                  toast({ title: t("couldNotUpdateOrder"), description: getErrorMessage(err), variant: "danger" }),
                 )
             }
           >
-            {next.label}
+            {t(next.labelKey)}
           </Button>
         )}
       </CardContent>
@@ -138,6 +135,7 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
  * the React Compiler's `set-state-in-effect` rule flags — see frontend/CLAUDE.md).
  */
 function LocationSharingToggle() {
+  const t = useTranslations("RiderDashboardPage");
   const socket = useSocket();
   const [sharingLocation, setSharingLocation] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -159,7 +157,7 @@ function LocationSharingToggle() {
 
   function startSharingLocation() {
     if (!navigator.geolocation) {
-      setGeoError("Your browser doesn't support location sharing.");
+      setGeoError(t("browserDoesNotSupportLocation"));
       return;
     }
     setGeoError(null);
@@ -170,7 +168,7 @@ function LocationSharingToggle() {
           lng: position.coords.longitude,
         });
       },
-      () => setGeoError("Couldn't get your location — check your browser's location permission."),
+      () => setGeoError(t("couldNotGetLocation")),
       { enableHighAccuracy: true },
     );
     setSharingLocation(true);
@@ -179,9 +177,9 @@ function LocationSharingToggle() {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className="text-sm text-text">Share live location</span>
+        <span className="text-sm text-text">{t("shareLiveLocation")}</span>
         <Switch
-          label="Share live location"
+          label={t("shareLiveLocation")}
           checked={sharingLocation}
           onChange={(checked) => (checked ? startSharingLocation() : stopSharingLocation())}
         />
@@ -192,6 +190,7 @@ function LocationSharingToggle() {
 }
 
 function RiderDashboard() {
+  const t = useTranslations("RiderDashboardPage");
   const { data: rider, isLoading: loadingProfile } = useGetMyRiderProfileQuery();
   const { data: queue, isLoading: loadingQueue, refetch: refetchQueue } = useGetRiderQueueQuery();
   const { data: myDeliveries, refetch: refetchDeliveries } = useGetMyDeliveriesQuery();
@@ -219,12 +218,12 @@ function RiderDashboard() {
   if (!rider) {
     return (
       <EmptyState
-        title="No rider profile yet"
-        description="Apply to become a rider to see your dashboard."
+        title={t("noRiderProfileYet")}
+        description={t("applyToSeeYourDashboard")}
         action={
-          <NextLink href="/rider/apply" className={buttonVariants({ variant: "primary" })}>
-            Apply now
-          </NextLink>
+          <Link href="/rider/apply" className={buttonVariants({ variant: "primary" })}>
+            {t("applyNow")}
+          </Link>
         }
       />
     );
@@ -232,32 +231,23 @@ function RiderDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      {!rider.isVerified && (
-        <Alert variant="warning">
-          Your rider account is pending verification. You can browse the queue, but you can&apos;t
-          accept deliveries yet.
-        </Alert>
-      )}
+      {!rider.isVerified && <Alert variant="warning">{t("pendingVerificationWarning")}</Alert>}
 
       <Card>
         <CardContent className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-text">
-              {rider.isOnline ? "You're online" : "You're offline"}
-            </span>
-            <span className="text-sm text-text-muted">
-              Go online to appear available for new deliveries.
-            </span>
+            <span className="text-sm font-medium text-text">{rider.isOnline ? t("youreOnline") : t("youreOffline")}</span>
+            <span className="text-sm text-text-muted">{t("goOnlineDescription")}</span>
           </div>
           <Switch
-            label="Online"
+            label={t("online")}
             checked={rider.isOnline}
             disabled={toggling}
             onChange={() =>
               void toggleOnline()
                 .unwrap()
                 .catch((err: unknown) =>
-                  toast({ title: "Couldn't update status", description: getErrorMessage(err), variant: "danger" }),
+                  toast({ title: t("couldNotUpdateStatus"), description: getErrorMessage(err), variant: "danger" }),
                 )
             }
           />
@@ -266,11 +256,11 @@ function RiderDashboard() {
 
       <Card>
         <CardContent className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-text">Your rating</span>
+          <span className="text-sm font-medium text-text">{t("yourRating")}</span>
           <div className="flex items-center gap-2">
-            <Rating value={rider.rating} label="Your rating" />
+            <Rating value={rider.rating} label={t("yourRating")} />
             <span className="text-sm text-text-muted">
-              {rider.rating.toFixed(1)} ({rider.reviewCount} {rider.reviewCount === 1 ? "review" : "reviews"})
+              {t("ratingWithReviewCount", { rating: rider.rating.toFixed(1), count: rider.reviewCount })}
             </span>
           </div>
         </CardContent>
@@ -279,7 +269,7 @@ function RiderDashboard() {
       {activeDeliveries.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-text">Your active deliveries</h2>
+            <h2 className="text-lg font-semibold text-text">{t("yourActiveDeliveries")}</h2>
             <LocationSharingToggle />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -291,11 +281,11 @@ function RiderDashboard() {
       )}
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-text">Unassigned orders</h2>
+        <h2 className="text-lg font-semibold text-text">{t("unassignedOrders")}</h2>
         {loadingQueue ? (
           <Skeleton className="h-32 w-full" />
         ) : !queue || queue.length === 0 ? (
-          <EmptyState title="No orders waiting" description="New ready-for-pickup orders will appear here." />
+          <EmptyState title={t("noOrdersWaiting")} description={t("newOrdersWillAppearHere")} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {queue.map((order) => (
@@ -309,14 +299,15 @@ function RiderDashboard() {
 }
 
 export default function RiderDashboardPage() {
+  const t = useTranslations("RiderDashboardPage");
   return (
     <RequireRole roles={["rider"]}>
       <Container className="flex flex-col gap-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-text">Rider dashboard</h1>
-          <NextLink href="/rider/deliveries" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Delivery history
-          </NextLink>
+          <h1 className="text-2xl font-bold text-text">{t("riderDashboard")}</h1>
+          <Link href="/rider/deliveries" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            {t("deliveryHistory")}
+          </Link>
         </div>
         <RiderDashboard />
       </Container>
