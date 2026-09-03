@@ -817,5 +817,11 @@
     "date": "Datum",
     "restaurantNotFound": "Restaurant nicht gefunden",
     "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf."
+  },
+  "NotFoundPage": {
+    "eyebrow": "404",
+    "title": "Seite nicht gefunden",
+    "description": "Die gesuchte Seite existiert nicht oder wurde möglicherweise verschoben.",
+    "backToHomepage": "Zurück zur Startseite"
   }
 }
