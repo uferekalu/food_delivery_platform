@@ -88,7 +88,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     <CartDrawer />
                     <div className="hidden items-center gap-3 sm:flex">
                       <AuthStatus />
-                      <LanguageSwitcher />
+                      <LanguageSwitcher className="w-36" />
                       <ThemeToggle />
                     </div>
                     <MobileNav />

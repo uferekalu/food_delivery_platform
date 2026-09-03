@@ -41,7 +41,8 @@
     "outOfFiveStars": "{value} out of 5 stars",
     "starCount": "{count, plural, one {# star} other {# stars}}",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "noMatches": "No matches"
   },
   "Footer": {
     "browseRestaurants": "Browse restaurants",

@@ -2,11 +2,11 @@
 
 import { Suspense, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter as usePlainRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -164,6 +164,11 @@ function RegisterFormSkeleton() {
 function RegisterForm() {
   const t = useTranslations("RegisterPage");
   const router = useRouter();
+  // A restaurant owner is redirected to /dashboard/restaurants/new, which deliberately isn't
+  // under app/[locale] yet (docs/ROADMAP.md FDP-55/FDP-70) — the locale-aware router above would
+  // incorrectly prefix that path with the current locale, a URL that doesn't exist. This plain
+  // router is used only for that one out-of-scope destination.
+  const plainRouter = usePlainRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [registerUser, { isLoading }] = useRegisterMutation();
@@ -213,7 +218,11 @@ function RegisterForm() {
         description: role === "restaurant_owner" ? t("checkEmailRestaurantOwner") : t("checkEmail"),
         variant: "success",
       });
-      router.push(role === "restaurant_owner" ? "/dashboard/restaurants/new" : "/");
+      if (role === "restaurant_owner") {
+        plainRouter.push("/dashboard/restaurants/new");
+      } else {
+        router.push("/");
+      }
     } catch (err) {
       setError(getErrorMessage(err, t("couldNotCreateAccount")));
     }

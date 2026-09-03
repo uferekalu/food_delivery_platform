@@ -1,36 +1,65 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import type { ChangeEvent } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { routing } from "@/i18n/routing";
+import { routing, type AppLocale } from "@/i18n/routing";
+import { isOutOfScopePath } from "@/i18n/scope";
+import { cn } from "@/lib/cn";
 
-const LOCALE_LABELS: Record<string, string> = { en: "EN", fr: "FR" };
+const LOCALE_LABELS: Record<AppLocale, string> = {
+  en: "English (EN)",
+  fr: "Français (FR)",
+  es: "Español (ES)",
+  pt: "Português (PT)",
+  de: "Deutsch (DE)",
+  zh: "中文 (ZH)",
+};
 
-/** Swaps locale while staying on the same page (docs/ROADMAP.md FDP-55) — a plain segmented
- * control, not a DropdownMenu, so it works inline in both the desktop header and MobileNav's
- * drawer without the portal-stacking issue documented in frontend/CLAUDE.md. */
-export function LanguageSwitcher() {
+/** Swaps locale while staying on the same page (docs/ROADMAP.md FDP-55/FDP-70). A native
+ * `<select>`, not the hand-built `Select` component — the latter portals its listbox at
+ * `--z-dropdown`, which renders invisibly/unclickably when this control sits inside
+ * `MobileNav`'s `Drawer` (`--z-modal`'s backdrop paints over it regardless of DOM order, the
+ * exact bug documented in frontend/CLAUDE.md's "Never nest a DropdownMenu-based control inside
+ * Modal/Drawer"). A native select has no portal, so it works identically in the header and the
+ * drawer, and gets the platform's native picker UI on mobile for free.
+ *
+ * This renders on every page, including the `@/i18n/scope` out-of-scope trees (dashboard/admin/
+ * rider/design-system) that don't exist under `app/[locale]` yet — `pathname` there is a real
+ * path with no locale-prefixed counterpart, so blindly calling `router.replace(pathname,
+ * {locale})` 404'd (docs/ROADMAP.md FDP-70 bug report). On those routes this instead sends the
+ * visitor to the chosen locale's homepage, the one page guaranteed to exist in every locale. */
+export function LanguageSwitcher({ className }: { className?: string }) {
   const t = useTranslations("Layout");
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
 
+  function handleChange(e: ChangeEvent<HTMLSelectElement>) {
+    const nextLocale = e.target.value as AppLocale;
+    if (isOutOfScopePath(pathname)) {
+      router.replace("/", { locale: nextLocale });
+      return;
+    }
+    router.replace(pathname, { locale: nextLocale });
+  }
+
   return (
-    <div role="radiogroup" aria-label={t("languageSwitcherLabel")} className="flex gap-1 rounded-md bg-secondary p-1">
+    <select
+      aria-label={t("languageSwitcherLabel")}
+      value={locale}
+      onChange={handleChange}
+      className={cn(
+        "h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text",
+        "transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        className,
+      )}
+    >
       {routing.locales.map((option) => (
-        <button
-          key={option}
-          type="button"
-          role="radio"
-          aria-checked={locale === option}
-          onClick={() => router.replace(pathname, { locale: option })}
-          className={`rounded px-2 py-1 text-xs font-medium transition-colors duration-150 ${
-            locale === option ? "bg-surface text-text shadow-sm" : "text-text-muted hover:text-text"
-          }`}
-        >
+        <option key={option} value={option}>
           {LOCALE_LABELS[option]}
-        </button>
+        </option>
       ))}
-    </div>
+    </select>
   );
 }

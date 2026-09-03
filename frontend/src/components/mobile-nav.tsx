@@ -77,7 +77,7 @@ export function MobileNav() {
         <div className="mt-auto flex flex-col gap-4 border-t border-border pt-5">
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium text-text">{t("language")}</span>
-            <LanguageSwitcher />
+            <LanguageSwitcher className="w-full" />
           </div>
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium text-text">{t("theme")}</span>

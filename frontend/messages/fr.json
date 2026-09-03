@@ -41,7 +41,8 @@
     "outOfFiveStars": "{value} sur 5 étoiles",
     "starCount": "{count, plural, one {# étoile} other {# étoiles}}",
     "previous": "Précédent",
-    "next": "Suivant"
+    "next": "Suivant",
+    "noMatches": "Aucun résultat"
   },
   "Footer": {
     "browseRestaurants": "Parcourir les restaurants",
