@@ -267,7 +267,10 @@ describe('RidersService', () => {
         vehicleType: 'bicycle',
         ...kycFields(),
       });
-      await ridersService.apply(requesterFor(b), { vehicleType: 'car', ...kycFields() });
+      await ridersService.apply(requesterFor(b), {
+        vehicleType: 'car',
+        ...kycFields(),
+      });
       await ridersService.verify(riderA._id.toString());
 
       expect(await ridersService.countByVerification()).toEqual({

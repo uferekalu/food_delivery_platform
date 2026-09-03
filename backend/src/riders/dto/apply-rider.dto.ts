@@ -10,19 +10,14 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import {
-  GOVERNMENT_ID_TYPES,
-  VEHICLE_TYPES,
-} from '../schemas/rider.schema';
-import type {
-  GovernmentIdType,
-  VehicleType,
-} from '../schemas/rider.schema';
+import { GOVERNMENT_ID_TYPES, VEHICLE_TYPES } from '../schemas/rider.schema';
+import type { GovernmentIdType, VehicleType } from '../schemas/rider.schema';
 import { GuarantorDto } from './guarantor.dto';
 
 // A motorized rider needs a license and a registered vehicle; a bicycle rider has neither —
 // these fields are conditionally required rather than always-optional or always-required.
-const requiresVehicleDocs = (dto: ApplyRiderDto) => dto.vehicleType !== 'bicycle';
+const requiresVehicleDocs = (dto: ApplyRiderDto) =>
+  dto.vehicleType !== 'bicycle';
 
 export class ApplyRiderDto {
   @ApiProperty({ enum: VEHICLE_TYPES })
@@ -103,7 +98,9 @@ export class ApplyRiderDto {
   @Type(() => GuarantorDto)
   guarantor: GuarantorDto;
 
-  @ApiProperty({ description: 'Emergency contact, distinct from the guarantor' })
+  @ApiProperty({
+    description: 'Emergency contact, distinct from the guarantor',
+  })
   @IsString()
   @MinLength(2)
   @MaxLength(100)
