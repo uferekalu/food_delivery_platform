@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Carousel } from "@/components/ui/carousel";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
+import { HeaderSearch } from "@/components/header-search";
 import { cn } from "@/lib/cn";
 import { Link } from "@/i18n/navigation";
 import { SmartLink } from "@/components/smart-link";
@@ -268,9 +269,11 @@ export default function Home() {
     <div className="flex flex-col">
       {/* Hero — a solid brand band (not a soft neutral wash) with an angled bottom edge, always
           rendered dark regardless of site theme: a deliberate, theme-invariant brand moment
-          rather than another light "hero card with a gradient tint" template. No search box
-          here: it's in the persistent header (layout.tsx), reachable from every page — see
-          docs/ROADMAP.md FDP-46. */}
+          rather than another light "hero card with a gradient tint" template. Search lives here
+          on desktop (docs/ROADMAP.md FDP-85) rather than in the persistent header — the header
+          was getting crowded with nav/account controls, and the homepage is the one place a
+          prominent, first-impression search box belongs anyway. Every other page keeps the
+          header's own search (still the *only* search on mobile, including here). */}
       <section className="relative">
         <div
           aria-hidden="true"
@@ -281,9 +284,16 @@ export default function Home() {
           }}
         />
         <Container className="relative flex flex-col items-start gap-6 py-20 sm:py-24 lg:py-28">
-          <span className="w-fit rounded-full border border-white/30 px-3 py-1 text-xs font-semibold tracking-wide text-white uppercase">
-            {t("nowDelivering")}
-          </span>
+          <div className="flex w-full flex-wrap items-center justify-between gap-4">
+            <span className="w-fit rounded-full border border-white/30 px-3 py-1 text-xs font-semibold tracking-wide text-white uppercase">
+              {t("nowDelivering")}
+            </span>
+            <HeaderSearch
+              className="hidden w-full max-w-xs sm:block"
+              inputClassName="border-white/30 bg-white/10 text-white placeholder:text-white/70 focus-visible:outline-white"
+              iconClassName="text-white/70"
+            />
+          </div>
           <h1 className="max-w-2xl text-4xl font-bold text-balance text-white sm:text-5xl lg:text-6xl">
             {t("heroTitle")}
           </h1>

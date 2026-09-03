@@ -6,7 +6,7 @@ import { AuthStatus } from "@/components/auth-status";
 import { MobileNav } from "@/components/mobile-nav";
 import { CartDrawer } from "@/components/cart-drawer";
 import { NotificationBell } from "@/components/notification-bell";
-import { HeaderSearch } from "@/components/header-search";
+import { HeaderSearchSlot } from "@/components/header-search-slot";
 import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Footer } from "@/components/footer";
@@ -45,8 +45,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
           {/* Full-width row of its own below `sm` (order-3 + w-full forces the wrap);
               a normal flex-1 middle column at `sm` and up — see frontend/CLAUDE.md
-              "Responsive design" and docs/ROADMAP.md FDP-46. */}
-          <HeaderSearch className="order-3 w-full sm:order-0 sm:w-auto sm:max-w-md sm:flex-1" />
+              "Responsive design" and docs/ROADMAP.md FDP-46. Collapses away entirely at `sm:`
+              and up on the homepage, whose hero has its own search box instead (FDP-85). */}
+          <HeaderSearchSlot />
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
             <CartDrawer />

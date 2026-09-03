@@ -16,11 +16,25 @@ function SearchIcon() {
 }
 
 /**
- * Lives in the persistent header (see `layout.tsx`) rather than only on the homepage, so search
- * is reachable from every page — see docs/ROADMAP.md FDP-46. Always navigates to `/restaurants`
- * (which reads the `search` param back out on mount), never manages results itself.
+ * Reachable from every page's persistent header by default (see `layout.tsx`) — see
+ * docs/ROADMAP.md FDP-46 — except the homepage, which replaces it with this same component
+ * re-themed for its dark hero banner instead (docs/ROADMAP.md FDP-85; the header row was
+ * getting crowded, and the homepage already has a prominent place for search). Always navigates
+ * to `/restaurants` (which reads the `search` param back out on mount), never manages results
+ * itself.
  */
-export function HeaderSearch({ className }: { className?: string }) {
+export function HeaderSearch({
+  className,
+  inputClassName,
+  iconClassName,
+}: {
+  className?: string;
+  /** Overrides the input's own background/border/text — used by the homepage hero, which is
+   * always dark regardless of site theme, so the default light-surface input would otherwise
+   * have poor contrast there. */
+  inputClassName?: string;
+  iconClassName?: string;
+}) {
   const t = useTranslations("HeaderSearch");
   const router = useRouter();
   const [value, setValue] = useState("");
@@ -34,7 +48,9 @@ export function HeaderSearch({ className }: { className?: string }) {
   return (
     <form onSubmit={onSubmit} role="search" className={cn("min-w-0", className)}>
       <div className="relative">
-        <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted">
+        <span
+          className={cn("pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted", iconClassName)}
+        >
           <SearchIcon />
         </span>
         <Input
@@ -42,7 +58,7 @@ export function HeaderSearch({ className }: { className?: string }) {
           placeholder={t("placeholder")}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="h-10 pl-9"
+          className={cn("h-10 pl-9", inputClassName)}
           aria-label={t("placeholder")}
         />
       </div>
