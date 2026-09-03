@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { PaginatedResult, Store, StoreSort, StoreType } from "../restaurant-types";
+import type { Address, PaginatedResult, Store, StoreSort, StoreType } from "../restaurant-types";
 
 export interface ListStoresParams {
   type: StoreType;
@@ -10,6 +10,25 @@ export interface ListStoresParams {
   sort?: StoreSort;
   page?: number;
   limit?: number;
+}
+
+export interface StoreInput {
+  name: string;
+  type: StoreType;
+  tags?: string[];
+  description?: string;
+  currency: string;
+  country: string;
+  address: Address;
+  estimatedDeliveryMinutes?: number;
+  // Business registration proof (docs/ROADMAP.md FDP-60) — required by the backend at creation,
+  // hence not optional here even though UpdateStoreInput below loosens every field.
+  complianceDocumentUrl: string;
+}
+
+export interface UpdateStoreInput extends Partial<StoreInput> {
+  logoUrl?: string;
+  coverUrl?: string;
 }
 
 function toQueryString(params: Record<string, string | number | undefined>): string {
@@ -38,7 +57,42 @@ export const storesApi = api.injectEndpoints({
       query: (slug) => `/stores/${slug}`,
       providesTags: (result) => (result ? [{ type: "Store", id: result._id }] : []),
     }),
+
+    getMyStores: builder.query<Store[], void>({
+      query: () => "/stores/mine",
+      providesTags: (result) =>
+        result
+          ? [...result.map((s) => ({ type: "MyStores" as const, id: s._id })), { type: "MyStores", id: "LIST" }]
+          : [{ type: "MyStores", id: "LIST" }],
+    }),
+
+    createStore: builder.mutation<Store, StoreInput>({
+      query: (body) => ({ url: "/stores", method: "POST", body }),
+      invalidatesTags: [{ type: "MyStores", id: "LIST" }],
+    }),
+
+    updateStore: builder.mutation<Store, { id: string; body: UpdateStoreInput }>({
+      query: ({ id, body }) => ({ url: `/stores/${id}`, method: "PATCH", body }),
+      invalidatesTags: (result, _error, { id }) => [
+        { type: "MyStores", id },
+        { type: "MyStores", id: "LIST" },
+        { type: "Store", id },
+        { type: "Store", id: "LIST" },
+      ],
+    }),
+
+    toggleStoreOpen: builder.mutation<Store, string>({
+      query: (id) => ({ url: `/stores/${id}/toggle-open`, method: "PATCH" }),
+      invalidatesTags: (result, _error, id) => [{ type: "MyStores", id }],
+    }),
   }),
 });
 
-export const { useListStoresQuery, useGetStoreBySlugQuery } = storesApi;
+export const {
+  useListStoresQuery,
+  useGetStoreBySlugQuery,
+  useGetMyStoresQuery,
+  useCreateStoreMutation,
+  useUpdateStoreMutation,
+  useToggleStoreOpenMutation,
+} = storesApi;

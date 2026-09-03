@@ -8,6 +8,9 @@ export const UPLOAD_FOLDERS = [
   'reviews',
   'compliance-documents',
   'rider-documents',
+  // Grocery/pharmacy marketplace (docs/ROADMAP.md FDP-56/80) — mirrors 'restaurants'/'menu-items'.
+  'stores',
+  'products',
 ] as const;
 export type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
 

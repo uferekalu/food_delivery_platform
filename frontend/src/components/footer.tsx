@@ -54,7 +54,10 @@ export function Footer() {
 
   const restaurantLinks: FooterLink[] =
     authenticated && user.role === "restaurant_owner"
-      ? [{ href: "/dashboard/restaurants", label: t("myRestaurants") }]
+      ? [
+          { href: "/dashboard/restaurants", label: t("myRestaurants") },
+          { href: "/dashboard/stores", label: t("myStores") },
+        ]
       : authenticated
         ? [{ href: "/register?role=restaurant_owner", label: t("partnerWithUs") }]
         : [

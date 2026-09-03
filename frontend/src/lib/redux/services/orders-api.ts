@@ -104,6 +104,20 @@ export const ordersApi = api.injectEndpoints({
           : [{ type: "Order", id: "QUEUE" }],
     }),
 
+    // Store-catalog counterpart of getRestaurantOrders (docs/ROADMAP.md FDP-56/77) — a distinct
+    // "STORE_QUEUE" tag id (rather than sharing "QUEUE") so a restaurant owner's and a store
+    // owner's open queue views never cross-invalidate each other.
+    getStoreOrders: builder.query<Order[], string>({
+      query: (storeId) => `/orders/store/${storeId}`,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((o) => ({ type: "Order" as const, id: o._id })),
+              { type: "Order" as const, id: "STORE_QUEUE" },
+            ]
+          : [{ type: "Order", id: "STORE_QUEUE" }],
+    }),
+
     getRestaurantEarnings: builder.query<RestaurantEarnings, string>({
       query: (restaurantId) => `/orders/restaurant/${restaurantId}/earnings`,
       providesTags: (_result, _error, restaurantId) => [{ type: "Order", id: `EARNINGS-${restaurantId}` }],
@@ -117,9 +131,13 @@ export const ordersApi = api.injectEndpoints({
 
     updateOrderStatus: builder.mutation<Order, { orderId: string; status: OrderStatus }>({
       query: ({ orderId, status }) => ({ url: `/orders/${orderId}/status`, method: "PATCH", body: { status } }),
+      // Shared by both seller types (the endpoint has no seller-type in its payload — the
+      // backend dispatches on the order itself) — invalidate both possible queue views rather
+      // than trying to know which one this order actually belongs to.
       invalidatesTags: (result, _error, { orderId }) => [
         { type: "Order", id: orderId },
         { type: "Order", id: "QUEUE" },
+        { type: "Order", id: "STORE_QUEUE" },
       ],
     }),
   }),
@@ -130,6 +148,7 @@ export const {
   useGetOrderQuery,
   useGetMyOrdersQuery,
   useGetRestaurantOrdersQuery,
+  useGetStoreOrdersQuery,
   useGetRestaurantEarningsQuery,
   useGetSalesReportQuery,
   useUpdateOrderStatusMutation,
