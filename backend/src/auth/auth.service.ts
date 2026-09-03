@@ -150,15 +150,20 @@ export class AuthService {
   }
 
   /**
-   * Sends (or silently no-ops) a 6-digit OTP over SMS. Never reveals whether a matching account
-   * exists — same "don't leak account state" reasoning as forgotPassword(): for `purpose:
-   * 'login'`, a phone with no verified account just doesn't get a text, but the caller sees the
-   * same generic response either way.
+   * Sends (or silently no-ops) a 6-digit OTP over SMS. Returns whether the text actually went
+   * out so the caller can show an honest result instead of a blind "code sent" — this is safe
+   * even for `purpose: 'login'`'s "don't leak account state" reasoning (same as
+   * forgotPassword()): a phone with no matching account returns `false` here, and so does one
+   * whose account exists but whose SMS provider call genuinely failed, so the two cases remain
+   * indistinguishable to the caller either way.
    */
-  async sendPhoneCode(phone: string, purpose: PhoneOtpPurpose): Promise<void> {
+  async sendPhoneCode(
+    phone: string,
+    purpose: PhoneOtpPurpose,
+  ): Promise<boolean> {
     if (purpose === 'login') {
       const user = await this.usersService.findByPhone(phone);
-      if (!user || !user.isPhoneVerified) return;
+      if (!user || !user.isPhoneVerified) return false;
     }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
@@ -184,6 +189,7 @@ export class AuthService {
         `Phone OTP to ${phone} (purpose: ${purpose}) was not sent — SMS provider unavailable or unconfigured`,
       );
     }
+    return sent;
   }
 
   /**

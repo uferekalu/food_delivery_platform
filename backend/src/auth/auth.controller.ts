@@ -77,9 +77,12 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 3, ttl: 300_000 } })
   @Post('phone/send-code')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async sendPhoneCode(@Body() dto: SendPhoneCodeDto) {
-    await this.authService.sendPhoneCode(dto.phone, dto.purpose);
+  @HttpCode(HttpStatus.OK)
+  async sendPhoneCode(
+    @Body() dto: SendPhoneCodeDto,
+  ): Promise<{ sent: boolean }> {
+    const sent = await this.authService.sendPhoneCode(dto.phone, dto.purpose);
+    return { sent };
   }
 
   @Public()

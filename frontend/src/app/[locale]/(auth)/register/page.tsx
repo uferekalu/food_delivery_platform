@@ -67,8 +67,12 @@ function PhoneVerificationField({
   async function handleSendCode() {
     setError(null);
     try {
-      await sendCode({ phone, purpose: "signup" }).unwrap();
-      setCodeSent(true);
+      const result = await sendCode({ phone, purpose: "signup" }).unwrap();
+      if (result.sent) {
+        setCodeSent(true);
+      } else {
+        setError(t("couldNotSendCode"));
+      }
     } catch (err) {
       setError(getErrorMessage(err, t("couldNotSendCode")));
     }
