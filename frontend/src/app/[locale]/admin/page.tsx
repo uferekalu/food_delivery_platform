@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs";
@@ -11,16 +12,17 @@ import { PromoCodesTab } from "./promo-codes-tab";
 import { RefundsTab } from "./refunds-tab";
 
 function AdminDashboard() {
+  const t = useTranslations("AdminPage");
   const [tab, setTab] = useState("overview");
 
   return (
     <Tabs value={tab} onChange={setTab}>
       <TabList>
-        <Tab value="overview">Overview</Tab>
-        <Tab value="restaurants">Restaurants</Tab>
-        <Tab value="riders">Riders</Tab>
-        <Tab value="promo-codes">Promo codes</Tab>
-        <Tab value="refunds">Refunds</Tab>
+        <Tab value="overview">{t("overview")}</Tab>
+        <Tab value="restaurants">{t("restaurants")}</Tab>
+        <Tab value="riders">{t("riders")}</Tab>
+        <Tab value="promo-codes">{t("promoCodes")}</Tab>
+        <Tab value="refunds">{t("refunds")}</Tab>
       </TabList>
       <TabPanel value="overview">
         <OverviewTab />
@@ -42,10 +44,11 @@ function AdminDashboard() {
 }
 
 export default function AdminPage() {
+  const t = useTranslations("AdminPage");
   return (
     <RequireRole roles={["admin"]}>
       <Container className="flex flex-col gap-6 py-10">
-        <h1 className="text-2xl font-bold text-text">Admin dashboard</h1>
+        <h1 className="text-2xl font-bold text-text">{t("adminDashboard")}</h1>
         <AdminDashboard />
       </Container>
     </RequireRole>
