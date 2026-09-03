@@ -1,7 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Address, AddressSchema } from '../../common/schemas/address.schema';
-import { OpeningHour, OpeningHourSchema } from './opening-hour.schema';
+import {
+  OpeningHour,
+  OpeningHourSchema,
+} from '../../common/schemas/opening-hour.schema';
 import { PayoutAccount, PayoutAccountSchema } from './payout-account.schema';
 
 @Schema({ timestamps: true })

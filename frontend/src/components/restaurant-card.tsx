@@ -1,9 +1,10 @@
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FavoriteButton } from "@/components/favorite-button";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
+import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 
 function priceLevelLabel(level: number): string {
   return "$".repeat(level);
@@ -20,6 +21,9 @@ export function PlateIcon({ className = "size-12" }: { className?: string }) {
 
 export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
   const t = useTranslations("RestaurantCard");
+  const locale = useLocale();
+  const scheduleStatus = getOpenStatus(restaurant.openingHours, restaurant.country);
+  const { label: openLabel, isOpenNow } = describeOpenStatus(restaurant.isOpen, scheduleStatus, locale, t);
   return (
     <Card className="relative h-full overflow-hidden transition-colors duration-150 hover:border-border-strong">
       <FavoriteButton restaurantId={restaurant._id} className="absolute top-3 right-3 z-10" />
@@ -54,9 +58,7 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
-          <Badge variant={restaurant.isOpen ? "success" : "neutral"}>
-            {restaurant.isOpen ? t("open") : t("closed")}
-          </Badge>
+          <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           {restaurant.cuisineTypes.slice(0, 3).map((cuisine) => (
             <Badge key={cuisine} variant="primary">
               {cuisine}

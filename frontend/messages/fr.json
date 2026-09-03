@@ -105,7 +105,10 @@
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Ouvert",
-    "closed": "Fermé"
+    "closed": "Fermé",
+    "opensAt": "Ouvre à {time}",
+    "closedUntilTomorrow": "Fermé jusqu'à demain",
+    "closedUntilDay": "Fermé jusqu'à {day}"
   },
   "FavoriteButton": {
     "removeFromFavorites": "Retirer des favoris",
@@ -561,6 +564,9 @@
     "restaurants": "Restaurants",
     "open": "Ouvert",
     "closed": "Fermé",
+    "opensAt": "Ouvre à {time}",
+    "closedUntilTomorrow": "Fermé jusqu'à demain",
+    "closedUntilDay": "Fermé jusqu'à {day}",
     "reviewCount": "{count, plural, one {# avis} other {# avis}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Actuellement fermé",
@@ -784,7 +790,19 @@
     "postalCode": "Code postal",
     "latitude": "Latitude",
     "latitudeHint": "Facultatif — permet des frais de livraison basés sur la distance réelle",
-    "longitude": "Longitude"
+    "longitude": "Longitude",
+    "sunday": "Dimanche",
+    "monday": "Lundi",
+    "tuesday": "Mardi",
+    "wednesday": "Mercredi",
+    "thursday": "Jeudi",
+    "friday": "Vendredi",
+    "saturday": "Samedi",
+    "openingHours": "Heures d'ouverture",
+    "closed": "Fermé",
+    "to": "à",
+    "openingTimeFor": "Heure d'ouverture le {day}",
+    "closingTimeFor": "Heure de fermeture le {day}"
   },
   "CatalogManagerPage": {
     "required": "Obligatoire",
@@ -1219,7 +1237,10 @@
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
     "open": "Ouvert",
-    "closed": "Fermé"
+    "closed": "Fermé",
+    "opensAt": "Ouvre à {time}",
+    "closedUntilTomorrow": "Fermé jusqu'à demain",
+    "closedUntilDay": "Fermé jusqu'à {day}"
   },
   "StoreDetailPage": {
     "storeNotFound": "Commerce introuvable",
@@ -1227,6 +1248,9 @@
     "browseHome": "Catégories",
     "open": "Ouvert",
     "closed": "Fermé",
+    "opensAt": "Ouvre à {time}",
+    "closedUntilTomorrow": "Fermé jusqu'à demain",
+    "closedUntilDay": "Fermé jusqu'à {day}",
     "reviewCount": "{count, plural, one {# avis} other {# avis}}",
     "estimatedMinutes": "~{minutes} min",
     "currentlyClosed": "Actuellement fermé",

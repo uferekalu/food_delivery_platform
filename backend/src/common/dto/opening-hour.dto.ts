@@ -11,6 +11,8 @@ import {
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// Moved from restaurants/dto/ (FDP-84) alongside common/schemas/opening-hour.schema.ts —
+// Store's opening hours need the same validated shape as Restaurant's.
 export class OpeningHourDto {
   @ApiProperty({
     minimum: 0,

@@ -13,12 +13,25 @@ import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { DocumentUpload } from "@/components/ui/document-upload";
 import { Alert } from "@/components/ui/alert";
-import { STORE_TYPES, type StoreType } from "@/lib/redux/restaurant-types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { STORE_TYPES, type OpeningHour, type StoreType } from "@/lib/redux/restaurant-types";
 import type { StoreInput } from "@/lib/redux/services/stores-api";
 import { getLocalizedCountryOptions, getLocalizedCurrencyOptions, currencyForCountry } from "@/lib/countries";
 
+const DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
+
+function defaultHours(): OpeningHour[] {
+  return DAYS_OF_WEEK.map((dayOfWeek) => ({
+    dayOfWeek,
+    openTime: "09:00",
+    closeTime: "21:00",
+    isClosed: false,
+  }));
+}
+
 export interface StoreFormProps {
   defaultValues?: Partial<FormInput>;
+  defaultOpeningHours?: OpeningHour[];
   defaultLogoUrl?: string | null;
   defaultCoverUrl?: string | null;
   defaultComplianceDocumentUrl?: string | null;
@@ -48,6 +61,7 @@ interface FormInput {
 
 export function StoreForm({
   defaultValues,
+  defaultOpeningHours,
   defaultLogoUrl,
   defaultCoverUrl,
   defaultComplianceDocumentUrl,
@@ -61,6 +75,10 @@ export function StoreForm({
   const currencyOptions = useMemo(() => getLocalizedCurrencyOptions(locale), [locale]);
   const TYPE_OPTIONS = useMemo(
     () => STORE_TYPES.map((value) => ({ value, label: t(value === "groceries" ? "groceries" : "pharmacyBeauty") })),
+    [t],
+  );
+  const DAY_LABELS = useMemo(
+    () => [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")],
     [t],
   );
 
@@ -102,12 +120,19 @@ export function StoreForm({
     defaultValues: { type: "groceries", ...defaultValues },
   });
 
+  const [hours, setHours] = useState<OpeningHour[]>(
+    defaultOpeningHours && defaultOpeningHours.length === 7 ? defaultOpeningHours : defaultHours(),
+  );
   const [logoUrl, setLogoUrl] = useState<string | undefined>(defaultLogoUrl ?? undefined);
   const [coverUrl, setCoverUrl] = useState<string | undefined>(defaultCoverUrl ?? undefined);
   const [complianceDocumentUrl, setComplianceDocumentUrl] = useState<string | undefined>(
     defaultComplianceDocumentUrl ?? undefined,
   );
   const [complianceError, setComplianceError] = useState<string | null>(null);
+
+  function updateHour(index: number, patch: Partial<OpeningHour>) {
+    setHours((prev) => prev.map((h, i) => (i === index ? { ...h, ...patch } : h)));
+  }
 
   const submit = (values: FormValues) => {
     if (!complianceDocumentUrl) {
@@ -134,6 +159,7 @@ export function StoreForm({
         lat: values.lat,
         lng: values.lng,
       },
+      openingHours: hours,
       estimatedDeliveryMinutes: values.estimatedDeliveryMinutes,
       complianceDocumentUrl,
       ...(logoUrl ? { logoUrl } : {}),
@@ -251,6 +277,41 @@ export function StoreForm({
         <FormField label={t("longitude")} error={errors.lng?.message}>
           <Input type="number" step="any" {...register("lng")} />
         </FormField>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-text">{t("openingHours")}</span>
+        <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          {hours.map((hour, index) => (
+            <div key={hour.dayOfWeek} className="flex flex-wrap items-center gap-3 p-3">
+              <span className="w-24 shrink-0 text-sm text-text">{DAY_LABELS[hour.dayOfWeek]}</span>
+              <Checkbox
+                label={t("closed")}
+                checked={hour.isClosed}
+                onChange={(e) => updateHour(index, { isClosed: e.target.checked })}
+              />
+              {!hour.isClosed && (
+                <>
+                  <input
+                    type="time"
+                    value={hour.openTime}
+                    onChange={(e) => updateHour(index, { openTime: e.target.value })}
+                    className="h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    aria-label={t("openingTimeFor", { day: DAY_LABELS[hour.dayOfWeek] })}
+                  />
+                  <span className="text-text-muted">{t("to")}</span>
+                  <input
+                    type="time"
+                    value={hour.closeTime}
+                    onChange={(e) => updateHour(index, { closeTime: e.target.value })}
+                    className="h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    aria-label={t("closingTimeFor", { day: DAY_LABELS[hour.dayOfWeek] })}
+                  />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <Button type="submit" isLoading={isSubmitting} className="self-start">

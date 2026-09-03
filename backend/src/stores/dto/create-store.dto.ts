@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { AddressDto } from '../../common/dto/address.dto';
+import { OpeningHourDto } from '../../common/dto/opening-hour.dto';
 import { STORE_TYPES } from '../schemas/store.schema';
 import type { StoreType } from '../schemas/store.schema';
 
@@ -80,6 +81,13 @@ export class CreateStoreDto {
   @ValidateNested()
   @Type(() => AddressDto)
   address: AddressDto;
+
+  @ApiProperty({ type: [OpeningHourDto], required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OpeningHourDto)
+  openingHours?: OpeningHourDto[];
 
   @ApiPropertyOptional({ description: 'A static estimate, in minutes' })
   @IsOptional()

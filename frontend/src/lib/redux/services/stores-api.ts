@@ -1,5 +1,12 @@
 import { api } from "../api";
-import type { Address, PaginatedResult, Store, StoreSort, StoreType } from "../restaurant-types";
+import type {
+  Address,
+  OpeningHour,
+  PaginatedResult,
+  Store,
+  StoreSort,
+  StoreType,
+} from "../restaurant-types";
 
 export interface ListStoresParams {
   type: StoreType;
@@ -20,6 +27,7 @@ export interface StoreInput {
   currency: string;
   country: string;
   address: Address;
+  openingHours?: OpeningHour[];
   estimatedDeliveryMinutes?: number;
   // Business registration proof (docs/ROADMAP.md FDP-60) — required by the backend at creation,
   // hence not optional here even though UpdateStoreInput below loosens every field.

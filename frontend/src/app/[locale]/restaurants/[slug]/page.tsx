@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,11 @@ import { ReviewsList } from "@/components/reviews-list";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
+import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 
 export default function RestaurantDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const t = useTranslations("RestaurantDetailPage");
+  const locale = useLocale();
   const { slug } = use(params);
   const { data: restaurant, isLoading: loadingRestaurant, isError } = useGetRestaurantBySlugQuery(slug);
   const { data: menu, isLoading: loadingMenu } = useGetMenuQuery(restaurant?._id ?? "", {
@@ -42,6 +44,9 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
     );
   }
 
+  const scheduleStatus = getOpenStatus(restaurant.openingHours, restaurant.country);
+  const { label: openLabel, isOpenNow } = describeOpenStatus(restaurant.isOpen, scheduleStatus, locale, t);
+
   return (
     <Container className="flex flex-col gap-6 py-10">
       <Breadcrumbs items={[{ label: t("restaurants"), href: "/restaurants" }, { label: restaurant.name }]} />
@@ -49,7 +54,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-text">{restaurant.name}</h1>
-          <Badge variant={restaurant.isOpen ? "success" : "neutral"}>{restaurant.isOpen ? t("open") : t("closed")}</Badge>
+          <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           <FavoriteButton restaurantId={restaurant._id} />
         </div>
         <p className="text-text-muted">
@@ -63,7 +68,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
         </p>
       </div>
 
-      {!restaurant.isOpen && (
+      {!isOpenNow && (
         <Alert variant="warning" title={t("currentlyClosed")}>
           {t("notAcceptingOrders")}
         </Alert>
@@ -120,7 +125,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                             ))}
                           </div>
                         )}
-                        {restaurant.isOpen && (
+                        {isOpenNow && (
                           <Button variant="outline" size="sm" className="self-start" onClick={() => setActiveItem(item)}>
                             {t("addToCart")}
                           </Button>
