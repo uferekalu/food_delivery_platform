@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import type { ChangeEvent } from "react";
+import { useRef, useTransition, type ChangeEvent } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing, type AppLocale } from "@/i18n/routing";
 import { isOutOfScopePath } from "@/i18n/scope";
@@ -28,20 +28,38 @@ const LOCALE_LABELS: Record<AppLocale, string> = {
  * rider/design-system) that don't exist under `app/[locale]` yet — `pathname` there is a real
  * path with no locale-prefixed counterpart, so blindly calling `router.replace(pathname,
  * {locale})` 404'd (docs/ROADMAP.md FDP-70 bug report). On those routes this instead sends the
- * visitor to the chosen locale's homepage, the one page guaranteed to exist in every locale. */
+ * visitor to the chosen locale's homepage, the one page guaranteed to exist in every locale.
+ *
+ * Guarded against rapid/repeated selection (docs/ROADMAP.md FDP-71) — a second `onChange`
+ * firing before the first navigation has actually landed could otherwise race against a
+ * `pathname`/`locale` that's already mid-transition and produce a malformed URL (the
+ * `/fr/fr/register` class of bug this ticket's sibling fix addressed for the *stale-context*
+ * case; this closes the *rapid-input* case the same bug class could reopen). `navigatingRef` is
+ * a synchronous guard checked before React even re-renders — `isPending`/`disabled` alone would
+ * leave a brief window between the click and the DOM actually reflecting `disabled`. */
 export function LanguageSwitcher({ className }: { className?: string }) {
   const t = useTranslations("Layout");
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const navigatingRef = useRef(false);
 
   function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const nextLocale = e.target.value as AppLocale;
-    if (isOutOfScopePath(pathname)) {
-      router.replace("/", { locale: nextLocale });
-      return;
-    }
-    router.replace(pathname, { locale: nextLocale });
+    if (nextLocale === locale || navigatingRef.current) return;
+    navigatingRef.current = true;
+
+    startTransition(() => {
+      if (isOutOfScopePath(pathname)) {
+        router.replace("/", { locale: nextLocale });
+      } else {
+        router.replace(pathname, { locale: nextLocale });
+      }
+      // The locale-driven remount of app/[locale]/layout.tsx (or the untranslated equivalent)
+      // unmounts this component entirely once the navigation lands, so there's no "reset to
+      // false" step to forget — this ref simply never outlives a completed switch.
+    });
   }
 
   return (
@@ -49,9 +67,11 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       aria-label={t("languageSwitcherLabel")}
       value={locale}
       onChange={handleChange}
+      disabled={isPending}
       className={cn(
         "h-9 rounded-md border border-border-strong bg-surface px-2 text-sm text-text",
         "transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        "disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
     >
