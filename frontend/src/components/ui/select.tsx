@@ -272,7 +272,7 @@ export function Select({
               className="max-h-64 overflow-auto py-1 outline-none"
             >
               {visibleOptions.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-text-muted">No matches</li>
+                <li className="px-3 py-2 text-sm text-text-muted">{t("noMatches")}</li>
               ) : (
                 visibleOptions.map((option, index) => (
                   <li
