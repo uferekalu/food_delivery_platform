@@ -371,14 +371,16 @@
     "noRestaurantsYet": "Aucun restaurant pour l'instant",
     "tryDifferentCuisine": "Essayez une autre cuisine, ou parcourez tous les restaurants.",
     "checkBackSoon": "Revenez bientôt, de nouveaux restaurants nous rejoignent.",
-    "categoryComingSoon": "{name} arrive bientôt",
-    "focusedOnRestaurantsFirst": "Nous nous concentrons d'abord sur les restaurants — cette catégorie s'ouvrira au fur et à mesure de notre croissance.",
     "categories": "Catégories",
     "everythingInOnePlace": "Tout ce que vous pouvez commander, au même endroit.",
     "food": "Restauration",
     "groceries": "Épicerie",
     "pharmacy": "Pharmacie",
-    "pharmacyAndMore": "Pharmacie & plus"
+    "pharmacyAndMore": "Pharmacie & plus",
+    "couldNotLoadStores": "Impossible de charger les commerces — réessayez bientôt.",
+    "noTagStoresYet": "Aucun commerce {tag} pour l'instant",
+    "noStoresYet": "Aucun commerce pour l'instant",
+    "tryDifferentTag": "Essayez une autre étiquette, ou parcourez tous les commerces."
   },
   "CheckoutPage": {
     "cardStripe": "Carte (Stripe)",
@@ -420,7 +422,6 @@
     "apply": "Appliquer",
     "gotAPromoCode": "Vous avez un code promo ?",
     "summary": "Résumé",
-    "itemsFromRestaurant": "{count, plural, one {# article} other {# articles}} de {restaurant}",
     "products": "Produits",
     "promotion": "Promotion",
     "deliveryEst": "Livraison (est.)",
@@ -430,7 +431,9 @@
     "checkingSession": "Vérification de votre session",
     "logInToCheckout": "Connectez-vous pour commander",
     "needAccountToOrder": "Vous avez besoin d'un compte pour passer une commande.",
-    "logIn": "Se connecter"
+    "logIn": "Se connecter",
+    "itemsFromSeller": "{count, plural, one {# article} other {# articles}} de {seller}",
+    "browseOptions": "Parcourir les restaurants et commerces"
   },
   "CheckoutCallbackPage": {
     "missingOrder": "Commande manquante — retournez au paiement et réessayez.",
@@ -1084,5 +1087,31 @@
     "goToRiderDashboard": "Aller au tableau de bord livreur",
     "adminAccountsDontNeedRiderProfile": "Les comptes administrateur n'ont pas besoin de profil livreur.",
     "restaurantOwnersCantBecomeRiders": "Les comptes propriétaire de restaurant ne peuvent pas aussi devenir livreurs — devenir livreur remplacerait le rôle de votre compte et vous perdriez l'accès à votre tableau de bord restaurant."
+  },
+  "StoreCard": {
+    "estimatedMinutes": "~{minutes} min",
+    "open": "Ouvert",
+    "closed": "Fermé"
+  },
+  "StoreDetailPage": {
+    "storeNotFound": "Commerce introuvable",
+    "unavailableOrIncorrectLink": "Il se peut qu'il soit indisponible ou que le lien soit incorrect.",
+    "browseHome": "Catégories",
+    "open": "Ouvert",
+    "closed": "Fermé",
+    "reviewCount": "{count, plural, one {# avis} other {# avis}}",
+    "estimatedMinutes": "~{minutes} min",
+    "currentlyClosed": "Actuellement fermé",
+    "notAcceptingOrders": "Ce commerce n'accepte pas de commandes pour le moment.",
+    "catalog": "Catalogue",
+    "catalogComingSoon": "Catalogue bientôt disponible",
+    "catalogNotPublished": "Ce commerce n'a pas encore publié son catalogue.",
+    "addToCart": "Ajouter au panier",
+    "outOfStock": "Rupture de stock",
+    "addedToCart": "Ajouté au panier",
+    "couldNotAddToCart": "Impossible d'ajouter au panier",
+    "startNewCartTitle": "Démarrer un nouveau panier ?",
+    "startNewCartDescription": "Votre panier contient des articles d'un autre restaurant ou commerce. Ajouter cet article le videra.",
+    "clearCartAndAdd": "Vider le panier et ajouter"
   }
 }

@@ -9,6 +9,15 @@ export interface AddCartItemInput {
   replace?: boolean;
 }
 
+// Store-catalog counterpart of AddCartItemInput (docs/ROADMAP.md FDP-56) — products have no
+// modifiers, so there's no selectedModifiers field here.
+export interface AddStoreCartItemInput {
+  productId: string;
+  qty?: number;
+  notes?: string;
+  replace?: boolean;
+}
+
 export interface UpdateCartItemInput {
   qty?: number;
   notes?: string;
@@ -23,6 +32,11 @@ export const cartApi = api.injectEndpoints({
 
     addCartItem: builder.mutation<Cart, AddCartItemInput>({
       query: (body) => ({ url: "/cart/items", method: "POST", body }),
+      invalidatesTags: ["Cart"],
+    }),
+
+    addStoreItem: builder.mutation<Cart, AddStoreCartItemInput>({
+      query: (body) => ({ url: "/cart/store-items", method: "POST", body }),
       invalidatesTags: ["Cart"],
     }),
 
@@ -46,6 +60,7 @@ export const cartApi = api.injectEndpoints({
 export const {
   useGetCartQuery,
   useAddCartItemMutation,
+  useAddStoreItemMutation,
   useUpdateCartItemMutation,
   useRemoveCartItemMutation,
   useClearCartMutation,

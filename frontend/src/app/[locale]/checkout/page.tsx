@@ -209,8 +209,8 @@ function CheckoutForm() {
           title={t("cartEmpty")}
           description={t("addItemsBeforeCheckout")}
           action={
-            <Link href="/restaurants" className={buttonVariants({ variant: "primary" })}>
-              {t("browseRestaurants")}
+            <Link href="/categories" className={buttonVariants({ variant: "primary" })}>
+              {t("browseOptions")}
             </Link>
           }
         />
@@ -224,6 +224,11 @@ function CheckoutForm() {
   const discount = appliedPromo?.discountAmount ?? 0;
   const estTotal = Math.max(0, round2(subtotal + estDeliveryFee + estServiceFee - discount));
   const currency = cart.currency ?? "";
+  const sellerName = cart.restaurantName ?? cart.storeName ?? "";
+  // Promo codes aren't offered for a store cart yet — PromoCode is restaurant-scoped only
+  // server-side (docs/ROADMAP.md FDP-77), so the section below is hidden rather than inviting
+  // an action that would always fail.
+  const promoCodesSupported = cart.sellerType !== "store";
 
   return (
     <Container className="max-w-5xl py-10">
@@ -239,7 +244,7 @@ function CheckoutForm() {
         <Card>
           <CardHeader>
             <CardTitle>{t("deliveryAddress")}</CardTitle>
-            <CardDescription>{cart.restaurantName}</CardDescription>
+            <CardDescription>{sellerName}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {savedAddresses && savedAddresses.length > 0 && (
@@ -338,6 +343,7 @@ function CheckoutForm() {
                 ))}
               </RadioGroup>
 
+              {promoCodesSupported && (
               <div className="border-t border-border pt-3">
                 {appliedPromo ? (
                   <Alert variant="success" title={t("promoApplied", { code: appliedPromo.code })}>
@@ -377,6 +383,7 @@ function CheckoutForm() {
                   </button>
                 )}
               </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -386,7 +393,7 @@ function CheckoutForm() {
         <Card>
           <CardHeader>
             <CardTitle>{t("summary")}</CardTitle>
-            <CardDescription>{t("itemsFromRestaurant", { count: cart.items.length, restaurant: cart.restaurantName ?? "" })}</CardDescription>
+            <CardDescription>{t("itemsFromSeller", { count: cart.items.length, seller: sellerName })}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">

@@ -371,14 +371,16 @@
     "noRestaurantsYet": "Aún no hay restaurantes",
     "tryDifferentCuisine": "Prueba otra cocina o explora todos los restaurantes.",
     "checkBackSoon": "Vuelve pronto, nuevos restaurantes se están uniendo.",
-    "categoryComingSoon": "{name} próximamente",
-    "focusedOnRestaurantsFirst": "Primero nos enfocamos en restaurantes — esta categoría se abrirá a medida que crezcamos.",
     "categories": "Categorías",
     "everythingInOnePlace": "Todo lo que puedes pedir, en un solo lugar.",
     "food": "Comida",
     "groceries": "Supermercado",
     "pharmacy": "Farmacia",
-    "pharmacyAndMore": "Farmacia y más"
+    "pharmacyAndMore": "Farmacia y más",
+    "couldNotLoadStores": "No se pudieron cargar las tiendas — inténtalo de nuevo en breve.",
+    "noTagStoresYet": "Aún no hay tiendas de {tag}",
+    "noStoresYet": "Aún no hay tiendas",
+    "tryDifferentTag": "Prueba otra etiqueta, o explora todas las tiendas."
   },
   "CheckoutPage": {
     "cardStripe": "Tarjeta (Stripe)",
@@ -420,7 +422,6 @@
     "apply": "Aplicar",
     "gotAPromoCode": "¿Tienes un código promocional?",
     "summary": "Resumen",
-    "itemsFromRestaurant": "{count, plural, one {# artículo} other {# artículos}} de {restaurant}",
     "products": "Productos",
     "promotion": "Promoción",
     "deliveryEst": "Entrega (est.)",
@@ -430,7 +431,9 @@
     "checkingSession": "Verificando tu sesión",
     "logInToCheckout": "Inicia sesión para pagar",
     "needAccountToOrder": "Necesitas una cuenta para realizar un pedido.",
-    "logIn": "Iniciar sesión"
+    "logIn": "Iniciar sesión",
+    "itemsFromSeller": "{count, plural, one {# artículo} other {# artículos}} de {seller}",
+    "browseOptions": "Explorar restaurantes y tiendas"
   },
   "CheckoutCallbackPage": {
     "missingOrder": "Falta el pedido — vuelve al pago e inténtalo de nuevo.",
@@ -1084,5 +1087,31 @@
     "goToRiderDashboard": "Ir al panel del repartidor",
     "adminAccountsDontNeedRiderProfile": "Las cuentas de administrador no necesitan un perfil de repartidor.",
     "restaurantOwnersCantBecomeRiders": "Las cuentas de propietario de restaurante no pueden convertirse también en repartidores — convertirte en repartidor reemplazaría el rol de tu cuenta y perderías el acceso a tu panel de restaurante."
+  },
+  "StoreCard": {
+    "estimatedMinutes": "~{minutes} min",
+    "open": "Abierto",
+    "closed": "Cerrado"
+  },
+  "StoreDetailPage": {
+    "storeNotFound": "Tienda no encontrada",
+    "unavailableOrIncorrectLink": "Puede que no esté disponible o que el enlace sea incorrecto.",
+    "browseHome": "Categorías",
+    "open": "Abierto",
+    "closed": "Cerrado",
+    "reviewCount": "{count, plural, one {# reseña} other {# reseñas}}",
+    "estimatedMinutes": "~{minutes} min",
+    "currentlyClosed": "Actualmente cerrado",
+    "notAcceptingOrders": "Esta tienda no está aceptando pedidos en este momento.",
+    "catalog": "Catálogo",
+    "catalogComingSoon": "Catálogo próximamente",
+    "catalogNotPublished": "Esta tienda aún no ha publicado su catálogo.",
+    "addToCart": "Agregar al carrito",
+    "outOfStock": "Agotado",
+    "addedToCart": "Agregado al carrito",
+    "couldNotAddToCart": "No se pudo agregar al carrito",
+    "startNewCartTitle": "¿Comenzar un nuevo carrito?",
+    "startNewCartDescription": "Tu carrito tiene artículos de otro restaurante o tienda. Agregar este artículo lo vaciará.",
+    "clearCartAndAdd": "Vaciar carrito y agregar"
   }
 }
