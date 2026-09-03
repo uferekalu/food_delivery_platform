@@ -1,6 +1,8 @@
 "use client";
 
 import { use, useState } from "react";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +56,7 @@ function ZoneRow({
   restaurantId: string;
   onEdit: () => void;
 }) {
+  const t = useTranslations("DeliveryZonesPage");
   const { toast } = useToast();
   const [deleteZone, { isLoading: isDeleting }] = useDeleteDeliveryZoneMutation();
   const [confirming, setConfirming] = useState(false);
@@ -64,7 +67,7 @@ function ZoneRow({
       .then(() => setConfirming(false))
       .catch((err: unknown) => {
         setConfirming(false);
-        toast({ title: "Couldn't delete zone", description: getErrorMessage(err), variant: "danger" });
+        toast({ title: t("couldNotDeleteZone"), description: getErrorMessage(err), variant: "danger" });
       });
   }
 
@@ -73,18 +76,18 @@ function ZoneRow({
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-text">{zone.name}</span>
-          {!zone.isActive && <Badge variant="neutral">Inactive</Badge>}
+          {!zone.isActive && <Badge variant="neutral">{t("inactive")}</Badge>}
         </div>
-        <span className="text-sm text-text-muted">Up to {zone.maxDistanceKm}km</span>
+        <span className="text-sm text-text-muted">{t("upToKm", { km: zone.maxDistanceKm })}</span>
         <span className="text-sm text-text-muted">
-          {currency} {zone.baseFee.toFixed(2)} base
+          {currency} {zone.baseFee.toFixed(2)} {t("base")}
           {zone.perKmFee > 0 ? ` + ${currency} ${zone.perKmFee.toFixed(2)}/km` : ""}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <IconButton label="Edit zone" size="sm" variant="ghost" icon={<EditIcon />} onClick={onEdit} />
+        <IconButton label={t("editZone")} size="sm" variant="ghost" icon={<EditIcon />} onClick={onEdit} />
         <IconButton
-          label="Delete zone"
+          label={t("deleteZone")}
           size="sm"
           variant="ghost"
           disabled={isDeleting}
@@ -96,9 +99,9 @@ function ZoneRow({
         open={confirming}
         onClose={() => setConfirming(false)}
         onConfirm={confirmDelete}
-        title={`Delete "${zone.name}"?`}
-        description="This can't be undone."
-        confirmLabel="Delete"
+        title={t("deleteZoneTitle", { name: zone.name })}
+        description={t("cannotBeUndone")}
+        confirmLabel={t("delete")}
         isLoading={isDeleting}
       />
     </div>
@@ -106,6 +109,7 @@ function ZoneRow({
 }
 
 function DeliveryZonesManager({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("DeliveryZonesPage");
   const { data: restaurants, isLoading: loadingRestaurant } = useGetMyRestaurantsQuery();
   const { data: zones, isLoading: loadingZones } = useGetDeliveryZonesQuery(restaurantId);
   const [modalOpen, setModalOpen] = useState(false);
@@ -125,7 +129,7 @@ function DeliveryZonesManager({ restaurantId }: { restaurantId: string }) {
 
   if (loadingRestaurant || loadingZones) return <Skeleton className="h-64 w-full" />;
   if (!restaurant) {
-    return <Alert variant="danger">Restaurant not found, or you don&apos;t have access to it.</Alert>;
+    return <Alert variant="danger">{t("restaurantNotFound")}</Alert>;
   }
 
   const hasCoordinates = restaurant.address.lat != null && restaurant.address.lng != null;
@@ -134,29 +138,23 @@ function DeliveryZonesManager({ restaurantId }: { restaurantId: string }) {
     <div className="flex flex-col gap-4">
       {!hasCoordinates && (
         <Alert variant="warning">
-          This restaurant has no latitude/longitude set — zones won&apos;t take effect until you add
-          coordinates on the{" "}
-          <a href={`/dashboard/restaurants/${restaurantId}`} className="underline">
-            restaurant details page
-          </a>
-          . Orders will keep using the flat estimated fee until then.
+          {t("noCoordinatesWarning")}{" "}
+          <Link href={`/dashboard/restaurants/${restaurantId}`} className="underline">
+            {t("restaurantDetailsPage")}
+          </Link>
+          . {t("flatFeeUntilThen")}
         </Alert>
       )}
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-text-muted">
-          Zones are matched by distance from the restaurant, nearest-covering-ring first.
-        </p>
+        <p className="text-sm text-text-muted">{t("zonesMatchedByDistance")}</p>
         <Button size="sm" onClick={openAdd}>
-          Add zone
+          {t("addZone")}
         </Button>
       </div>
 
       {!zones || zones.length === 0 ? (
-        <EmptyState
-          title="No delivery zones yet"
-          description="Without a zone, checkout falls back to a flat 10% of the order subtotal."
-        />
+        <EmptyState title={t("noDeliveryZonesYet")} description={t("fallsBackToFlatFee")} />
       ) : (
         <Card>
           <CardContent>
@@ -185,10 +183,11 @@ function DeliveryZonesManager({ restaurantId }: { restaurantId: string }) {
 
 export default function DeliveryZonesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const t = useTranslations("DeliveryZonesPage");
   return (
     <RequireRole roles={["restaurant_owner", "admin"]}>
       <Container className="max-w-2xl py-10">
-        <h1 className="mb-6 text-2xl font-bold text-text">Delivery zones</h1>
+        <h1 className="mb-6 text-2xl font-bold text-text">{t("deliveryZones")}</h1>
         <DeliveryZonesManager restaurantId={id} />
       </Container>
     </RequireRole>

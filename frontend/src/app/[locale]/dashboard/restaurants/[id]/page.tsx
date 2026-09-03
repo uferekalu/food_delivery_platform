@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Alert } from "@/components/ui/alert";
@@ -11,6 +12,7 @@ import { getErrorMessage } from "@/lib/redux/error";
 import { RestaurantForm } from "../restaurant-form";
 
 function EditRestaurantForm({ id }: { id: string }) {
+  const t = useTranslations("EditRestaurantPage");
   const { toast } = useToast();
   const { data: restaurants, isLoading } = useGetMyRestaurantsQuery();
   const [updateRestaurant, { isLoading: saving }] = useUpdateRestaurantMutation();
@@ -20,7 +22,7 @@ function EditRestaurantForm({ id }: { id: string }) {
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (!restaurant) {
-    return <Alert variant="danger">Restaurant not found, or you don&apos;t have access to it.</Alert>;
+    return <Alert variant="danger">{t("restaurantNotFound")}</Alert>;
   }
 
   return (
@@ -52,14 +54,14 @@ function EditRestaurantForm({ id }: { id: string }) {
         defaultCoverUrl={restaurant.coverUrl}
         defaultComplianceDocumentUrl={restaurant.complianceDocumentUrl}
         isSubmitting={saving}
-        submitLabel="Save changes"
+        submitLabel={t("saveChanges")}
         onSubmit={async (input) => {
           setError(null);
           try {
             await updateRestaurant({ id, body: input }).unwrap();
-            toast({ title: "Saved", variant: "success" });
+            toast({ title: t("saved"), variant: "success" });
           } catch (err) {
-            setError(getErrorMessage(err, "Couldn't save changes"));
+            setError(getErrorMessage(err, t("couldNotSaveChanges")));
           }
         }}
       />
@@ -69,10 +71,11 @@ function EditRestaurantForm({ id }: { id: string }) {
 
 export default function EditRestaurantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const t = useTranslations("EditRestaurantPage");
   return (
     <RequireRole roles={["restaurant_owner", "admin"]}>
       <Container className="max-w-2xl py-10">
-        <h1 className="mb-6 text-2xl font-bold text-text">Edit restaurant</h1>
+        <h1 className="mb-6 text-2xl font-bold text-text">{t("editRestaurant")}</h1>
         <EditRestaurantForm id={id} />
       </Container>
     </RequireRole>

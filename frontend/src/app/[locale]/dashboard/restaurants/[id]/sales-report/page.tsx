@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,6 +35,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
  * since page load) just surfaces as a toast asking to retry, rather than replicating RTK Query's
  * full reauth-retry machinery for a rare, user-initiated click. */
 function DownloadCsvButton({ restaurantId, from, to }: { restaurantId: string; from: string; to: string }) {
+  const t = useTranslations("SalesReportPage");
   const accessToken = useAppSelector((s) => s.auth.accessToken);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
@@ -61,7 +63,7 @@ function DownloadCsvButton({ restaurantId, from, to }: { restaurantId: string; f
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast({ title: "Couldn't download CSV", description: getErrorMessage(err), variant: "danger" });
+      toast({ title: t("couldNotDownloadCsv"), description: getErrorMessage(err), variant: "danger" });
     } finally {
       setDownloading(false);
     }
@@ -69,12 +71,13 @@ function DownloadCsvButton({ restaurantId, from, to }: { restaurantId: string; f
 
   return (
     <Button variant="outline" size="sm" isLoading={downloading} onClick={() => void handleDownload()}>
-      Download CSV
+      {t("downloadCsv")}
     </Button>
   );
 }
 
 function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
+  const t = useTranslations("SalesReportPage");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const { data, isLoading, isFetching, isError } = useGetSalesReportQuery({
@@ -89,16 +92,16 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
   return (
     <Container className="flex flex-col gap-6 py-10">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-text">Sales report</h1>
+        <h1 className="text-2xl font-bold text-text">{t("salesReport")}</h1>
         <p className="text-text-muted">{restaurant.name}</p>
       </div>
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4">
-          <FormField label="From">
+          <FormField label={t("from")}>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} max={to || undefined} />
           </FormField>
-          <FormField label="To">
+          <FormField label={t("to")}>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} min={from || undefined} />
           </FormField>
           {(from || to) && (
@@ -110,7 +113,7 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
                 setTo("");
               }}
             >
-              Clear range
+              {t("clearRange")}
             </Button>
           )}
           <div className="ml-auto">
@@ -122,52 +125,48 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : isError || !data ? (
-        <Alert variant="danger">Couldn&apos;t load the sales report.</Alert>
+        <Alert variant="danger">{t("couldNotLoadSalesReport")}</Alert>
       ) : data.totals.orders === 0 ? (
-        <EmptyState
-          title="No delivered orders in this range"
-          description="Sales figures appear here once an order for this restaurant is delivered."
-        />
+        <EmptyState title={t("noDeliveredOrdersInRange")} description={t("salesFiguresAppearHere")} />
       ) : (
         <>
           {data.itemsMissingCostPrice.length > 0 && (
-            <Alert variant="warning" title="Some items are missing a cost price">
-              Profit figures below exclude cost for: {data.itemsMissingCostPrice.join(", ")}. Set a cost price on
-              these items in your menu for a complete picture.
+            <Alert variant="warning" title={t("someItemsMissingCostPrice")}>
+              {t("profitFiguresExclude", { items: data.itemsMissingCostPrice.join(", ") })}
             </Alert>
           )}
 
           <Card className={isFetching ? "opacity-60 transition-opacity" : undefined}>
             <CardContent className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-              <Stat label="Revenue" value={money(data.totals.revenue)} />
-              <Stat label="Cost of goods sold" value={money(data.totals.cogs)} />
-              <Stat label="Gross profit" value={money(data.totals.grossProfit)} />
+              <Stat label={t("revenue")} value={money(data.totals.revenue)} />
+              <Stat label={t("costOfGoodsSold")} value={money(data.totals.cogs)} />
+              <Stat label={t("grossProfit")} value={money(data.totals.grossProfit)} />
               <Stat
-                label="Gross margin"
+                label={t("grossMargin")}
                 value={data.totals.grossMarginPct == null ? "—" : `${data.totals.grossMarginPct.toFixed(1)}%`}
               />
-              <Stat label="Orders" value={String(data.totals.orders)} />
-              <Stat label="Avg order value" value={money(data.totals.avgOrderValue)} />
-              <Stat label="Platform fee" value={money(data.totals.platformFeeTotal)} />
-              <Stat label="Net payout" value={money(data.totals.netEarned)} />
+              <Stat label={t("orders")} value={String(data.totals.orders)} />
+              <Stat label={t("avgOrderValue")} value={money(data.totals.avgOrderValue)} />
+              <Stat label={t("platformFee")} value={money(data.totals.platformFeeTotal)} />
+              <Stat label={t("netPayout")} value={money(data.totals.netEarned)} />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Sales by item</CardTitle>
-              <CardDescription>Sorted by revenue, highest first.</CardDescription>
+              <CardTitle>{t("salesByItem")}</CardTitle>
+              <CardDescription>{t("sortedByRevenue")}</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-text-muted">
-                    <th className="py-2 pr-4 font-medium">Item</th>
-                    <th className="py-2 pr-4 font-medium">Qty sold</th>
-                    <th className="py-2 pr-4 font-medium">Revenue</th>
-                    <th className="py-2 pr-4 font-medium">COGS</th>
-                    <th className="py-2 pr-4 font-medium">Profit</th>
-                    <th className="py-2 font-medium">Margin</th>
+                    <th className="py-2 pr-4 font-medium">{t("item")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("qtySold")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("revenue")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("cogs")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("profit")}</th>
+                    <th className="py-2 font-medium">{t("margin")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -176,7 +175,7 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
                       <td className="py-2 pr-4 text-text">
                         {item.name}
                         {item.hasIncompleteCostData && (
-                          <span className="ml-1 text-xs text-warning" title="Some sales of this item have no cost price on record">
+                          <span className="ml-1 text-xs text-warning" title={t("incompleteCostDataTitle")}>
                             *
                           </span>
                         )}
@@ -195,17 +194,17 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Sales by day</CardTitle>
+              <CardTitle>{t("salesByDay")}</CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-text-muted">
-                    <th className="py-2 pr-4 font-medium">Date</th>
-                    <th className="py-2 pr-4 font-medium">Orders</th>
-                    <th className="py-2 pr-4 font-medium">Revenue</th>
-                    <th className="py-2 pr-4 font-medium">COGS</th>
-                    <th className="py-2 font-medium">Profit</th>
+                    <th className="py-2 pr-4 font-medium">{t("date")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("orders")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("revenue")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("cogs")}</th>
+                    <th className="py-2 font-medium">{t("profit")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -229,6 +228,7 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
 }
 
 function SalesReportPage({ id }: { id: string }) {
+  const t = useTranslations("SalesReportPage");
   const { data: restaurants, isLoading } = useGetMyRestaurantsQuery();
   const restaurant = restaurants?.find((r) => r._id === id);
 
@@ -243,7 +243,7 @@ function SalesReportPage({ id }: { id: string }) {
   if (!restaurant) {
     return (
       <Container className="py-10">
-        <EmptyState title="Restaurant not found" description="It may not exist, or you don't have access to it." />
+        <EmptyState title={t("restaurantNotFound")} description={t("mayNotExistOrNoAccess")} />
       </Container>
     );
   }

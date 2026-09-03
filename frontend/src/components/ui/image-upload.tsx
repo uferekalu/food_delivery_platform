@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { useLazyGetUploadSignatureQuery, type UploadFolder } from "@/lib/redux/services/uploads-api";
 import { Spinner } from "./spinner";
@@ -25,6 +26,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
  * See docs/ARCHITECTURE.md §Uploads.
  */
 export function ImageUpload({ label, folder, value, onChange, hint, className }: ImageUploadProps) {
+  const t = useTranslations("Upload");
   const [fetchSignature] = useLazyGetUploadSignatureQuery();
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +37,12 @@ export function ImageUpload({ label, folder, value, onChange, hint, className }:
 
     if (!file.type.startsWith("image/")) {
       setStatus("error");
-      setError("Please choose an image file.");
+      setError(t("chooseAnImageFile"));
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
       setStatus("error");
-      setError("Images must be under 5MB.");
+      setError(t("imagesMustBeUnder5mb"));
       return;
     }
 
@@ -66,7 +68,7 @@ export function ImageUpload({ label, folder, value, onChange, hint, className }:
       setStatus("idle");
     } catch {
       setStatus("error");
-      setError("Upload failed — try again.");
+      setError(t("uploadFailedTryAgain"));
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -104,7 +106,7 @@ export function ImageUpload({ label, folder, value, onChange, hint, className }:
             isLoading={status === "uploading"}
             onClick={() => inputRef.current?.click()}
           >
-            {value ? "Replace image" : "Upload image"}
+            {value ? t("replaceImage") : t("uploadImage")}
           </Button>
           {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
           {error && <span className="text-xs text-danger">{error}</span>}

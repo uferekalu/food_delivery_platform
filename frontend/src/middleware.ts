@@ -5,11 +5,11 @@ export default createMiddleware(routing);
 
 export const config = {
   // Everything except: Next internals, the /api rewrite proxy (next.config.ts), static files,
-  // and the out-of-scope route trees this ticket deliberately doesn't touch — dashboard/admin/
-  // rider stay English-only, unprefixed, exactly as they are today until their own i18n tickets
-  // (docs/ROADMAP.md FDP-55's customer-facing-first scope). Excluding them here means the
-  // middleware never redirects/rewrites those paths at all.
+  // and the out-of-scope route trees this ticket deliberately doesn't touch — admin/rider stay
+  // English-only, unprefixed, exactly as they are today until their own i18n tickets
+  // (docs/ROADMAP.md FDP-55's customer-facing-first scope; dashboard moved in-scope in FDP-70).
+  // Excluding them here means the middleware never redirects/rewrites those paths at all.
   matcher: [
-    "/((?!api|_next|_vercel|dashboard|admin|rider|design-system|.*\\..*).*)",
+    "/((?!api|_next|_vercel|admin|rider|design-system|.*\\..*).*)",
   ],
 };

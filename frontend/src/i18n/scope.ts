@@ -3,8 +3,9 @@
 // ever exist at their plain, unprefixed path. Shared by SmartLink (picking which Link
 // implementation to render) and LanguageSwitcher (never constructing a locale-prefixed URL for
 // one of these paths — that URL doesn't exist and previously 404'd anyone who switched language
-// while on, say, /dashboard/restaurants).
-export const OUT_OF_SCOPE_PREFIXES = ["/dashboard", "/admin", "/rider", "/design-system"];
+// while on, say, /dashboard/restaurants). `/dashboard` moved in-scope in FDP-70 — this list now
+// only covers admin/rider/design-system.
+export const OUT_OF_SCOPE_PREFIXES = ["/admin", "/rider", "/design-system"];
 
 export function isOutOfScopePath(pathname: string): boolean {
   return OUT_OF_SCOPE_PREFIXES.some(
