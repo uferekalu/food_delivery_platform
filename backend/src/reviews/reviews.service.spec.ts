@@ -8,6 +8,7 @@ import { Review, ReviewDocument, ReviewSchema } from './schemas/review.schema';
 import { OrdersService } from '../orders/orders.service';
 import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -28,6 +29,8 @@ import {
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
 import { MenuItem, MenuItemSchema } from '../menu/schemas/menu-item.schema';
+import { Store, StoreSchema } from '../stores/schemas/store.schema';
+import { Product, ProductSchema } from '../stores/schemas/product.schema';
 import {
   PromoCode,
   PromoCodeSchema,
@@ -73,6 +76,8 @@ describe('ReviewsService', () => {
           { name: Cart.name, schema: CartSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
           { name: MenuItem.name, schema: MenuItemSchema },
+          { name: Store.name, schema: StoreSchema },
+          { name: Product.name, schema: ProductSchema },
           { name: PromoCode.name, schema: PromoCodeSchema },
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
           { name: Rider.name, schema: RiderSchema },
@@ -84,6 +89,7 @@ describe('ReviewsService', () => {
         OrdersService,
         CartService,
         RestaurantsService,
+        StoresService,
         PromoCodesService,
         PaymentProviderResolver,
         DeliveryZonesService,

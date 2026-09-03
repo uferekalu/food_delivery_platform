@@ -72,12 +72,22 @@ export class PaymentsService {
     // restaurant has actually onboarded an *active* payout account for the provider this
     // specific order is charging through; an adapter with no automated-split support yet (or a
     // restaurant with no active account) just ignores these, per the interface's doc comment.
-    const restaurant = await this.restaurantsService.findByIdOrThrow(
-      order.restaurantId.toString(),
-    );
-    const payoutAccount = restaurant.payoutAccounts.find(
-      (account) => account.provider === provider && account.status === 'active',
-    );
+    // A store order (docs/ROADMAP.md FDP-56) has no payout-account concept yet — same as a
+    // restaurant that hasn't onboarded one, the full charge settles to the platform's own
+    // account for now, which every adapter already handles correctly (undefined reference).
+    const payoutAccount =
+      order.sellerType === 'store'
+        ? undefined
+        : (
+            await this.restaurantsService.findByIdOrThrow(
+              (
+                order.restaurantId as NonNullable<typeof order.restaurantId>
+              ).toString(),
+            )
+          ).payoutAccounts.find(
+            (account) =>
+              account.provider === provider && account.status === 'active',
+          );
 
     // The split sent to a payment provider can never exceed what's actually being charged this
     // transaction (docs/ROADMAP.md FDP-65). order.restaurantPayoutAmount is computed on the

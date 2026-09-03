@@ -16,15 +16,25 @@ export class Cart {
   })
   userId: Types.ObjectId;
 
-  // One active restaurant per cart (docs/PRODUCT_GUIDE.md §4) — enforced in CartService, not
-  // here; adding an item from a different restaurant requires an explicit `replace: true`.
+  // Which seller kind this cart belongs to (docs/ROADMAP.md FDP-56) — mirrors Order.sellerType,
+  // same default-'restaurant' backward-compatibility reasoning.
   @Prop({
-    type: Types.ObjectId,
-    ref: 'Restaurant',
+    type: String,
+    enum: ['restaurant', 'store'],
     required: true,
-    index: true,
+    default: 'restaurant',
   })
-  restaurantId: Types.ObjectId;
+  sellerType: 'restaurant' | 'store';
+
+  // One active seller per cart (docs/PRODUCT_GUIDE.md §4) — enforced in CartService, not here;
+  // adding an item from a different restaurant/store (or switching seller type) requires an
+  // explicit `replace: true`. No longer `required` — a store cart has this null instead. See
+  // Order.restaurantId's comment for why the field name itself wasn't generalized.
+  @Prop({ type: Types.ObjectId, ref: 'Restaurant', default: null, index: true })
+  restaurantId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Store', default: null, index: true })
+  storeId: Types.ObjectId | null;
 
   @Prop({ type: [CartItemSchema], default: [] })
   items: CartItem[];

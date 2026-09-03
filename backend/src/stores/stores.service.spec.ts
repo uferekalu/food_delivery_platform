@@ -9,6 +9,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { StoresService } from './stores.service';
 import { Store, StoreDocument, StoreSchema } from './schemas/store.schema';
+import type { StoreType } from './schemas/store.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 jest.setTimeout(30_000);
@@ -71,7 +72,11 @@ describe('StoresService', () => {
     await mongod.stop();
   });
 
-  async function createApproved(overrides: Partial<typeof baseDto> = {}) {
+  async function createApproved(
+    overrides: Partial<Omit<typeof baseDto, 'type'>> & {
+      type?: StoreType;
+    } = {},
+  ) {
     const created = await service.create('owner-id', {
       ...baseDto,
       ...overrides,

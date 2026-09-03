@@ -19,6 +19,7 @@ import {
   Restaurant,
   RestaurantDocument,
 } from '../restaurants/schemas/restaurant.schema';
+import { Store, StoreDocument } from '../stores/schemas/store.schema';
 
 function orderRoom(orderId: string): string {
   return `order:${orderId}`;
@@ -26,6 +27,10 @@ function orderRoom(orderId: string): string {
 
 function restaurantRoom(restaurantId: string): string {
   return `restaurant:${restaurantId}`;
+}
+
+function storeRoom(storeId: string): string {
+  return `store:${storeId}`;
 }
 
 function userRoom(userId: string): string {
@@ -78,6 +83,7 @@ export class RealtimeGateway implements OnGatewayConnection {
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Restaurant.name)
     private readonly restaurantModel: Model<RestaurantDocument>,
+    @InjectModel(Store.name) private readonly storeModel: Model<StoreDocument>,
   ) {}
 
   /**
@@ -157,6 +163,31 @@ export class RealtimeGateway implements OnGatewayConnection {
     await client.join(restaurantRoom(restaurantId));
   }
 
+  // Store-catalog counterpart of `restaurant:subscribe` (docs/ROADMAP.md FDP-56).
+  @SubscribeMessage('store:subscribe')
+  async handleStoreSubscribe(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { storeId?: string },
+  ): Promise<void> {
+    const user = client.data.user;
+    const storeId = body?.storeId;
+    if (!user || !storeId) return;
+
+    const store = await this.storeModel
+      .findById(storeId)
+      .select('ownerId')
+      .exec();
+    if (!store) return;
+    if (store.ownerId.toString() !== user.sub && user.role !== 'admin') {
+      this.logger.warn(
+        `User ${user.sub} tried to subscribe to store ${storeId} they don't own`,
+      );
+      return;
+    }
+
+    await client.join(storeRoom(storeId));
+  }
+
   /**
    * A rider's live GPS ping (docs/ROADMAP.md FDP-17) — deliberately not persisted anywhere
    * (no `Rider.currentLocation` field), purely relayed to whichever order rooms currently need
@@ -192,9 +223,17 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server
       .to(orderRoom(order._id.toString()))
       .emit('order:statusChanged', order);
-    this.server
-      .to(restaurantRoom(order.restaurantId.toString()))
-      .emit('restaurant:orderUpdated', order);
+
+    // docs/ROADMAP.md FDP-56 — exactly one of these is set, matching order.sellerType.
+    if (order.sellerType === 'store' && order.storeId) {
+      this.server
+        .to(storeRoom(order.storeId.toString()))
+        .emit('store:orderUpdated', order);
+    } else if (order.restaurantId) {
+      this.server
+        .to(restaurantRoom(order.restaurantId.toString()))
+        .emit('restaurant:orderUpdated', order);
+    }
   }
 
   /** Called by `NotificationsService` right after persisting a new in-app notification

@@ -19,13 +19,34 @@ export class Order {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   customerId: Types.ObjectId;
 
+  // Which seller kind this order belongs to (docs/ROADMAP.md FDP-56) — defaults to 'restaurant'
+  // so every order created before this field existed reads back correctly with no migration.
+  // Exactly one of restaurantId/storeId is set, matching this value.
+  @Prop({
+    type: String,
+    enum: ['restaurant', 'store'],
+    required: true,
+    default: 'restaurant',
+    index: true,
+  })
+  sellerType: 'restaurant' | 'store';
+
+  // No longer `required` (was, before FDP-56) — a store order has this null instead. Every
+  // *restaurant* order still always has it set; nothing about existing restaurant-order data or
+  // behavior changes. Field name kept as-is (not generalized to "sellerId") deliberately: it's
+  // the one thing every restaurant-scoped query/aggregation in this codebase (earnings,
+  // sales-report, the owner order queue) already matches on, and renaming it would mean
+  // touching every one of those call sites purely for cosmetics with no behavior change.
   @Prop({
     type: Types.ObjectId,
     ref: 'Restaurant',
-    required: true,
+    default: null,
     index: true,
   })
-  restaurantId: Types.ObjectId;
+  restaurantId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Store', default: null, index: true })
+  storeId: Types.ObjectId | null;
 
   @Prop({ type: Types.ObjectId, ref: 'User', default: null })
   riderId: Types.ObjectId | null;
@@ -66,6 +87,9 @@ export class Order {
   @Prop({ type: Number, required: true, min: 0 })
   platformFeeAmount: number;
 
+  // What the SELLER (restaurant or store, per sellerType — docs/ROADMAP.md FDP-56) is owed for
+  // this order: subtotal minus platformFeeAmount. Field name kept from before stores existed,
+  // same reasoning as restaurantId above.
   @Prop({ type: Number, required: true, min: 0 })
   restaurantPayoutAmount: number;
 

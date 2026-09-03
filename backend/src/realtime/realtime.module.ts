@@ -7,6 +7,7 @@ import {
   Restaurant,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import { Store, StoreSchema } from '../stores/schemas/store.schema';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Module({
@@ -24,6 +25,7 @@ import { RealtimeGateway } from './realtime.gateway';
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Restaurant.name, schema: RestaurantSchema },
+      { name: Store.name, schema: StoreSchema },
     ]),
   ],
   providers: [RealtimeGateway],

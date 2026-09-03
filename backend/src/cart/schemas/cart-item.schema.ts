@@ -12,8 +12,13 @@ export class CartItem {
   // the field CartService's update/remove-by-id lookups need; it doesn't change the schema.
   _id: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'MenuItem', required: true })
-  menuItemId: Types.ObjectId;
+  // Exactly one of menuItemId/productId is set, matching the parent Cart's sellerType
+  // (docs/ROADMAP.md FDP-56) — neither is `required` for that reason.
+  @Prop({ type: Types.ObjectId, ref: 'MenuItem', default: null })
+  menuItemId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Product', default: null })
+  productId: Types.ObjectId | null;
 
   // Name/price snapshotted at add-to-cart time (see SelectedModifier) — keeps the cart's
   // subtotal stable while shopping even if the owner edits the item afterward.

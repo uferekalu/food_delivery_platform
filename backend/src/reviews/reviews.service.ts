@@ -44,6 +44,14 @@ export class ReviewsService {
 
     let targetId: string;
     if (dto.targetType === 'restaurant') {
+      // Store orders have no restaurant to review (docs/ROADMAP.md FDP-56) — reviewing a store
+      // isn't supported yet, so this is a clear rejection rather than a crash on a null
+      // restaurantId.
+      if (!order.restaurantId) {
+        throw new BadRequestException(
+          'This order was not placed with a restaurant',
+        );
+      }
       targetId = order.restaurantId.toString();
     } else {
       if (!order.riderId) {

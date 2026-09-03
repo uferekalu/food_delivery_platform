@@ -9,6 +9,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { CartService } from './cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import {
   Restaurant,
   RestaurantDocument,
@@ -19,17 +20,41 @@ import {
   MenuItemDocument,
   MenuItemSchema,
 } from '../menu/schemas/menu-item.schema';
+import {
+  Store,
+  StoreDocument,
+  StoreSchema,
+} from '../stores/schemas/store.schema';
+import {
+  Product,
+  ProductDocument,
+  ProductSchema,
+} from '../stores/schemas/product.schema';
 import { Cart, CartDocument, CartSchema } from './schemas/cart.schema';
 
 jest.setTimeout(30_000);
+
+const EMPTY_CART = {
+  sellerType: null,
+  restaurantId: null,
+  restaurantName: null,
+  storeId: null,
+  storeName: null,
+  currency: null,
+  items: [],
+  subtotal: 0,
+};
 
 describe('CartService', () => {
   let mongod: MongoMemoryServer;
   let moduleRef: TestingModule;
   let cartService: CartService;
   let restaurantsService: RestaurantsService;
+  let storesService: StoresService;
   let restaurantModel: Model<RestaurantDocument>;
   let itemModel: Model<MenuItemDocument>;
+  let storeModel: Model<StoreDocument>;
+  let productModel: Model<ProductDocument>;
   let cartModel: Model<CartDocument>;
 
   const userId = 'customer-id';
@@ -46,16 +71,21 @@ describe('CartService', () => {
         MongooseModule.forFeature([
           { name: Restaurant.name, schema: RestaurantSchema },
           { name: MenuItem.name, schema: MenuItemSchema },
+          { name: Store.name, schema: StoreSchema },
+          { name: Product.name, schema: ProductSchema },
           { name: Cart.name, schema: CartSchema },
         ]),
       ],
-      providers: [CartService, RestaurantsService],
+      providers: [CartService, RestaurantsService, StoresService],
     }).compile();
 
     cartService = moduleRef.get(CartService);
     restaurantsService = moduleRef.get(RestaurantsService);
+    storesService = moduleRef.get(StoresService);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
     itemModel = moduleRef.get(getModelToken(MenuItem.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
+    productModel = moduleRef.get(getModelToken(Product.name));
     cartModel = moduleRef.get(getModelToken(Cart.name));
   }, 60_000);
 
@@ -63,6 +93,8 @@ describe('CartService', () => {
     await Promise.all([
       restaurantModel.deleteMany({}).exec(),
       itemModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
+      productModel.deleteMany({}).exec(),
       cartModel.deleteMany({}).exec(),
     ]);
   });
@@ -82,6 +114,37 @@ describe('CartService', () => {
       complianceDocumentUrl: 'https://example.com/doc.pdf',
     });
     return restaurantsService.approve(restaurant._id.toString());
+  }
+
+  async function createApprovedStore(name = 'Market Square Supermarket') {
+    const store = await storesService.create('owner-id', {
+      name,
+      type: 'groceries',
+      currency: 'NGN',
+      country: 'Nigeria',
+      address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
+    });
+    return storesService.approve(store._id.toString());
+  }
+
+  async function createProduct(
+    storeId: string,
+    overrides: Partial<{
+      name: string;
+      price: number;
+      discountedPrice: number;
+      isAvailable: boolean;
+    }> = {},
+  ) {
+    return productModel.create({
+      storeId,
+      categoryId: storeId, // not exercised by CartService; any ObjectId-shaped value works
+      name: overrides.name ?? 'Milk',
+      price: overrides.price ?? 5,
+      discountedPrice: overrides.discountedPrice ?? null,
+      isAvailable: overrides.isAvailable ?? true,
+    });
   }
 
   interface TestModifierGroup {
@@ -112,13 +175,7 @@ describe('CartService', () => {
 
   it('returns an empty cart when none exists', async () => {
     const cart = await cartService.getCart(userId);
-    expect(cart).toEqual({
-      restaurantId: null,
-      restaurantName: null,
-      currency: null,
-      items: [],
-      subtotal: 0,
-    });
+    expect(cart).toEqual(EMPTY_CART);
   });
 
   it('adds an item and computes the subtotal', async () => {
@@ -290,13 +347,7 @@ describe('CartService', () => {
     expect(afterUpdate.subtotal).toBe(15);
 
     const afterRemove = await cartService.removeItem(userId, cartItemId);
-    expect(afterRemove).toEqual({
-      restaurantId: null,
-      restaurantName: null,
-      currency: null,
-      items: [],
-      subtotal: 0,
-    });
+    expect(afterRemove).toEqual(EMPTY_CART);
 
     const cartInDb = await cartModel.findOne({ userId }).exec();
     expect(cartInDb).toBeNull();
@@ -320,12 +371,106 @@ describe('CartService', () => {
 
     await cartService.clearCart(userId);
     const cart = await cartService.getCart(userId);
-    expect(cart).toEqual({
-      restaurantId: null,
-      restaurantName: null,
-      currency: null,
-      items: [],
-      subtotal: 0,
+    expect(cart).toEqual(EMPTY_CART);
+  });
+
+  describe('store cart items (FDP-56)', () => {
+    it('adds a store item and computes the subtotal, preferring discountedPrice when set', async () => {
+      const store = await createApprovedStore();
+      const product = await createProduct(store._id.toString(), {
+        price: 10,
+        discountedPrice: 8,
+      });
+
+      const cart = await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+        qty: 2,
+      });
+
+      expect(cart.sellerType).toBe('store');
+      expect(cart.storeId).toBe(store._id.toString());
+      expect(cart.storeName).toBe('Market Square Supermarket');
+      expect(cart.restaurantId).toBeNull();
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].price).toBe(8);
+      expect(cart.subtotal).toBe(16);
+    });
+
+    it('rejects adding a store item from a different store without replace: true', async () => {
+      const storeA = await createApprovedStore('Store A');
+      const storeB = await createApprovedStore('Store B');
+      const productA = await createProduct(storeA._id.toString(), {
+        name: 'From A',
+      });
+      const productB = await createProduct(storeB._id.toString(), {
+        name: 'From B',
+      });
+
+      await cartService.addStoreItem(userId, {
+        productId: productA._id.toString(),
+      });
+
+      await expect(
+        cartService.addStoreItem(userId, {
+          productId: productB._id.toString(),
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      const cart = await cartService.addStoreItem(userId, {
+        productId: productB._id.toString(),
+        replace: true,
+      });
+      expect(cart.storeId).toBe(storeB._id.toString());
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].name).toBe('From B');
+    });
+
+    it('rejects adding an unavailable product', async () => {
+      const store = await createApprovedStore();
+      const product = await createProduct(store._id.toString(), {
+        isAvailable: false,
+      });
+
+      await expect(
+        cartService.addStoreItem(userId, {
+          productId: product._id.toString(),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('requires replace: true to switch from a restaurant cart to a store cart, and vice versa', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const menuItem = await createItem(restaurant._id.toString());
+      const store = await createApprovedStore();
+      const product = await createProduct(store._id.toString());
+
+      await cartService.addItem(userId, {
+        menuItemId: menuItem._id.toString(),
+      });
+
+      await expect(
+        cartService.addStoreItem(userId, {
+          productId: product._id.toString(),
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      const switched = await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+        replace: true,
+      });
+      expect(switched.sellerType).toBe('store');
+      expect(switched.items).toHaveLength(1);
+
+      await expect(
+        cartService.addItem(userId, { menuItemId: menuItem._id.toString() }),
+      ).rejects.toThrow(ConflictException);
+
+      const switchedBack = await cartService.addItem(userId, {
+        menuItemId: menuItem._id.toString(),
+        replace: true,
+      });
+      expect(switchedBack.sellerType).toBe('restaurant');
+      expect(switchedBack.items).toHaveLength(1);
     });
   });
 });
