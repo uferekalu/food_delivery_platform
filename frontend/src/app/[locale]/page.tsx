@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { Container } from "@/components/ui/container";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Carousel } from "@/components/ui/carousel";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { cn } from "@/lib/cn";
@@ -12,6 +12,57 @@ import { Link } from "@/i18n/navigation";
 import { SmartLink } from "@/components/smart-link";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
+import { useGetMyOrdersQuery } from "@/lib/redux/services/orders-api";
+import type { OrderStatus } from "@/lib/redux/restaurant-types";
+
+// Only these statuses represent an order genuinely still in flight — mirrors the same set on
+// orders/[id]/page.tsx's ACTIVE_DELIVERY_STATUSES plus the earlier kitchen-side statuses, since
+// the homepage card can be honest about "accepted"/"preparing" too, not just "out for delivery".
+const IN_FLIGHT_ORDER_STATUSES: OrderStatus[] = [
+  "PLACED",
+  "ACCEPTED_BY_RESTAURANT",
+  "PREPARING",
+  "READY_FOR_PICKUP",
+  "ASSIGNED_TO_RIDER",
+  "PICKED_UP",
+  "OUT_FOR_DELIVERY",
+];
+
+const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
+  PENDING_PAYMENT: "warning",
+  PLACED: "info",
+  ACCEPTED_BY_RESTAURANT: "info",
+  PREPARING: "info",
+  READY_FOR_PICKUP: "info",
+  ASSIGNED_TO_RIDER: "info",
+  PICKED_UP: "info",
+  OUT_FOR_DELIVERY: "info",
+  DELIVERED: "success",
+  CANCELLED: "danger",
+  REFUNDED: "neutral",
+};
+
+// Same collapsed milestones as the order-detail page's tracking stepper (orders/[id]/page.tsx) —
+// reused here only to size the progress bar, not to render step labels.
+const PROGRESS_STEP_COLLAPSE: Partial<Record<OrderStatus, OrderStatus>> = {
+  ASSIGNED_TO_RIDER: "OUT_FOR_DELIVERY",
+  PICKED_UP: "OUT_FOR_DELIVERY",
+};
+const PROGRESS_STEPS: OrderStatus[] = ["PLACED", "ACCEPTED_BY_RESTAURANT", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"];
+
+function orderProgressFraction(status: OrderStatus): number {
+  const key = PROGRESS_STEP_COLLAPSE[status] ?? status;
+  const index = PROGRESS_STEPS.indexOf(key);
+  return index >= 0 ? (index + 1) / PROGRESS_STEPS.length : 0;
+}
+
+// Reads the current time, so it's called from the JSX itself rather than hoisted into a
+// render-body `const` — same pattern as NotificationBell's useTimeAgo() and checkout/page.tsx's
+// `min={...}` datetime bound, both of which keep an impure `Date.now()` read out of the
+// React Compiler's purity check by not storing it in a top-level render variable.
+function minutesUntil(iso: string): number {
+  return Math.max(1, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
+}
 
 function StoreIcon({ className = "size-7" }: { className?: string }) {
   return (
@@ -155,6 +206,7 @@ function TogetherItem({
 
 export default function Home() {
   const t = useTranslations("HomePage");
+  const tStatus = useTranslations("OrderStatus");
   const { user, status } = useAppSelector((state) => state.auth);
   const authenticated = status === "authenticated" && !!user;
 
@@ -171,6 +223,22 @@ export default function Home() {
     .filter((v): v is number => v != null);
   const avgDeliveryMinutes =
     deliveryMinutes.length > 0 ? Math.round(deliveryMinutes.reduce((a, b) => a + b, 0) / deliveryMinutes.length) : null;
+
+  // Only a customer account places customer orders — skip the fetch entirely for anyone else
+  // (or a not-yet-resolved session) so the floating hero card never has a reason to guess.
+  const { data: myOrders } = useGetMyOrdersQuery(undefined, {
+    skip: !authenticated || user.role !== "customer",
+  });
+  const activeOrder = (myOrders ?? [])
+    .filter((order) => IN_FLIGHT_ORDER_STATUSES.includes(order.status))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  // The order only names its restaurant by id — resolve it against the list already fetched
+  // above rather than firing a second request. If it isn't one of the top-50-by-rating
+  // restaurants, fall back to the generic discovery card below instead of guessing its details.
+  const activeOrderRestaurant = activeOrder
+    ? (data?.items ?? []).find((r) => r._id === activeOrder.restaurantId)
+    : undefined;
+  const liveOrder = activeOrder && activeOrderRestaurant ? { order: activeOrder, restaurant: activeOrderRestaurant } : null;
 
   const partnerCta =
     authenticated && user.role === "restaurant_owner"
@@ -237,25 +305,46 @@ export default function Home() {
                 </div>
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate font-semibold text-text">
-                    {featuredRestaurant?.name ?? t("topRatedNearYou")}
+                    {liveOrder ? liveOrder.restaurant.name : (featuredRestaurant?.name ?? t("topRatedNearYou"))}
                   </span>
                   <span className="flex items-center gap-1 text-sm text-text-muted">
                     <StarIcon />
-                    {featuredRestaurant ? featuredRestaurant.avgRating.toFixed(1) : "4.8"} · {t("openNow")}
+                    {(liveOrder ? liveOrder.restaurant.avgRating : featuredRestaurant?.avgRating)?.toFixed(1) ?? "4.8"} ·{" "}
+                    {liveOrder ? liveOrder.order.orderNumber : t("openNow")}
                   </span>
                 </div>
               </div>
               <div className="h-px bg-border" />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-text-muted">{t("orderStatus")}</span>
-                <Badge variant="success">{t("onTheWay")}</Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full w-2/3 rounded-full bg-primary" />
+              {liveOrder ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-text-muted">{t("orderStatus")}</span>
+                    <Badge variant={STATUS_BADGE_VARIANT[liveOrder.order.status]}>{tStatus(liveOrder.order.status)}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${orderProgressFraction(liveOrder.order.status) * 100}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-xs text-text-muted">
+                      {liveOrder.order.estimatedDeliveryAt
+                        ? t("etaMinutes", { minutes: minutesUntil(liveOrder.order.estimatedDeliveryAt) })
+                        : t("arrivingSoon")}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-text-muted">{t("estimatedDelivery")}</span>
+                  <span className="font-medium text-text">
+                    {featuredRestaurant?.estimatedDeliveryMinutes != null
+                      ? t("etaMinutes", { minutes: featuredRestaurant.estimatedDeliveryMinutes })
+                      : t("deliveryTimeVaries")}
+                  </span>
                 </div>
-                <span className="shrink-0 text-xs text-text-muted">{t("etaMinutes", { minutes: 12 })}</span>
-              </div>
+              )}
             </div>
           </div>
         </Container>

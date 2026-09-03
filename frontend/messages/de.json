@@ -182,7 +182,10 @@
     "careersDescription": "Hilf uns, die Zukunft der Essenslieferung zu gestalten.",
     "viewCareers": "Stellenangebote ansehen",
     "goToMyDashboard": "Zu meinem Dashboard",
-    "registerHere": "Hier registrieren"
+    "registerHere": "Hier registrieren",
+    "arrivingSoon": "Trifft bald ein",
+    "estimatedDelivery": "Geschätzte Lieferzeit",
+    "deliveryTimeVaries": "Abhängig von der Bestellung"
   },
   "LoginPage": {
     "enterValidEmail": "Gib eine gültige E-Mail-Adresse ein",

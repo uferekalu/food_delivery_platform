@@ -182,7 +182,10 @@
     "careersDescription": "Ajude-nos a construir o futuro da entrega de comida.",
     "viewCareers": "Ver vagas",
     "goToMyDashboard": "Ir para meu painel",
-    "registerHere": "Cadastre-se aqui"
+    "registerHere": "Cadastre-se aqui",
+    "arrivingSoon": "Chegando em breve",
+    "estimatedDelivery": "Entrega estimada",
+    "deliveryTimeVaries": "Varia conforme o pedido"
   },
   "LoginPage": {
     "enterValidEmail": "Insira um endereço de e-mail válido",

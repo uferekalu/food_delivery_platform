@@ -182,7 +182,10 @@
     "careersDescription": "Help us build the future of food delivery.",
     "viewCareers": "View careers",
     "goToMyDashboard": "Go to my dashboard",
-    "registerHere": "Register here"
+    "registerHere": "Register here",
+    "arrivingSoon": "Arriving soon",
+    "estimatedDelivery": "Estimated delivery",
+    "deliveryTimeVaries": "Varies by order"
   },
   "LoginPage": {
     "enterValidEmail": "Enter a valid email address",
