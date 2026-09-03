@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CartService } from './cart.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
+import { AddStoreCartItemDto } from './dto/add-store-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
 @ApiTags('cart')
@@ -30,6 +31,15 @@ export class CartController {
     @Body() dto: AddCartItemDto,
   ) {
     return this.cartService.addItem(user.sub, dto);
+  }
+
+  // Store-catalog counterpart of POST /cart/items (docs/ROADMAP.md FDP-56).
+  @Post('store-items')
+  addStoreItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: AddStoreCartItemDto,
+  ) {
+    return this.cartService.addStoreItem(user.sub, dto);
   }
 
   @Patch('items/:cartItemId')

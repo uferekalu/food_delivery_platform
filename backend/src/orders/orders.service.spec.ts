@@ -6,6 +6,7 @@ import { Model } from 'mongoose';
 import { OrdersService } from './orders.service';
 import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -30,6 +31,16 @@ import {
   MenuItemSchema,
 } from '../menu/schemas/menu-item.schema';
 import {
+  Store,
+  StoreDocument,
+  StoreSchema,
+} from '../stores/schemas/store.schema';
+import {
+  Product,
+  ProductDocument,
+  ProductSchema,
+} from '../stores/schemas/product.schema';
+import {
   PromoCode,
   PromoCodeSchema,
 } from '../promo-codes/schemas/promo-code.schema';
@@ -42,11 +53,14 @@ describe('OrdersService', () => {
   let ordersService: OrdersService;
   let cartService: CartService;
   let restaurantsService: RestaurantsService;
+  let storesService: StoresService;
   let promoCodesService: PromoCodesService;
   let deliveryZonesService: DeliveryZonesService;
   let realtimeGateway: { emitOrderStatusChanged: jest.Mock };
   let restaurantModel: Model<RestaurantDocument>;
   let itemModel: Model<MenuItemDocument>;
+  let storeModel: Model<StoreDocument>;
+  let productModel: Model<ProductDocument>;
   let cartModel: Model<CartDocument>;
   let orderModel: Model<OrderDocument>;
   let zoneModel: Model<DeliveryZoneDocument>;
@@ -68,6 +82,8 @@ describe('OrdersService', () => {
           { name: Cart.name, schema: CartSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
           { name: MenuItem.name, schema: MenuItemSchema },
+          { name: Store.name, schema: StoreSchema },
+          { name: Product.name, schema: ProductSchema },
           { name: PromoCode.name, schema: PromoCodeSchema },
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
         ]),
@@ -76,6 +92,7 @@ describe('OrdersService', () => {
         OrdersService,
         CartService,
         RestaurantsService,
+        StoresService,
         PromoCodesService,
         PaymentProviderResolver,
         DeliveryZonesService,
@@ -95,20 +112,30 @@ describe('OrdersService', () => {
     ordersService = moduleRef.get(OrdersService);
     cartService = moduleRef.get(CartService);
     restaurantsService = moduleRef.get(RestaurantsService);
+    storesService = moduleRef.get(StoresService);
     promoCodesService = moduleRef.get(PromoCodesService);
     deliveryZonesService = moduleRef.get(DeliveryZonesService);
     realtimeGateway = moduleRef.get(RealtimeGateway);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
     itemModel = moduleRef.get(getModelToken(MenuItem.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
+    productModel = moduleRef.get(getModelToken(Product.name));
     cartModel = moduleRef.get(getModelToken(Cart.name));
     orderModel = moduleRef.get(getModelToken(Order.name));
     zoneModel = moduleRef.get(getModelToken(DeliveryZone.name));
   }, 60_000);
 
   afterEach(async () => {
+    // Without this, `realtimeGateway.emitOrderStatusChanged`'s call count accumulates across
+    // every test in this file (it's the same mock instance for the whole `describe` block, set
+    // up once in `beforeAll`) — a test asserting an exact `toHaveBeenCalledTimes` count would
+    // otherwise silently depend on how many other tests ran before it in file order.
+    realtimeGateway.emitOrderStatusChanged.mockClear();
     await Promise.all([
       restaurantModel.deleteMany({}).exec(),
       itemModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
+      productModel.deleteMany({}).exec(),
       cartModel.deleteMany({}).exec(),
       orderModel.deleteMany({}).exec(),
       zoneModel.deleteMany({}).exec(),
@@ -189,6 +216,175 @@ describe('OrdersService', () => {
 
     const cartAfter = await cartService.getCart(userId);
     expect(cartAfter.items).toHaveLength(0);
+  });
+
+  describe('store orders (FDP-56)', () => {
+    const owner = {
+      sub: 'store-owner-id',
+      email: 'store-owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    async function createApprovedStore() {
+      const store = await storesService.create(owner.sub, {
+        name: 'Market Square Supermarket',
+        type: 'groceries',
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return storesService.approve(store._id.toString());
+    }
+
+    async function createTestProduct(
+      storeId: string,
+      overrides: Partial<{
+        price: number;
+        isAvailable: boolean;
+        stockQuantity: number | null;
+      }> = {},
+    ) {
+      return productModel.create({
+        storeId,
+        categoryId: storeId,
+        name: 'Milk',
+        price: overrides.price ?? 10,
+        isAvailable: overrides.isAvailable ?? true,
+        stockQuantity: overrides.stockQuantity ?? null,
+      });
+    }
+
+    it('creates a store order in PENDING_PAYMENT, computes fees the same way a restaurant order does, and clears the cart', async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString(), {
+        price: 100,
+      });
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+        qty: 2,
+      }); // subtotal 200
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress,
+      });
+
+      expect(order.sellerType).toBe('store');
+      expect(order.storeId?.toString()).toBe(store._id.toString());
+      expect(order.restaurantId).toBeNull();
+      expect(order.status).toBe('PENDING_PAYMENT');
+      expect(order.subtotal).toBe(200);
+      expect(order.deliveryFee).toBe(20); // same FALLBACK_DELIVERY_FEE_RATE as a zone-less restaurant
+      expect(order.serviceFee).toBe(10);
+      expect(order.total).toBe(230);
+      expect(order.platformFeeAmount).toBe(30);
+      expect(order.restaurantPayoutAmount).toBe(170);
+      expect(order.currency).toBe('NGN');
+      expect(order.items).toHaveLength(1);
+      expect(order.items[0].productId?.toString()).toBe(product._id.toString());
+
+      const cartAfter = await cartService.getCart(userId);
+      expect(cartAfter.items).toHaveLength(0);
+    });
+
+    it('rejects a promo code on a store order', async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString());
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+      });
+
+      await expect(
+        ordersService.createOrder(userId, {
+          deliveryAddress: validAddress,
+          promoCode: 'SAVE10',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects checkout when a tracked product no longer has enough stock', async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString(), {
+        stockQuantity: 1,
+      });
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+        qty: 1,
+      });
+      // Stock drops below what's in the cart between add-to-cart and checkout.
+      await productModel
+        .updateOne({ _id: product._id }, { stockQuantity: 0 })
+        .exec();
+
+      await expect(
+        ordersService.createOrder(userId, {
+          deliveryAddress: validAddress,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("findForStore returns only that store's active orders, and rejects a non-owner", async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString());
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+      });
+      await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress,
+      });
+
+      const stranger = {
+        sub: 'stranger-id',
+        email: 'stranger@test.local',
+        role: 'restaurant_owner',
+      } as const;
+      await expect(
+        ordersService.findForStore(stranger, store._id.toString()),
+      ).rejects.toThrow(ForbiddenException);
+
+      // PENDING_PAYMENT is not an "active seller" status yet (same as a restaurant order) —
+      // the queue is empty until a webhook moves it to PLACED.
+      const queue = await ordersService.findForStore(
+        owner,
+        store._id.toString(),
+      );
+      expect(queue).toHaveLength(0);
+    });
+
+    it('updateStatusByOwner dispatches to the store-owner ownership check for a store order', async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString());
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+      });
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress,
+      });
+      await orderModel
+        .updateOne({ _id: order._id }, { status: 'PLACED' })
+        .exec();
+
+      const stranger = {
+        sub: 'stranger-id',
+        email: 'stranger@test.local',
+        role: 'restaurant_owner',
+      } as const;
+      await expect(
+        ordersService.updateStatusByOwner(
+          stranger,
+          order._id.toString(),
+          'ACCEPTED_BY_RESTAURANT',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      const updated = await ordersService.updateStatusByOwner(
+        owner,
+        order._id.toString(),
+        'ACCEPTED_BY_RESTAURANT',
+      );
+      expect(updated.status).toBe('ACCEPTED_BY_RESTAURANT');
+      expect(realtimeGateway.emitOrderStatusChanged).toHaveBeenCalled();
+    });
   });
 
   describe('delivery fee calculation (FDP-15)', () => {
@@ -887,7 +1083,7 @@ describe('OrdersService', () => {
       expect(notFound).toBeNull();
     });
 
-    it("findByPaymentRef still finds an order by an *earlier* reference after a retry issues a new one (docs/ROADMAP.md FDP-65) — previously overwriting paymentRef stranded a webhook for a session the customer actually completed before retrying", async () => {
+    it('findByPaymentRef still finds an order by an *earlier* reference after a retry issues a new one (docs/ROADMAP.md FDP-65) — previously overwriting paymentRef stranded a webhook for a session the customer actually completed before retrying', async () => {
       const restaurant = await createApprovedRestaurant();
       const order = await createOrderAtStatus(
         restaurant._id.toString(),
@@ -901,10 +1097,7 @@ describe('OrdersService', () => {
       );
 
       expect(updated.paymentRef).toBe('cs_test_second'); // the current/latest ref
-      expect(updated.paymentRefs).toEqual([
-        'cs_test_first',
-        'cs_test_second',
-      ]);
+      expect(updated.paymentRefs).toEqual(['cs_test_first', 'cs_test_second']);
 
       const foundFirst = await ordersService.findByPaymentRef('cs_test_first');
       expect(foundFirst?._id.toString()).toBe(order._id.toString());
@@ -1003,9 +1196,7 @@ describe('OrdersService', () => {
         'DELIVERED',
         { paymentStatus: 'succeeded' },
       );
-      const claimed = await ordersService.claimForRefund(
-        order._id.toString(),
-      );
+      const claimed = await ordersService.claimForRefund(order._id.toString());
       await ordersService.finalizeRefund(order._id.toString());
       expect(claimed?.status).toBe('DELIVERED');
 
@@ -1044,14 +1235,10 @@ describe('OrdersService', () => {
         { paymentStatus: 'succeeded' },
       );
 
-      const claimed = await ordersService.claimForRefund(
-        order._id.toString(),
-      );
+      const claimed = await ordersService.claimForRefund(order._id.toString());
       expect(claimed?.status).toBe('DELIVERED'); // pre-update doc, for the caller to revert to
 
-      const refunded = await ordersService.finalizeRefund(
-        order._id.toString(),
-      );
+      const refunded = await ordersService.finalizeRefund(order._id.toString());
       expect(refunded.status).toBe('REFUNDED');
       expect(refunded.paymentStatus).toBe('refunded');
       expect(refunded.statusHistory.at(-1)).toMatchObject({
@@ -1069,9 +1256,7 @@ describe('OrdersService', () => {
         { paymentStatus: 'succeeded' },
       );
 
-      const claimed = await ordersService.claimForRefund(
-        order._id.toString(),
-      );
+      const claimed = await ordersService.claimForRefund(order._id.toString());
       expect(claimed?.status).toBe('CANCELLED');
       const updated = await orderModel.findById(order._id).exec();
       expect(updated?.status).toBe('REFUNDED');
@@ -1104,9 +1289,7 @@ describe('OrdersService', () => {
         .updateOne({ _id: order._id }, { paymentStatus: 'failed' })
         .exec();
 
-      const claimed = await ordersService.claimForRefund(
-        order._id.toString(),
-      );
+      const claimed = await ordersService.claimForRefund(order._id.toString());
       expect(claimed).toBeNull();
     });
 
@@ -1117,9 +1300,7 @@ describe('OrdersService', () => {
         'DELIVERED',
         { paymentStatus: 'succeeded' },
       );
-      const claimed = await ordersService.claimForRefund(
-        order._id.toString(),
-      );
+      const claimed = await ordersService.claimForRefund(order._id.toString());
       expect(claimed?.status).toBe('DELIVERED');
       let current = await orderModel.findById(order._id).exec();
       expect(current?.status).toBe('REFUNDED'); // claimed

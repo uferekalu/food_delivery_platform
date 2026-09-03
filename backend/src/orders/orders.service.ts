@@ -9,11 +9,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
+import { Product, ProductDocument } from '../stores/schemas/product.schema';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
-import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
+import {
+  DeliveryZonesService,
+  FALLBACK_DELIVERY_FEE_RATE,
+} from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
@@ -34,8 +39,7 @@ const ORDER_STATUS_MESSAGES: Partial<
 > = {
   PLACED: {
     title: 'Order confirmed',
-    body: (order) =>
-      `Your order ${order.orderNumber} has been confirmed and sent to the restaurant.`,
+    body: (order) => `Your order ${order.orderNumber} has been confirmed.`,
   },
   ACCEPTED_BY_RESTAURANT: {
     title: 'Order accepted',
@@ -44,8 +48,7 @@ const ORDER_STATUS_MESSAGES: Partial<
   },
   PREPARING: {
     title: 'Order being prepared',
-    body: (order) =>
-      `The restaurant is preparing your order ${order.orderNumber}.`,
+    body: (order) => `Your order ${order.orderNumber} is being prepared.`,
   },
   READY_FOR_PICKUP: {
     title: 'Order ready for pickup',
@@ -83,10 +86,11 @@ const ORDER_STATUS_MESSAGES: Partial<
 
 const SMS_NOTIFIED_STATUSES: OrderStatus[] = ['OUT_FOR_DELIVERY', 'DELIVERED'];
 
-// Statuses a restaurant owner still needs to act on — what their "live order queue" shows.
-// Excludes PENDING_PAYMENT (not actionable until FDP-14's webhook moves it to PLACED) and every
-// terminal/rider-stage status (nothing left for the restaurant to do).
-const ACTIVE_RESTAURANT_STATUSES: OrderStatus[] = [
+// Statuses a seller (restaurant or store owner, docs/ROADMAP.md FDP-56) still needs to act on —
+// what their "live order queue" shows. Excludes PENDING_PAYMENT (not actionable until FDP-14's
+// webhook moves it to PLACED) and every terminal/rider-stage status (nothing left for the
+// seller to do).
+const ACTIVE_SELLER_STATUSES: OrderStatus[] = [
   'PLACED',
   'ACCEPTED_BY_RESTAURANT',
   'PREPARING',
@@ -175,8 +179,11 @@ export class OrdersService {
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(MenuItem.name)
     private readonly menuItemModel: Model<MenuItemDocument>,
+    @InjectModel(Product.name)
+    private readonly productModel: Model<ProductDocument>,
     private readonly cartService: CartService,
     private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
     private readonly promoCodesService: PromoCodesService,
     private readonly paymentProviderResolver: PaymentProviderResolver,
     private readonly realtimeGateway: RealtimeGateway,
@@ -211,13 +218,31 @@ export class OrdersService {
       );
   }
 
+  /** Resolves whichever seller owns this order (docs/ROADMAP.md FDP-56) so the notification
+   * always reaches the right owner regardless of sellerType. */
+  private findOwnerId(order: OrderDocument): Promise<string> {
+    if (order.sellerType === 'store') {
+      return this.storesService
+        .findByIdOrThrow(
+          (order.storeId as NonNullable<typeof order.storeId>).toString(),
+        )
+        .then((store) => store.ownerId.toString());
+    }
+    return this.restaurantsService
+      .findByIdOrThrow(
+        (
+          order.restaurantId as NonNullable<typeof order.restaurantId>
+        ).toString(),
+      )
+      .then((restaurant) => restaurant.ownerId.toString());
+  }
+
   private notifyNewOrderToOwner(order: OrderDocument): void {
-    this.restaurantsService
-      .findByIdOrThrow(order.restaurantId.toString())
-      .then((restaurant) => {
+    this.findOwnerId(order)
+      .then((ownerId) => {
         const body = `New order ${order.orderNumber} for ${order.currency} ${order.total.toFixed(2)} just came in.`;
         return this.notificationsService.notify({
-          userId: restaurant.ownerId.toString(),
+          userId: ownerId,
           type: 'new_order',
           title: 'New order received',
           body,
@@ -256,7 +281,26 @@ export class OrdersService {
       );
   }
 
+  /**
+   * Public entry point for both seller types (docs/ROADMAP.md FDP-56) — dispatches on the
+   * customer's cart, which already carries its own sellerType. `createRestaurantOrder` below is
+   * the exact pre-FDP-56 method body, deliberately left untouched (bar this rename) rather than
+   * threading a seller-type branch through its middle — that method is the one covered by the
+   * FDP-65 payment/security audit, and the safest way to add a second seller type is to leave
+   * its control flow alone and put the new one in a fully separate method.
+   */
   async createOrder(
+    userId: string,
+    dto: CreateOrderDto,
+  ): Promise<OrderDocument> {
+    const cart = await this.cartService.getCart(userId);
+    if (cart.sellerType === 'store') {
+      return this.createStoreOrder(userId, dto, cart);
+    }
+    return this.createRestaurantOrder(userId, dto);
+  }
+
+  private async createRestaurantOrder(
     userId: string,
     dto: CreateOrderDto,
   ): Promise<OrderDocument> {
@@ -287,8 +331,10 @@ export class OrdersService {
       )
       .exec();
     const unavailable = cart.items.find((item) => {
+      // Guaranteed set — this is the restaurant-order path, whose cart items always carry a
+      // menuItemId (see CartService.addItem).
       const current = menuItemSnapshots.find(
-        (a) => a._id.toString() === item.menuItemId.toString(),
+        (a) => a._id.toString() === item.menuItemId!.toString(),
       );
       return !current || !current.isAvailable;
     });
@@ -348,7 +394,9 @@ export class OrdersService {
     const order = await this.orderModel.create({
       orderNumber: generateOrderNumber(),
       customerId: userId,
+      sellerType: 'restaurant',
       restaurantId: cart.restaurantId,
+      storeId: null,
       items: cart.items.map((item) => ({
         menuItemId: item.menuItemId,
         name: item.name,
@@ -359,7 +407,7 @@ export class OrdersService {
         // cost data" apart from "this item genuinely costs nothing".
         costPrice:
           menuItemSnapshots.find(
-            (m) => m._id.toString() === item.menuItemId.toString(),
+            (m) => m._id.toString() === item.menuItemId!.toString(),
           )?.costPrice ?? null,
         imageUrl: item.imageUrl,
         qty: item.qty,
@@ -393,6 +441,137 @@ export class OrdersService {
       await this.promoCodesService.redeem(redeemedPromoCodeId);
     await this.cartService.clearCart(userId);
 
+    return order;
+  }
+
+  /**
+   * Store-catalog counterpart of `createRestaurantOrder` (docs/ROADMAP.md FDP-56). Mirrors its
+   * structure closely, with the differences a store actually has: Product availability
+   * (including stock, which a cooked-to-order restaurant dish never needs) instead of
+   * MenuItem.isAvailable, no delivery-zone pricing yet (stores don't have DeliveryZone
+   * documents — falls back to the same flat rate a zone-less/ungeocoded restaurant already
+   * uses), and no promo codes yet (PromoCode is restaurant-scoped only today). `cart` is passed
+   * in from the `createOrder` dispatcher, which already fetched it to decide which method to
+   * call — refetching here would be redundant.
+   */
+  private async createStoreOrder(
+    userId: string,
+    dto: CreateOrderDto,
+    cart: Awaited<ReturnType<CartService['getCart']>>,
+  ): Promise<OrderDocument> {
+    if (!cart.storeId || cart.items.length === 0) {
+      throw new BadRequestException('Your cart is empty');
+    }
+    if (dto.promoCode) {
+      throw new BadRequestException(
+        'Promo codes are not yet supported for this store',
+      );
+    }
+
+    const store = await this.storesService.findByIdOrThrow(cart.storeId);
+    if (!store.isApproved || !store.isOpen) {
+      throw new BadRequestException(
+        'This store is no longer accepting orders — please review your cart',
+      );
+    }
+
+    // Same "price snapshotted at add-to-cart time, availability re-checked fresh at checkout"
+    // split as createRestaurantOrder — plus a stock check, since a tracked Product (unlike a
+    // MenuItem) can run out between add-to-cart and checkout.
+    const productSnapshots = await this.productModel
+      .find(
+        { _id: { $in: cart.items.map((i) => i.productId) } },
+        { isAvailable: 1, costPrice: 1, stockQuantity: 1 },
+      )
+      .exec();
+    const unavailable = cart.items.find((item) => {
+      const current = productSnapshots.find(
+        (p) => p._id.toString() === item.productId?.toString(),
+      );
+      return (
+        !current ||
+        !current.isAvailable ||
+        (current.stockQuantity != null && current.stockQuantity < item.qty)
+      );
+    });
+    if (unavailable) {
+      throw new BadRequestException(
+        `"${unavailable.name}" is no longer available in the quantity requested — please review your cart`,
+      );
+    }
+
+    if (
+      dto.scheduledFor &&
+      new Date(dto.scheduledFor).getTime() <= Date.now()
+    ) {
+      throw new BadRequestException(
+        'Scheduled delivery time must be in the future',
+      );
+    }
+
+    const subtotal = cart.subtotal;
+    // No DeliveryZone support for stores yet — same fallback rate DeliveryZonesService.
+    // calculateFee itself uses whenever a restaurant has no zone covering the distance.
+    const deliveryFee = round2(subtotal * FALLBACK_DELIVERY_FEE_RATE);
+    const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
+    const tax = 0;
+    const discount = 0;
+    // Same commission model as a restaurant order — see createRestaurantOrder's comment.
+    // restaurantPayoutAmount's field name is legacy (kept for the reason on Order.schema.ts);
+    // it means "what the seller is owed" for either seller type.
+    const platformFeeAmount = round2(subtotal * PLATFORM_COMMISSION_RATE);
+    const restaurantPayoutAmount = round2(subtotal - platformFeeAmount);
+    const total = Math.max(
+      0,
+      round2(subtotal + deliveryFee + serviceFee + tax - discount),
+    );
+    const paymentProvider = this.paymentProviderResolver.resolveDefault(
+      store.currency,
+    );
+
+    const order = await this.orderModel.create({
+      orderNumber: generateOrderNumber(),
+      customerId: userId,
+      sellerType: 'store',
+      restaurantId: null,
+      storeId: cart.storeId,
+      items: cart.items.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        price: item.price,
+        costPrice:
+          productSnapshots.find(
+            (p) => p._id.toString() === item.productId?.toString(),
+          )?.costPrice ?? null,
+        imageUrl: item.imageUrl,
+        qty: item.qty,
+        selectedModifiers: [],
+        notes: item.notes,
+      })),
+      subtotal,
+      deliveryFee,
+      serviceFee,
+      tax,
+      discount,
+      total,
+      platformFeeAmount,
+      restaurantPayoutAmount,
+      currency: store.currency,
+      status: 'PENDING_PAYMENT',
+      statusHistory: [
+        { status: 'PENDING_PAYMENT', at: new Date(), by: userId },
+      ],
+      paymentProvider,
+      paymentStatus: 'pending',
+      paymentRef: null,
+      deliveryAddress: dto.deliveryAddress,
+      deliveryInstructions: dto.deliveryInstructions?.trim() ?? '',
+      scheduledFor: dto.scheduledFor ? new Date(dto.scheduledFor) : null,
+      estimatedDeliveryAt: null,
+      promoCode: null,
+    });
+
+    await this.cartService.clearCart(userId);
     return order;
   }
 
@@ -432,14 +611,34 @@ export class OrdersService {
     this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
 
     return this.orderModel
-      .find({ restaurantId, status: { $in: ACTIVE_RESTAURANT_STATUSES } })
+      .find({ restaurantId, status: { $in: ACTIVE_SELLER_STATUSES } })
       .sort({ createdAt: 1 })
       .exec();
   }
 
-  /** The restaurant owner's accept/reject/prepare/ready actions (docs/ROADMAP.md FDP-13) — see
+  /** Store-catalog counterpart of `findForRestaurant` (docs/ROADMAP.md FDP-56). */
+  async findForStore(
+    requester: AccessTokenPayload,
+    storeId: string,
+  ): Promise<OrderDocument[]> {
+    const store = await this.storesService.findByIdOrThrow(storeId);
+    this.storesService.assertOwnerOrAdmin(store, requester);
+
+    return this.orderModel
+      .find({ storeId, status: { $in: ACTIVE_SELLER_STATUSES } })
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  /**
+   * The seller's accept/reject/prepare/ready actions (docs/ROADMAP.md FDP-13) — see
    * order-state-machine.ts for exactly which transitions this allows and why
-   * PENDING_PAYMENT→PLACED and every rider-stage transition are deliberately excluded. */
+   * PENDING_PAYMENT→PLACED and every rider-stage transition are deliberately excluded. Public
+   * entry point for both seller types (docs/ROADMAP.md FDP-56): a single `PATCH /orders/:id/
+   * status` route backs both, since store ownership reuses the `restaurant_owner` role (the
+   * route's `@Roles` guard already covers both) — this dispatches on the order itself once
+   * fetched, the same "peek, then delegate" shape as `createOrder`.
+   */
   async updateStatusByOwner(
     requester: AccessTokenPayload,
     orderId: string,
@@ -448,11 +647,32 @@ export class OrdersService {
     const order = await this.orderModel.findById(orderId).exec();
     if (!order) throw new NotFoundException('Order not found');
 
-    const restaurant = await this.restaurantsService.findByIdOrThrow(
-      order.restaurantId.toString(),
-    );
-    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    if (order.sellerType === 'store') {
+      const store = await this.storesService.findByIdOrThrow(
+        (order.storeId as NonNullable<typeof order.storeId>).toString(),
+      );
+      this.storesService.assertOwnerOrAdmin(store, requester);
+    } else {
+      const restaurant = await this.restaurantsService.findByIdOrThrow(
+        (
+          order.restaurantId as NonNullable<typeof order.restaurantId>
+        ).toString(),
+      );
+      this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    }
 
+    return this.applyOwnerTransition(order, targetStatus, requester);
+  }
+
+  /** Shared tail of `updateStatusByOwner`/`updateStatusByStoreOwner` — the state-machine check,
+   * the transition itself, and its side effects (realtime emit + customer notification) are
+   * identical for either seller type; only how ownership was verified differs, which each
+   * caller above already did before reaching here. */
+  private async applyOwnerTransition(
+    order: OrderDocument,
+    targetStatus: OrderStatus,
+    requester: AccessTokenPayload,
+  ): Promise<OrderDocument> {
     if (!canOwnerTransition(order.status, targetStatus)) {
       throw new BadRequestException(
         `Cannot move an order from ${order.status} to ${targetStatus}`,
@@ -648,7 +868,10 @@ export class OrdersService {
     // refunded order previously slipped through and overwrote paymentStatus to 'failed' while
     // status stayed REFUNDED, an inconsistent combination that also dropped the order from
     // getAnalyticsSummary's revenue total).
-    if (order.paymentStatus === 'succeeded' || order.paymentStatus === 'refunded') {
+    if (
+      order.paymentStatus === 'succeeded' ||
+      order.paymentStatus === 'refunded'
+    ) {
       return order;
     }
 

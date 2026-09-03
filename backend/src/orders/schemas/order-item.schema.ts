@@ -5,13 +5,18 @@ import {
   SelectedModifierSchema,
 } from '../../cart/schemas/selected-modifier.schema';
 
-// Snapshot of a cart item at order-creation time — cart items reference live menu data (and
-// disappear once the order is placed, since the cart is cleared), so the order needs its own
-// permanent copy of what the customer actually paid for.
+// Snapshot of a cart item at order-creation time — cart items reference live menu/product data
+// (and disappear once the order is placed, since the cart is cleared), so the order needs its
+// own permanent copy of what the customer actually paid for.
 @Schema({ _id: false })
 export class OrderItem {
-  @Prop({ type: Types.ObjectId, ref: 'MenuItem', required: true })
-  menuItemId: Types.ObjectId;
+  // Exactly one of menuItemId/productId is set, matching the parent Order's sellerType
+  // (docs/ROADMAP.md FDP-56) — neither is `required` for that reason.
+  @Prop({ type: Types.ObjectId, ref: 'MenuItem', default: null })
+  menuItemId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Product', default: null })
+  productId: Types.ObjectId | null;
 
   @Prop({ type: String, required: true, trim: true })
   name: string;

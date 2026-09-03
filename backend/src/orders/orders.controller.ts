@@ -61,6 +61,17 @@ export class OrdersController {
     return this.ordersService.findForRestaurant(user, restaurantId);
   }
 
+  // Store-catalog counterpart of `restaurant/:restaurantId` above (docs/ROADMAP.md FDP-56).
+  // Declared before `:id` for the same route-matching-order reason.
+  @Roles('restaurant_owner', 'admin')
+  @Get('store/:storeId')
+  findForStore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+  ) {
+    return this.ordersService.findForStore(user, storeId);
+  }
+
   // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — vendor
   // payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51).
   @Roles('restaurant_owner', 'admin')

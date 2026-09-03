@@ -5,6 +5,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { RealtimeGateway } from './realtime.gateway';
 import { Order } from '../orders/schemas/order.schema';
 import { Restaurant } from '../restaurants/schemas/restaurant.schema';
+import { Store } from '../stores/schemas/store.schema';
 
 function fakeSocket() {
   return {
@@ -24,11 +25,13 @@ describe('RealtimeGateway', () => {
   let jwtService: { verifyAsync: jest.Mock };
   let orderModel: { findById: jest.Mock; find: jest.Mock };
   let restaurantModel: { findById: jest.Mock };
+  let storeModel: { findById: jest.Mock };
 
   beforeEach(async () => {
     jwtService = { verifyAsync: jest.fn() };
     orderModel = { findById: jest.fn(), find: jest.fn() };
     restaurantModel = { findById: jest.fn() };
+    storeModel = { findById: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -40,6 +43,7 @@ describe('RealtimeGateway', () => {
         },
         { provide: getModelToken(Order.name), useValue: orderModel },
         { provide: getModelToken(Restaurant.name), useValue: restaurantModel },
+        { provide: getModelToken(Store.name), useValue: storeModel },
       ],
     }).compile();
 
@@ -162,6 +166,36 @@ describe('RealtimeGateway', () => {
     });
   });
 
+  describe('handleStoreSubscribe', () => {
+    it('joins the room when the caller owns the store', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'owner-1', role: 'restaurant_owner' };
+      storeModel.findById.mockReturnValue({
+        select: () => ({
+          exec: () =>
+            Promise.resolve({ ownerId: { toString: () => 'owner-1' } }),
+        }),
+      });
+
+      await gateway.handleStoreSubscribe(client as never, { storeId: 's-1' });
+      expect(client.join).toHaveBeenCalledWith('store:s-1');
+    });
+
+    it('does not join when the caller does not own the store', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'intruder', role: 'restaurant_owner' };
+      storeModel.findById.mockReturnValue({
+        select: () => ({
+          exec: () =>
+            Promise.resolve({ ownerId: { toString: () => 'owner-1' } }),
+        }),
+      });
+
+      await gateway.handleStoreSubscribe(client as never, { storeId: 's-1' });
+      expect(client.join).not.toHaveBeenCalled();
+    });
+  });
+
   describe('handleRiderLocation', () => {
     it("broadcasts to every one of the rider's active-delivery order rooms", async () => {
       const client = fakeSocket();
@@ -232,10 +266,12 @@ describe('RealtimeGateway', () => {
   });
 
   describe('emitOrderStatusChanged', () => {
-    it('emits to both the order room and the restaurant room', () => {
+    it('emits to both the order room and the restaurant room for a restaurant order', () => {
       const order = {
         _id: { toString: () => 'order-1' },
+        sellerType: 'restaurant',
         restaurantId: { toString: () => 'restaurant-1' },
+        storeId: null,
       };
 
       gateway.emitOrderStatusChanged(order as never);
@@ -248,6 +284,28 @@ describe('RealtimeGateway', () => {
       );
       expect(gateway.server.emit).toHaveBeenCalledWith(
         'restaurant:orderUpdated',
+        order,
+      );
+    });
+
+    it('emits to both the order room and the store room for a store order (FDP-56)', () => {
+      const order = {
+        _id: { toString: () => 'order-1' },
+        sellerType: 'store',
+        restaurantId: null,
+        storeId: { toString: () => 'store-1' },
+      };
+
+      gateway.emitOrderStatusChanged(order as never);
+
+      expect(gateway.server.to).toHaveBeenCalledWith('order:order-1');
+      expect(gateway.server.to).toHaveBeenCalledWith('store:store-1');
+      expect(gateway.server.emit).toHaveBeenCalledWith(
+        'order:statusChanged',
+        order,
+      );
+      expect(gateway.server.emit).toHaveBeenCalledWith(
+        'store:orderUpdated',
         order,
       );
     });

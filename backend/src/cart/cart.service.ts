@@ -7,23 +7,32 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
+import { Product, ProductDocument } from '../stores/schemas/product.schema';
 import { Cart, CartDocument } from './schemas/cart.schema';
 import type { CartItem } from './schemas/cart-item.schema';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
+import { AddStoreCartItemDto } from './dto/add-store-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
 export interface CartResponse {
+  sellerType: 'restaurant' | 'store' | null;
   restaurantId: string | null;
   restaurantName: string | null;
+  storeId: string | null;
+  storeName: string | null;
   currency: string | null;
   items: CartItem[];
   subtotal: number;
 }
 
 const EMPTY_CART: CartResponse = {
+  sellerType: null,
   restaurantId: null,
   restaurantName: null,
+  storeId: null,
+  storeName: null,
   currency: null,
   items: [],
   subtotal: 0,
@@ -35,7 +44,10 @@ export class CartService {
     @InjectModel(Cart.name) private readonly cartModel: Model<CartDocument>,
     @InjectModel(MenuItem.name)
     private readonly menuItemModel: Model<MenuItemDocument>,
+    @InjectModel(Product.name)
+    private readonly productModel: Model<ProductDocument>,
     private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
   ) {}
 
   async getCart(userId: string): Promise<CartResponse> {
@@ -67,23 +79,31 @@ export class CartService {
 
     let cart = await this.cartModel.findOne({ userId }).exec();
 
-    if (
+    // A cart has exactly one seller (docs/PRODUCT_GUIDE.md §4) — that seller can be this same
+    // restaurant, a different restaurant, or (docs/ROADMAP.md FDP-56) a store; any mismatch
+    // requires `replace: true` to start over.
+    const switchingSeller =
       cart &&
-      cart.restaurantId.toString() !== menuItem.restaurantId.toString()
-    ) {
+      (cart.sellerType !== 'restaurant' ||
+        cart.restaurantId?.toString() !== menuItem.restaurantId.toString());
+    if (cart && switchingSeller) {
       if (!dto.replace) {
         throw new ConflictException(
           'Your cart has items from a different restaurant. Pass replace: true to start a new cart.',
         );
       }
       cart.items = [];
+      cart.sellerType = 'restaurant';
       cart.restaurantId = menuItem.restaurantId;
+      cart.storeId = null;
     }
 
     if (!cart) {
       cart = new this.cartModel({
         userId,
+        sellerType: 'restaurant',
         restaurantId: menuItem.restaurantId,
+        storeId: null,
         items: [],
       });
     }
@@ -91,7 +111,7 @@ export class CartService {
     const newLineNotes = dto.notes?.trim() ?? '';
     const existingLine = cart.items.find(
       (item) =>
-        item.menuItemId.toString() === menuItem._id.toString() &&
+        item.menuItemId?.toString() === menuItem._id.toString() &&
         item.notes === newLineNotes &&
         this.sameModifiers(item.selectedModifiers, resolvedModifiers),
     );
@@ -108,6 +128,86 @@ export class CartService {
         selectedModifiers: resolvedModifiers,
         notes: newLineNotes,
       } as CartItem);
+    }
+
+    await cart.save();
+    return await this.toResponse(cart);
+  }
+
+  /** Store-catalog counterpart of `addItem` (docs/ROADMAP.md FDP-56) — same shape, resolved
+   * against Product/Store instead of MenuItem/Restaurant. Products have no modifiers, so lines
+   * here never carry `selectedModifiers`. */
+  async addStoreItem(
+    userId: string,
+    dto: AddStoreCartItemDto,
+  ): Promise<CartResponse> {
+    const product = await this.productModel.findById(dto.productId).exec();
+    if (!product) throw new NotFoundException('Product not found');
+    if (!product.isAvailable) {
+      throw new BadRequestException('This item is currently unavailable');
+    }
+
+    const store = await this.storesService.findByIdOrThrow(
+      product.storeId.toString(),
+    );
+    if (!store.isApproved || !store.isOpen) {
+      throw new BadRequestException(
+        'This store is not currently accepting orders',
+      );
+    }
+
+    const qty = dto.qty ?? 1;
+
+    let cart = await this.cartModel.findOne({ userId }).exec();
+
+    const switchingSeller =
+      cart &&
+      (cart.sellerType !== 'store' ||
+        cart.storeId?.toString() !== product.storeId.toString());
+    if (cart && switchingSeller) {
+      if (!dto.replace) {
+        throw new ConflictException(
+          'Your cart has items from a different store. Pass replace: true to start a new cart.',
+        );
+      }
+      cart.items = [];
+      cart.sellerType = 'store';
+      cart.storeId = product.storeId;
+      cart.restaurantId = null;
+    }
+
+    if (!cart) {
+      cart = new this.cartModel({
+        userId,
+        sellerType: 'store',
+        storeId: product.storeId,
+        restaurantId: null,
+        items: [],
+      });
+    }
+
+    const newLineNotes = dto.notes?.trim() ?? '';
+    // Price snapshotted at add-to-cart time (same "price protection while shopping" reasoning
+    // as addItem) — a discountedPrice, if active, is what's actually charged.
+    const price = product.discountedPrice ?? product.price;
+    const existingLine = cart.items.find(
+      (item) =>
+        item.productId?.toString() === product._id.toString() &&
+        item.notes === newLineNotes,
+    );
+
+    if (existingLine) {
+      existingLine.qty = Math.min(20, existingLine.qty + qty);
+    } else {
+      cart.items.push({
+        productId: product._id,
+        name: product.name,
+        price,
+        imageUrl: product.imageUrl,
+        qty,
+        selectedModifiers: [],
+        notes: newLineNotes,
+      } as unknown as CartItem);
     }
 
     await cart.save();
@@ -221,7 +321,7 @@ export class CartService {
     return sortedA.every((value, index) => value === sortedB[index]);
   }
 
-  // Fetches the restaurant on every response (not just add-time) so the cart UI always has a
+  // Fetches the seller on every response (not just add-time) so the cart UI always has a
   // currency/name to render with — cheaper than a second frontend request, and cart reads are
   // low-volume enough that the extra lookup isn't worth denormalizing into the Cart document.
   private async toResponse(cart: CartDocument | null): Promise<CartResponse> {
@@ -233,12 +333,34 @@ export class CartService {
       );
       return sum + (item.price + modifiersTotal) * item.qty;
     }, 0);
+
+    if (cart.sellerType === 'store') {
+      // storeId is guaranteed set whenever sellerType is 'store' — both are only ever written
+      // together, in addStoreItem above.
+      const store = await this.storesService.findByIdOrThrow(
+        (cart.storeId as NonNullable<typeof cart.storeId>).toString(),
+      );
+      return {
+        sellerType: 'store',
+        restaurantId: null,
+        restaurantName: null,
+        storeId: cart.storeId!.toString(),
+        storeName: store.name,
+        currency: store.currency,
+        items: cart.items,
+        subtotal,
+      };
+    }
+
     const restaurant = await this.restaurantsService.findByIdOrThrow(
-      cart.restaurantId.toString(),
+      (cart.restaurantId as NonNullable<typeof cart.restaurantId>).toString(),
     );
     return {
-      restaurantId: cart.restaurantId.toString(),
+      sellerType: 'restaurant',
+      restaurantId: cart.restaurantId!.toString(),
       restaurantName: restaurant.name,
+      storeId: null,
+      storeName: null,
       currency: restaurant.currency,
       items: cart.items,
       subtotal,
