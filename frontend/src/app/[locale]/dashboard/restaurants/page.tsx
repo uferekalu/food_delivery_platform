@@ -25,6 +25,13 @@ function MyRestaurantsList() {
         </Link>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle p-4">
+        <p className="text-sm text-text">{t("alsoSellGroceriesOrPharmacy")}</p>
+        <Link href="/dashboard/stores/new" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          {t("addAStore")}
+        </Link>
+      </div>
+
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : !data || data.length === 0 ? (

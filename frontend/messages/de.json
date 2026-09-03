@@ -54,12 +54,13 @@
     "myRestaurants": "Meine Restaurants",
     "myStores": "Meine Shops",
     "partnerWithUs": "Partner werden",
+    "sellGroceriesOrPharmacy": "Lebensmittel oder Apothekenartikel verkaufen",
     "riderDashboard": "Fahrer-Dashboard",
     "becomeARider": "Fahrer werden",
     "siteName": "Essenslieferplattform",
     "tagline": "Bestelle großartiges Essen von lokalen Restaurants, schnell geliefert und live verfolgt — von der Bestellung bis zur Haustür.",
     "forCustomers": "Für Kunden",
-    "forRestaurants": "Für Restaurants",
+    "forRestaurants": "Für Unternehmen",
     "forRiders": "Für Fahrer",
     "copyright": "© {year} Essenslieferplattform. Alle Rechte vorbehalten.",
     "footerTagline": "Gebaut für schnelle, zuverlässige Lieferung — überall, wo wir tätig sind."
@@ -188,7 +189,10 @@
     "estimatedDelivery": "Geschätzte Lieferzeit",
     "deliveryTimeVaries": "Abhängig von der Bestellung",
     "exploreGroceries": "Lebensmittel entdecken",
-    "explorePharmacy": "Apotheke entdecken"
+    "explorePharmacy": "Apotheke entdecken",
+    "sellGroceriesOrPharmacy": "Lebensmittel oder Apothekenartikel verkaufen",
+    "sellGroceriesOrPharmacyDescription": "Liste deinen Lebensmittelladen oder deine Apotheke und erreiche mehr Kunden.",
+    "goToMyStores": "Zu meinen Shops"
   },
   "LoginPage": {
     "enterValidEmail": "Gib eine gültige E-Mail-Adresse ein",
@@ -235,12 +239,17 @@
     "passwordsDontMatch": "Passwörter stimmen nicht überein",
     "accountCreated": "Konto erstellt",
     "checkEmailRestaurantOwner": "Überprüfe deine E-Mail, um deine Adresse zu bestätigen, und füge dann dein Restaurant hinzu.",
+    "checkEmailStoreOwner": "Überprüfe deine E-Mail, um deine Adresse zu bestätigen, und füge dann deinen Shop hinzu.",
     "checkEmail": "Überprüfe deine E-Mail, um deine Adresse zu bestätigen.",
     "couldNotCreateAccount": "Dein Konto konnte nicht erstellt werden",
     "accountType": "Kontotyp",
     "orderingFood": "Ich bestelle Essen",
     "runARestaurant": "Ich betreibe ein Restaurant",
     "addManageRestaurant": "Füge dein Restaurant zur Plattform hinzu und verwalte es",
+    "runAGroceryStore": "Ich betreibe einen Lebensmittelladen",
+    "addManageGroceryStore": "Füge deinen Lebensmittelladen zur Plattform hinzu und verwalte ihn",
+    "runAPharmacyStore": "Ich betreibe eine Apotheke oder einen Beauty-Shop",
+    "addManagePharmacyStore": "Füge deine Apotheke oder deinen Beauty-Shop zur Plattform hinzu und verwalte sie",
     "fullName": "Vollständiger Name",
     "email": "E-Mail",
     "password": "Passwort",
@@ -591,7 +600,9 @@
     "deliveryZones": "Liefergebiete",
     "earnings": "Einnahmen",
     "salesReport": "Verkaufsbericht",
-    "close": "Schließen"
+    "close": "Schließen",
+    "alsoSellGroceriesOrPharmacy": "Möchtest du auch Lebensmittel oder Apothekenartikel verkaufen?",
+    "addAStore": "Shop hinzufügen"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Ein Restaurant hinzufügen",
@@ -721,7 +732,9 @@
     "edit": "Bearbeiten",
     "manageCatalog": "Katalog verwalten",
     "orderQueue": "Bestellwarteschlange",
-    "close": "Schließen"
+    "close": "Schließen",
+    "alsoRunARestaurant": "Betreibst du auch ein Restaurant?",
+    "addRestaurant": "Restaurant hinzufügen"
   },
   "NewStorePage": {
     "addAStore": "Shop hinzufügen",

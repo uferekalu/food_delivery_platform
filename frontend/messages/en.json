@@ -54,12 +54,13 @@
     "myRestaurants": "My restaurants",
     "myStores": "My stores",
     "partnerWithUs": "Partner with us",
+    "sellGroceriesOrPharmacy": "Sell groceries or pharmacy items",
     "riderDashboard": "Rider dashboard",
     "becomeARider": "Become a rider",
     "siteName": "Food Delivery Platform",
     "tagline": "Ordering great food from local restaurants, delivered fast and tracked live — from checkout to your door.",
     "forCustomers": "For customers",
-    "forRestaurants": "For restaurants",
+    "forRestaurants": "For businesses",
     "forRiders": "For riders",
     "copyright": "© {year} Food Delivery Platform. All rights reserved.",
     "footerTagline": "Built for fast, reliable delivery — everywhere we operate."
@@ -188,7 +189,10 @@
     "estimatedDelivery": "Estimated delivery",
     "deliveryTimeVaries": "Varies by order",
     "exploreGroceries": "Explore groceries",
-    "explorePharmacy": "Explore pharmacy"
+    "explorePharmacy": "Explore pharmacy",
+    "sellGroceriesOrPharmacy": "Sell groceries or pharmacy items",
+    "sellGroceriesOrPharmacyDescription": "List your grocery store or pharmacy and reach more customers.",
+    "goToMyStores": "Go to my stores"
   },
   "LoginPage": {
     "enterValidEmail": "Enter a valid email address",
@@ -235,12 +239,17 @@
     "passwordsDontMatch": "Passwords don't match",
     "accountCreated": "Account created",
     "checkEmailRestaurantOwner": "Check your email to verify your address, then add your restaurant.",
+    "checkEmailStoreOwner": "Check your email to verify your address, then add your store.",
     "checkEmail": "Check your email to verify your address.",
     "couldNotCreateAccount": "Couldn't create your account",
     "accountType": "Account type",
     "orderingFood": "I'm ordering food",
     "runARestaurant": "I run a restaurant",
     "addManageRestaurant": "Add and manage your restaurant on the platform",
+    "runAGroceryStore": "I run a grocery store",
+    "addManageGroceryStore": "Add and manage your grocery store on the platform",
+    "runAPharmacyStore": "I run a pharmacy or beauty store",
+    "addManagePharmacyStore": "Add and manage your pharmacy or beauty store on the platform",
     "fullName": "Full name",
     "email": "Email",
     "password": "Password",
@@ -591,7 +600,9 @@
     "deliveryZones": "Delivery zones",
     "earnings": "Earnings",
     "salesReport": "Sales report",
-    "close": "Close"
+    "close": "Close",
+    "alsoSellGroceriesOrPharmacy": "Also want to sell groceries or pharmacy items?",
+    "addAStore": "Add a store"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Add a restaurant",
@@ -721,7 +732,9 @@
     "edit": "Edit",
     "manageCatalog": "Manage catalog",
     "orderQueue": "Order queue",
-    "close": "Close"
+    "close": "Close",
+    "alsoRunARestaurant": "Also run a restaurant?",
+    "addRestaurant": "Add a restaurant"
   },
   "NewStorePage": {
     "addAStore": "Add a store",
