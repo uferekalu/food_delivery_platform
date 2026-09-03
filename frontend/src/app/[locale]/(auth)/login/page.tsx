@@ -114,8 +114,12 @@ function PhoneLoginForm() {
     e.preventDefault();
     setError(null);
     try {
-      await sendCode({ phone, purpose: "login" }).unwrap();
-      setCodeSent(true);
+      const result = await sendCode({ phone, purpose: "login" }).unwrap();
+      if (result.sent) {
+        setCodeSent(true);
+      } else {
+        setError(t("couldNotSendCode"));
+      }
     } catch (err) {
       setError(getErrorMessage(err, t("couldNotSendCode")));
     }

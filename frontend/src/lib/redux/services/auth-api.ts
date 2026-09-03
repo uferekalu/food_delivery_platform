@@ -50,7 +50,7 @@ export const authApi = api.injectEndpoints({
       },
     }),
 
-    sendPhoneCode: builder.mutation<void, { phone: string; purpose: PhoneOtpPurpose }>({
+    sendPhoneCode: builder.mutation<{ sent: boolean }, { phone: string; purpose: PhoneOtpPurpose }>({
       query: (body) => ({ url: "/auth/phone/send-code", method: "POST", body }),
     }),
 
