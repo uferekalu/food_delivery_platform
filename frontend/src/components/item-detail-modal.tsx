@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useAddCartItemMutation } from "@/lib/redux/services/cart-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { MenuItem, ModifierGroup } from "@/lib/redux/restaurant-types";
 
 interface ItemDetailModalProps {
@@ -28,13 +29,16 @@ function isConflictError(err: unknown): boolean {
 function ModifierGroupFields({
   group,
   selected,
+  currency,
   onToggle,
 }: {
   group: ModifierGroup;
   selected: string[];
+  currency: string;
   onToggle: (optionName: string) => void;
 }) {
   const t = useTranslations("ItemDetailModal");
+  const locale = useLocale();
   const isSingleChoice = group.max === 1;
 
   return (
@@ -68,7 +72,7 @@ function ModifierGroupFields({
               {option.name}
             </span>
             {option.priceDelta > 0 && (
-              <span className="text-text-muted">+{option.priceDelta.toFixed(2)}</span>
+              <span className="text-text-muted">+{formatMoney(option.priceDelta, currency, locale)}</span>
             )}
           </label>
         );
@@ -79,6 +83,7 @@ function ModifierGroupFields({
 
 export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailModalProps) {
   const t = useTranslations("ItemDetailModal");
+  const locale = useLocale();
   const { status } = useAppSelector((state) => state.auth);
   const [addCartItem, { isLoading }] = useAddCartItemMutation();
   const { toast } = useToast();
@@ -178,6 +183,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
             key={group.name}
             group={group}
             selected={selections[group.name] ?? []}
+            currency={currency}
             onToggle={(optionName) => toggleOption(group, optionName)}
           />
         ))}
@@ -224,7 +230,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
 
         {status === "authenticated" ? (
           <Button disabled={!allGroupsValid} isLoading={isLoading} onClick={() => void submit(false)}>
-            {t("addToCartWithPrice", { currency, amount: (unitPrice * qty).toFixed(2) })}
+            {t("addToCartWithPrice", { amount: formatMoney(unitPrice * qty, currency, locale) })}
           </Button>
         ) : (
           <Link href="/login" className={buttonVariants({ className: "w-full" })}>

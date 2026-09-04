@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
 import { useVerifyPaymentMutation } from "@/lib/redux/services/payments-api";
 import { useGetReviewEligibilityQuery } from "@/lib/redux/services/reviews-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
@@ -114,6 +115,7 @@ function OrderSummary({
 }) {
   const t = useTranslations("OrderDetailPage");
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   const trackingSteps: StepperStep[] = TRACKING_STEP_KEYS.map((key) => ({ key, label: tStatus(key) }));
 
   return (
@@ -181,42 +183,36 @@ function OrderSummary({
                 </div>
               </div>
               <span className="text-text-muted">
-                {order.currency} {((item.price + item.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0)) * item.qty).toFixed(2)}
+                {formatMoney(
+                  (item.price + item.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0)) * item.qty,
+                  order.currency,
+                  locale,
+                )}
               </span>
             </div>
           ))}
           <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
             <div className="flex items-center justify-between text-text-muted">
               <span>{t("subtotal")}</span>
-              <span>
-                {order.currency} {order.subtotal.toFixed(2)}
-              </span>
+              <span>{formatMoney(order.subtotal, order.currency, locale)}</span>
             </div>
             <div className="flex items-center justify-between text-text-muted">
               <span>{t("deliveryFee")}</span>
-              <span>
-                {order.currency} {order.deliveryFee.toFixed(2)}
-              </span>
+              <span>{formatMoney(order.deliveryFee, order.currency, locale)}</span>
             </div>
             <div className="flex items-center justify-between text-text-muted">
               <span>{t("serviceFee")}</span>
-              <span>
-                {order.currency} {order.serviceFee.toFixed(2)}
-              </span>
+              <span>{formatMoney(order.serviceFee, order.currency, locale)}</span>
             </div>
             {order.discount > 0 && (
               <div className="flex items-center justify-between text-success">
                 <span>{order.promoCode ? t("discountWithCode", { code: order.promoCode }) : t("discount")}</span>
-                <span>
-                  -{order.currency} {order.discount.toFixed(2)}
-                </span>
+                <span>-{formatMoney(order.discount, order.currency, locale)}</span>
               </div>
             )}
             <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold text-text">
               <span>{t("total")}</span>
-              <span>
-                {order.currency} {order.total.toFixed(2)}
-              </span>
+              <span>{formatMoney(order.total, order.currency, locale)}</span>
             </div>
           </div>
         </CardContent>

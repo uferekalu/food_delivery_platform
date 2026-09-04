@@ -16,6 +16,7 @@ import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-ap
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
 import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
+import { formatMoney } from "@/lib/currency";
 
 export default function RestaurantDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const t = useTranslations("RestaurantDetailPage");
@@ -45,6 +46,11 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
   }
 
   const scheduleStatus = getOpenStatus(restaurant.openingHours, restaurant.country);
+  // Deliberately schedule-aware, not just the manual toggle: an owner can forget to flip
+  // isOpen back on/off, so ordering availability (badge, alert, and the "Add to cart" buttons
+  // below) follows the actual weekly hours whenever a schedule is set (docs/ROADMAP.md FDP-84).
+  // A restaurant that never set opening hours still falls back to the manual toggle alone —
+  // see getOpenStatus's "unknown" case.
   const { label: openLabel, isOpenNow } = describeOpenStatus(restaurant.isOpen, scheduleStatus, locale, t);
 
   return (
@@ -104,7 +110,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                             {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
                           </div>
                           <span className="shrink-0 font-semibold text-text">
-                            {restaurant.currency} {item.price.toFixed(2)}
+                            {formatMoney(item.price, restaurant.currency, locale)}
                           </span>
                         </div>
                         {item.modifierGroups.length > 0 && (
@@ -117,7 +123,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                                 {group.options
                                   .map((option) =>
                                     option.priceDelta > 0
-                                      ? `${option.name} (+${restaurant.currency} ${option.priceDelta.toFixed(2)})`
+                                      ? `${option.name} (+${formatMoney(option.priceDelta, restaurant.currency, locale)})`
                                       : option.name,
                                   )
                                   .join(", ")}

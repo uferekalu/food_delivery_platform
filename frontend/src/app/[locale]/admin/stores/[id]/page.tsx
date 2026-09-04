@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
@@ -15,10 +15,12 @@ import { useToast } from "@/components/ui/toast";
 import { useApproveStoreMutation, useGetStoreByIdForAdminQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreCatalogQuery } from "@/lib/redux/services/store-catalog-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { Product } from "@/lib/redux/restaurant-types";
 
 function AdminStoreReview({ id }: { id: string }) {
   const t = useTranslations("AdminStoreReviewPage");
+  const locale = useLocale();
   const DAY_LABELS = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const router = useRouter();
   const { toast } = useToast();
@@ -182,7 +184,7 @@ function AdminStoreReview({ id }: { id: string }) {
                             )}
                           </div>
                           <span className="shrink-0 font-semibold text-text">
-                            {store.currency} {product.price.toFixed(2)}
+                            {formatMoney(product.price, store.currency, locale)}
                           </span>
                         </div>
                         {!product.isAvailable && <Badge variant="neutral">{t("unavailable")}</Badge>}

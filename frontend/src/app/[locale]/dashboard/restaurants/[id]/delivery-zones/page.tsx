@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
@@ -20,6 +20,7 @@ import {
   useDeleteDeliveryZoneMutation,
 } from "@/lib/redux/services/delivery-zones-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { DeliveryZone } from "@/lib/redux/restaurant-types";
 import { ZoneFormModal } from "./zone-form-modal";
 
@@ -57,6 +58,7 @@ function ZoneRow({
   onEdit: () => void;
 }) {
   const t = useTranslations("DeliveryZonesPage");
+  const locale = useLocale();
   const { toast } = useToast();
   const [deleteZone, { isLoading: isDeleting }] = useDeleteDeliveryZoneMutation();
   const [confirming, setConfirming] = useState(false);
@@ -80,8 +82,8 @@ function ZoneRow({
         </div>
         <span className="text-sm text-text-muted">{t("upToKm", { km: zone.maxDistanceKm })}</span>
         <span className="text-sm text-text-muted">
-          {currency} {zone.baseFee.toFixed(2)} {t("base")}
-          {zone.perKmFee > 0 ? ` + ${currency} ${zone.perKmFee.toFixed(2)}/km` : ""}
+          {formatMoney(zone.baseFee, currency, locale)} {t("base")}
+          {zone.perKmFee > 0 ? ` + ${formatMoney(zone.perKmFee, currency, locale)}/km` : ""}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -175,6 +177,7 @@ function DeliveryZonesManager({ restaurantId }: { restaurantId: string }) {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         restaurantId={restaurantId}
+        currency={restaurant.currency}
         editing={editing}
       />
     </div>

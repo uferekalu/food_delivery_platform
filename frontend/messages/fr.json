@@ -146,7 +146,7 @@
     "quantity": "Quantité",
     "decreaseQuantity": "Diminuer la quantité",
     "increaseQuantity": "Augmenter la quantité",
-    "addToCartWithPrice": "Ajouter au panier — {currency} {amount}",
+    "addToCartWithPrice": "Ajouter au panier — {amount}",
     "logInToOrder": "Connectez-vous pour commander"
   },
   "HomePage": {
@@ -409,6 +409,7 @@
     "pickDateAndTime": "Choisissez une date et une heure",
     "mustBeInFuture": "Doit être dans le futur",
     "couldNotValidateCode": "Impossible de valider ce code",
+    "minOrderNotMet": "Ce code promo nécessite une commande minimale de {amount}",
     "couldNotPlaceOrder": "Impossible de passer votre commande",
     "loadingYourCart": "Chargement de votre panier",
     "cartEmpty": "Votre panier est vide",
@@ -1071,13 +1072,13 @@
     "orderId": "ID de la commande",
     "lookUp": "Rechercher",
     "couldNotFindOrder": "Aucune commande trouvée avec cet ID.",
-    "orderSummary": "{currency} {total} · paiement {paymentStatus}",
+    "orderSummary": "{total} · paiement {paymentStatus}",
     "refSuffix": " · réf {ref}",
     "onlyDeliveredCanBeRefunded": "Seule une commande livrée avec un paiement réussi peut être remboursée.",
     "refundOrder": "Rembourser la commande",
     "refundOrderTitle": "Rembourser la commande {orderNumber} ?",
     "refundThisOrder": "Rembourser cette commande ?",
-    "refundOrderDescription": "Ceci débitera {currency} {total} au client et ne peut pas être annulé.",
+    "refundOrderDescription": "Ceci débitera {total} au client et ne peut pas être annulé.",
     "refund": "Rembourser"
   },
   "AdminRestaurantReviewPage": {
@@ -1207,7 +1208,7 @@
   },
   "RiderDashboardPage": {
     "deliverTo": "Livrer à {line1}, {city}",
-    "deliveryFeeAmount": "{currency} {amount} frais de livraison",
+    "deliveryFeeAmount": "{amount} frais de livraison",
     "orderAccepted": "Commande acceptée",
     "couldNotAcceptOrder": "Impossible d'accepter la commande",
     "accept": "Accepter",

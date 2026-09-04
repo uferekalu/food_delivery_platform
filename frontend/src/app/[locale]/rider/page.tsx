@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
@@ -23,6 +23,7 @@ import {
   useGetMyDeliveriesQuery,
 } from "@/lib/redux/services/riders-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
@@ -43,6 +44,7 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
 function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
   const t = useTranslations("RiderDashboardPage");
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   const { toast } = useToast();
   const [assignOrder, { isLoading }] = useAssignRiderOrderMutation();
   const itemsSummary = order.items.map((item) => `${item.qty}× ${item.name}`).join(", ");
@@ -59,7 +61,7 @@ function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
           {t("deliverTo", { line1: order.deliveryAddress.line1, city: order.deliveryAddress.city })}
         </p>
         <p className="text-sm font-medium text-text">
-          {t("deliveryFeeAmount", { currency: order.currency, amount: order.deliveryFee.toFixed(2) })}
+          {t("deliveryFeeAmount", { amount: formatMoney(order.deliveryFee, order.currency, locale) })}
         </p>
         <Button
           size="sm"

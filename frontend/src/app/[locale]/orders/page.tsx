@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetMyOrdersQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
 const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
@@ -31,6 +32,7 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
 function OrderRow({ order }: { order: Order }) {
   const t = useTranslations("OrdersPage");
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   const itemCount = order.items.reduce((sum, item) => sum + item.qty, 0);
 
   return (
@@ -45,7 +47,7 @@ function OrderRow({ order }: { order: Order }) {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-text">
-              {order.currency} {order.total.toFixed(2)}
+              {formatMoney(order.total, order.currency, locale)}
             </span>
             <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetMyRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetSalesReportQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -78,6 +79,7 @@ function DownloadCsvButton({ restaurantId, from, to }: { restaurantId: string; f
 
 function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
   const t = useTranslations("SalesReportPage");
+  const locale = useLocale();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const { data, isLoading, isFetching, isError } = useGetSalesReportQuery({
@@ -87,7 +89,7 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
   });
 
   const currency = data?.currency ?? restaurant.currency;
-  const money = (value: number) => `${currency} ${value.toFixed(2)}`;
+  const money = (value: number) => formatMoney(value, currency, locale);
 
   return (
     <Container className="flex flex-col gap-6 py-10">

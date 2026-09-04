@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Drawer } from "@/components/ui/drawer";
 import { IconButton } from "@/components/ui/icon-button";
@@ -16,6 +16,7 @@ import {
   useUpdateCartItemMutation,
 } from "@/lib/redux/services/cart-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { CartItem } from "@/lib/redux/restaurant-types";
 
 function CartIcon() {
@@ -36,6 +37,7 @@ function CartIcon() {
 
 function CartLineItem({ item, currency }: { item: CartItem; currency: string }) {
   const t = useTranslations("CartDrawer");
+  const locale = useLocale();
   const [updateItem] = useUpdateCartItemMutation();
   const [removeItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
   const { toast } = useToast();
@@ -124,9 +126,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
             }
           />
         </div>
-        <span className="text-sm font-medium text-text">
-          {currency} {lineTotal.toFixed(2)}
-        </span>
+        <span className="text-sm font-medium text-text">{formatMoney(lineTotal, currency, locale)}</span>
       </div>
       </div>
     </div>
@@ -135,6 +135,7 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
 
 export function CartDrawer() {
   const t = useTranslations("CartDrawer");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const { status } = useAppSelector((state) => state.auth);
   const { data: cart, isLoading } = useGetCartQuery(undefined, { skip: status !== "authenticated" });
@@ -171,9 +172,7 @@ export function CartDrawer() {
             <div className="mt-auto flex flex-col gap-3 border-t border-border pt-4">
               <div className="flex items-center justify-between text-sm font-semibold text-text">
                 <span>{t("subtotal")}</span>
-                <span>
-                  {cart.currency} {cart.subtotal.toFixed(2)}
-                </span>
+                <span>{formatMoney(cart.subtotal, cart.currency, locale)}</span>
               </div>
               <Link
                 href="/checkout"

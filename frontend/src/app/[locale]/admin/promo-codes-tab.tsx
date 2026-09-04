@@ -1,12 +1,13 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import { Controller, useForm } from "react-hook-form";
+import { useLocale, useTranslations } from "next-intl";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
   useUpdatePromoCodeMutation,
 } from "@/lib/redux/services/admin-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatNumber } from "@/lib/currency";
 import { DISCOUNT_TYPES, type PromoCode } from "@/lib/redux/restaurant-types";
 
 // An empty number input submits as "" — coerced to 0 by z.coerce.number() rather than treated
@@ -30,6 +32,7 @@ const blankToUndefined = (v: unknown) => (v === "" ? undefined : v);
 
 function CreatePromoForm() {
   const t = useTranslations("AdminPromoCodesTab");
+  const locale = useLocale();
   const { toast } = useToast();
   const [createPromo, { isLoading }] = useCreatePromoCodeMutation();
 
@@ -58,6 +61,7 @@ function CreatePromoForm() {
     resolver: zodResolver(promoSchema),
     defaultValues: { discountType: "percentage" },
   });
+  const discountType = useWatch({ control, name: "discountType" });
 
   async function submit(values: PromoValues) {
     try {
@@ -99,10 +103,36 @@ function CreatePromoForm() {
             />
           </FormField>
           <FormField label={t("value")} error={errors.discountValue?.message} required>
-            <Input type="number" step="0.01" min="0" {...register("discountValue")} />
+            {discountType === "fixed" ? (
+              <Controller
+                control={control}
+                name="discountValue"
+                render={({ field }) => (
+                  <MoneyInput
+                    value={field.value as number | undefined}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    locale={locale}
+                  />
+                )}
+              />
+            ) : (
+              <Input type="number" step="0.01" min="0" {...register("discountValue")} />
+            )}
           </FormField>
           <FormField label={t("minOrderAmount")} hint={t("optional")}>
-            <Input type="number" step="0.01" min="0" {...register("minOrderAmount")} />
+            <Controller
+              control={control}
+              name="minOrderAmount"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
           <FormField label={t("usageLimit")} hint={t("optionalUnlimited")} className="sm:col-span-2">
             <Input type="number" min="1" {...register("usageLimit")} />
@@ -118,6 +148,7 @@ function CreatePromoForm() {
 
 function PromoRow({ promo }: { promo: PromoCode }) {
   const t = useTranslations("AdminPromoCodesTab");
+  const locale = useLocale();
   const { toast } = useToast();
   const [updatePromo, { isLoading }] = useUpdatePromoCodeMutation();
 
@@ -130,7 +161,9 @@ function PromoRow({ promo }: { promo: PromoCode }) {
             <Badge variant={promo.isActive ? "success" : "neutral"}>{promo.isActive ? t("active") : t("inactive")}</Badge>
           </div>
           <span className="text-sm text-text-muted">
-            {promo.discountType === "percentage" ? t("percentOff", { value: promo.discountValue }) : t("amountOff", { value: promo.discountValue })}
+            {promo.discountType === "percentage"
+              ? t("percentOff", { value: promo.discountValue })
+              : t("amountOff", { value: formatNumber(promo.discountValue, locale) })}
             {promo.usageLimit
               ? t("usedOfLimit", { used: promo.usedCount, limit: promo.usageLimit })
               : t("usedTimes", { count: promo.usedCount })}

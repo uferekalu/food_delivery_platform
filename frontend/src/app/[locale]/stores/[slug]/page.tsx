@@ -17,6 +17,7 @@ import { useAddStoreItemMutation } from "@/lib/redux/services/cart-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import type { Product, ProductCategory } from "@/lib/redux/restaurant-types";
 import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
+import { formatMoney } from "@/lib/currency";
 
 function isConflictError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "status" in err && (err as { status: unknown }).status === 409;
@@ -24,6 +25,7 @@ function isConflictError(err: unknown): boolean {
 
 function ProductCard({ product, currency, storeIsOpen }: { product: Product; currency: string; storeIsOpen: boolean }) {
   const t = useTranslations("StoreDetailPage");
+  const locale = useLocale();
   const { toast } = useToast();
   const [addStoreItem, { isLoading }] = useAddStoreItemMutation();
   const [confirmingReplace, setConfirmingReplace] = useState(false);
@@ -63,16 +65,14 @@ function ProductCard({ product, currency, storeIsOpen }: { product: Product; cur
             {product.discountedPrice != null ? (
               <>
                 <span className="text-xs text-text-muted line-through">
-                  {currency} {product.price.toFixed(2)}
+                  {formatMoney(product.price, currency, locale)}
                 </span>
                 <span className="font-semibold text-danger">
-                  {currency} {product.discountedPrice.toFixed(2)}
+                  {formatMoney(product.discountedPrice, currency, locale)}
                 </span>
               </>
             ) : (
-              <span className="font-semibold text-text">
-                {currency} {product.price.toFixed(2)}
-              </span>
+              <span className="font-semibold text-text">{formatMoney(product.price, currency, locale)}</span>
             )}
           </div>
         </div>
@@ -178,6 +178,9 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
 
   const topLevelCategories = catalog?.categories.filter((c) => c.parentCategoryId === null) ?? [];
   const scheduleStatus = getOpenStatus(store.openingHours, store.country);
+  // Deliberately schedule-aware, not just the manual toggle — see the identical note on the
+  // restaurant detail page (docs/ROADMAP.md FDP-84): an owner can forget to flip isOpen, so
+  // ordering availability follows the actual weekly hours whenever a schedule is set.
   const { label: openLabel, isOpenNow } = describeOpenStatus(store.isOpen, scheduleStatus, locale, t);
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +24,7 @@ import { useValidatePromoCodeMutation } from "@/lib/redux/services/promo-codes-a
 import { useListAddressesQuery } from "@/lib/redux/services/account-api";
 import { useGetPaymentProvidersQuery, useInitiatePaymentMutation } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { PaymentProvider } from "@/lib/redux/restaurant-types";
 
 // Mirrors backend/src/orders/orders.service.ts's DELIVERY_FEE_RATE/SERVICE_FEE_RATE — a
@@ -49,6 +50,7 @@ interface AppliedPromo {
 
 function CheckoutForm() {
   const t = useTranslations("CheckoutPage");
+  const locale = useLocale();
   const providerLabels: Record<PaymentProvider, string> = {
     stripe: t("cardStripe"),
     paystack: "Paystack",
@@ -153,7 +155,11 @@ function CheckoutForm() {
         setAppliedPromo({ code: code.toUpperCase(), discountAmount: result.discountAmount });
       } else {
         setAppliedPromo(null);
-        setPromoError(result.reason);
+        setPromoError(
+          result.minOrderAmount != null
+            ? t("minOrderNotMet", { amount: formatMoney(result.minOrderAmount, cart.currency, locale) })
+            : result.reason,
+        );
       }
     } catch (err) {
       setAppliedPromo(null);
@@ -348,9 +354,7 @@ function CheckoutForm() {
                 {appliedPromo ? (
                   <Alert variant="success" title={t("promoApplied", { code: appliedPromo.code })}>
                     <div className="flex items-center justify-between gap-3">
-                      <span>
-                        -{currency} {appliedPromo.discountAmount.toFixed(2)}
-                      </span>
+                      <span>{formatMoney(-appliedPromo.discountAmount, currency, locale)}</span>
                       <Button type="button" variant="ghost" size="sm" onClick={removePromo}>
                         {t("remove")}
                       </Button>
@@ -410,7 +414,11 @@ function CheckoutForm() {
                     {item.qty}× {item.name}
                   </span>
                   <span className="text-text-muted">
-                    {currency} {((item.price + item.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0)) * item.qty).toFixed(2)}
+                    {formatMoney(
+                      (item.price + item.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0)) * item.qty,
+                      currency,
+                      locale,
+                    )}
                   </span>
                 </div>
               ))}
@@ -418,35 +426,25 @@ function CheckoutForm() {
             <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
               <div className="flex items-center justify-between text-text-muted">
                 <span>{t("products")}</span>
-                <span>
-                  {currency} {subtotal.toFixed(2)}
-                </span>
+                <span>{formatMoney(subtotal, currency, locale)}</span>
               </div>
               {discount > 0 && (
                 <div className="flex items-center justify-between text-success">
                   <span>{t("promotion")}</span>
-                  <span>
-                    -{currency} {discount.toFixed(2)}
-                  </span>
+                  <span>{formatMoney(-discount, currency, locale)}</span>
                 </div>
               )}
               <div className="flex items-center justify-between text-text-muted">
                 <span>{t("deliveryEst")}</span>
-                <span>
-                  {currency} {estDeliveryFee.toFixed(2)}
-                </span>
+                <span>{formatMoney(estDeliveryFee, currency, locale)}</span>
               </div>
               <div className="flex items-center justify-between text-text-muted">
                 <span>{t("serviceFeeEst")}</span>
-                <span>
-                  {currency} {estServiceFee.toFixed(2)}
-                </span>
+                <span>{formatMoney(estServiceFee, currency, locale)}</span>
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold text-text">
                 <span>{t("total")}</span>
-                <span>
-                  {currency} {estTotal.toFixed(2)}
-                </span>
+                <span>{formatMoney(estTotal, currency, locale)}</span>
               </div>
             </div>
             <Button type="submit" isLoading={isPlacingOrder || isStartingPayment} size="lg" className="mt-1">

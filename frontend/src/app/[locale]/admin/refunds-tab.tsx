@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,12 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useLazyGetOrderAsAdminQuery, useRefundOrderMutation } from "@/lib/redux/services/admin-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 
 export function RefundsTab() {
   const t = useTranslations("AdminRefundsTab");
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   const [orderId, setOrderId] = useState("");
   const [lookupOrder, { data: order, isFetching, isError }] = useLazyGetOrderAsAdminQuery();
   const [refundOrder, { isLoading: refunding }] = useRefundOrderMutation();
@@ -73,7 +75,7 @@ export function RefundsTab() {
               <Badge variant={order.status === "REFUNDED" ? "neutral" : "info"}>{tStatus(order.status)}</Badge>
             </div>
             <p className="text-sm text-text-muted">
-              {t("orderSummary", { currency: order.currency, total: order.total.toFixed(2), paymentStatus: order.paymentStatus })}
+              {t("orderSummary", { total: formatMoney(order.total, order.currency, locale), paymentStatus: order.paymentStatus })}
               {order.paymentRef ? t("refSuffix", { ref: order.paymentRef }) : ""}
             </p>
             {!refundable && <Alert variant="warning">{t("onlyDeliveredCanBeRefunded")}</Alert>}
@@ -95,7 +97,7 @@ export function RefundsTab() {
         onClose={() => setConfirming(false)}
         onConfirm={confirmRefund}
         title={order ? t("refundOrderTitle", { orderNumber: order.orderNumber }) : t("refundThisOrder")}
-        description={order ? t("refundOrderDescription", { currency: order.currency, total: order.total.toFixed(2) }) : undefined}
+        description={order ? t("refundOrderDescription", { total: formatMoney(order.total, order.currency, locale) }) : undefined}
         confirmLabel={t("refund")}
         isLoading={refunding}
       />

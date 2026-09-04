@@ -7,7 +7,11 @@ import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 
 export type PromoCodeValidation =
   | { valid: true; promoCodeId: string; discountAmount: number }
-  | { valid: false; reason: string };
+  // `minOrderAmount` is only set for the min-order-not-met case — this service has no currency
+  // in scope to format it with (it never loads the restaurant/store document), so `reason` stays
+  // a plain sentence for every other rejection, and the frontend builds its own currency-aware
+  // message for this one case using the cart's own currency instead of embedding a bare number.
+  | { valid: false; reason: string; minOrderAmount?: number };
 
 @Injectable()
 export class PromoCodesService {
@@ -60,7 +64,8 @@ export class PromoCodesService {
     if (subtotal < promo.minOrderAmount) {
       return {
         valid: false,
-        reason: `This promo code requires a minimum order of ${promo.minOrderAmount.toFixed(2)}`,
+        reason: 'This promo code requires a higher minimum order',
+        minOrderAmount: promo.minOrderAmount,
       };
     }
     if (promo.usageLimit !== null && promo.usedCount >= promo.usageLimit) {

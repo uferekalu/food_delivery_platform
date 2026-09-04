@@ -146,7 +146,7 @@
     "quantity": "Menge",
     "decreaseQuantity": "Menge verringern",
     "increaseQuantity": "Menge erhöhen",
-    "addToCartWithPrice": "Zum Warenkorb hinzufügen — {currency} {amount}",
+    "addToCartWithPrice": "Zum Warenkorb hinzufügen — {amount}",
     "logInToOrder": "Zum Bestellen anmelden"
   },
   "HomePage": {
@@ -409,6 +409,7 @@
     "pickDateAndTime": "Wähle ein Datum und eine Uhrzeit",
     "mustBeInFuture": "Muss in der Zukunft liegen",
     "couldNotValidateCode": "Dieser Code konnte nicht überprüft werden",
+    "minOrderNotMet": "Dieser Rabattcode erfordert einen Mindestbestellwert von {amount}",
     "couldNotPlaceOrder": "Deine Bestellung konnte nicht aufgegeben werden",
     "loadingYourCart": "Dein Warenkorb wird geladen",
     "cartEmpty": "Dein Warenkorb ist leer",
@@ -1071,13 +1072,13 @@
     "orderId": "Bestell-ID",
     "lookUp": "Nachschlagen",
     "couldNotFindOrder": "Keine Bestellung mit dieser ID gefunden.",
-    "orderSummary": "{currency} {total} · Zahlung {paymentStatus}",
+    "orderSummary": "{total} · Zahlung {paymentStatus}",
     "refSuffix": " · Ref {ref}",
     "onlyDeliveredCanBeRefunded": "Nur eine gelieferte Bestellung mit erfolgreicher Zahlung kann erstattet werden.",
     "refundOrder": "Bestellung erstatten",
     "refundOrderTitle": "Bestellung {orderNumber} erstatten?",
     "refundThisOrder": "Diese Bestellung erstatten?",
-    "refundOrderDescription": "Dies erstattet {currency} {total} an den Kunden zurück und kann nicht rückgängig gemacht werden.",
+    "refundOrderDescription": "Dies erstattet {total} an den Kunden zurück und kann nicht rückgängig gemacht werden.",
     "refund": "Erstatten"
   },
   "AdminRestaurantReviewPage": {
@@ -1207,7 +1208,7 @@
   },
   "RiderDashboardPage": {
     "deliverTo": "Liefern an {line1}, {city}",
-    "deliveryFeeAmount": "{currency} {amount} Liefergebühr",
+    "deliveryFeeAmount": "{amount} Liefergebühr",
     "orderAccepted": "Bestellung angenommen",
     "couldNotAcceptOrder": "Bestellung konnte nicht angenommen werden",
     "accept": "Annehmen",
