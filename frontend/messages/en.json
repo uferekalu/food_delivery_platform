@@ -146,7 +146,7 @@
     "quantity": "Quantity",
     "decreaseQuantity": "Decrease quantity",
     "increaseQuantity": "Increase quantity",
-    "addToCartWithPrice": "Add to cart — {currency} {amount}",
+    "addToCartWithPrice": "Add to cart — {amount}",
     "logInToOrder": "Log in to order"
   },
   "HomePage": {
@@ -409,6 +409,7 @@
     "pickDateAndTime": "Pick a date and time",
     "mustBeInFuture": "Must be in the future",
     "couldNotValidateCode": "Couldn't validate that code",
+    "minOrderNotMet": "This promo code requires a minimum order of {amount}",
     "couldNotPlaceOrder": "Couldn't place your order",
     "loadingYourCart": "Loading your cart",
     "cartEmpty": "Your cart is empty",
@@ -1071,13 +1072,13 @@
     "orderId": "Order ID",
     "lookUp": "Look up",
     "couldNotFindOrder": "Couldn't find an order with that ID.",
-    "orderSummary": "{currency} {total} · payment {paymentStatus}",
+    "orderSummary": "{total} · payment {paymentStatus}",
     "refSuffix": " · ref {ref}",
     "onlyDeliveredCanBeRefunded": "Only a delivered order with a successful payment can be refunded.",
     "refundOrder": "Refund order",
     "refundOrderTitle": "Refund order {orderNumber}?",
     "refundThisOrder": "Refund this order?",
-    "refundOrderDescription": "This charges back {currency} {total} to the customer and can't be undone.",
+    "refundOrderDescription": "This charges back {total} to the customer and can't be undone.",
     "refund": "Refund"
   },
   "AdminRestaurantReviewPage": {
@@ -1207,7 +1208,7 @@
   },
   "RiderDashboardPage": {
     "deliverTo": "Deliver to {line1}, {city}",
-    "deliveryFeeAmount": "{currency} {amount} delivery fee",
+    "deliveryFeeAmount": "{amount} delivery fee",
     "orderAccepted": "Order accepted",
     "couldNotAcceptOrder": "Couldn't accept the order",
     "accept": "Accept",

@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
@@ -18,9 +18,11 @@ import {
 } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 
 function AdminRestaurantReview({ id }: { id: string }) {
   const t = useTranslations("AdminRestaurantReviewPage");
+  const locale = useLocale();
   const DAY_LABELS = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const router = useRouter();
   const { toast } = useToast();
@@ -178,7 +180,7 @@ function AdminRestaurantReview({ id }: { id: string }) {
                             {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
                           </div>
                           <span className="shrink-0 font-semibold text-text">
-                            {restaurant.currency} {item.price.toFixed(2)}
+                            {formatMoney(item.price, restaurant.currency, locale)}
                           </span>
                         </div>
                         {!item.isAvailable && <Badge variant="neutral">{t("unavailable")}</Badge>}

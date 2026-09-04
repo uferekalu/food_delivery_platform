@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
-import { useForm, useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
+import { useLocale, useTranslations } from "next-intl";
+import { useForm, useFieldArray, Controller, type Control, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { RequireRole } from "@/components/require-role";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
+import { MoneyInput } from "@/components/ui/money-input";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -31,7 +32,9 @@ import {
   useDeleteItemMutation,
   useToggleItemAvailabilityMutation,
 } from "@/lib/redux/services/menu-api";
+import { useGetMyRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
 
 function PhotoIcon() {
@@ -85,11 +88,15 @@ function ModifierGroupRow({
   register,
   groupIndex,
   onRemoveGroup,
+  currency,
+  locale,
 }: {
   control: Control<ItemFormInput>;
   register: UseFormRegister<ItemFormInput>;
   groupIndex: number;
   onRemoveGroup: () => void;
+  currency: string;
+  locale: string;
 }) {
   const t = useTranslations("MenuManagerPage");
   const {
@@ -120,13 +127,20 @@ function ModifierGroupRow({
               className="flex-1"
               {...register(`modifierGroups.${groupIndex}.options.${optionIndex}.name`)}
             />
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder={t("pricePlaceholder")}
-              className="w-28"
-              {...register(`modifierGroups.${groupIndex}.options.${optionIndex}.priceDelta`)}
+            <Controller
+              control={control}
+              name={`modifierGroups.${groupIndex}.options.${optionIndex}.priceDelta`}
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                  placeholder={t("pricePlaceholder")}
+                  className="w-28"
+                />
+              )}
             />
             <IconButton
               label={t("removeOption")}
@@ -148,17 +162,20 @@ function ModifierGroupRow({
 function ItemFormModal({
   restaurantId,
   categoryId,
+  currency,
   item,
   open,
   onClose,
 }: {
   restaurantId: string;
   categoryId: string;
+  currency: string;
   item?: MenuItem;
   open: boolean;
   onClose: () => void;
 }) {
   const t = useTranslations("MenuManagerPage");
+  const locale = useLocale();
   const [createItem, { isLoading: isCreating }] = useCreateItemMutation();
   const [updateItem, { isLoading: isUpdating }] = useUpdateItemMutation();
   const { toast } = useToast();
@@ -273,10 +290,34 @@ function ItemFormModal({
         </FormField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label={t("price")} error={errors.price?.message} required>
-            <Input type="number" step="0.01" min="0" {...register("price")} />
+            <Controller
+              control={control}
+              name="price"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
           <FormField label={t("costPrice")} error={errors.costPrice?.message} hint={t("costPriceHint")}>
-            <Input type="number" step="0.01" min="0" {...register("costPrice")} />
+            <Controller
+              control={control}
+              name="costPrice"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
         </div>
 
@@ -300,6 +341,8 @@ function ItemFormModal({
               register={register}
               groupIndex={groupIndex}
               onRemoveGroup={() => removeGroup(groupIndex)}
+              currency={currency}
+              locale={locale}
             />
           ))}
         </div>
@@ -314,7 +357,10 @@ type PendingDelete =
 
 function MenuManager({ restaurantId }: { restaurantId: string }) {
   const t = useTranslations("MenuManagerPage");
+  const locale = useLocale();
   const { data: menu, isLoading, isError } = useGetMenuQuery(restaurantId);
+  const { data: restaurants, isLoading: isLoadingRestaurant } = useGetMyRestaurantsQuery();
+  const restaurant = restaurants?.find((r) => r._id === restaurantId);
   const [deleteCategory, { isLoading: isDeletingCategory }] = useDeleteCategoryMutation();
   const [deleteItem, { isLoading: isDeletingItem }] = useDeleteItemMutation();
   const [toggleAvailability] = useToggleItemAvailabilityMutation();
@@ -342,8 +388,9 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
       });
   }
 
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isLoading || isLoadingRestaurant) return <Skeleton className="h-64 w-full" />;
   if (isError) return <Alert variant="danger">{t("couldNotLoadMenu")}</Alert>;
+  if (!restaurant) return <Alert variant="danger">{t("couldNotLoadMenu")}</Alert>;
 
   return (
     <div className="flex flex-col gap-6">
@@ -394,7 +441,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                       )}
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-text">{item.name}</span>
-                        <span className="text-sm text-text-muted">{item.price.toFixed(2)}</span>
+                        <span className="text-sm text-text-muted">{formatMoney(item.price, restaurant.currency, locale)}</span>
                         <div className="flex flex-wrap gap-1">
                           {item.modifierGroups.length > 0 && (
                             <Badge variant="neutral" className="w-fit">
@@ -453,6 +500,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
         <ItemFormModal
           restaurantId={restaurantId}
           categoryId={activeCategoryId}
+          currency={restaurant.currency}
           open={!!activeCategoryId}
           onClose={() => setActiveCategoryId(null)}
         />
@@ -462,6 +510,7 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
         <ItemFormModal
           restaurantId={restaurantId}
           categoryId={editingItem.categoryId}
+          currency={restaurant.currency}
           item={editingItem}
           open={!!editingItem}
           onClose={() => setEditingItem(null)}

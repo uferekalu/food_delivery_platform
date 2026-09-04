@@ -1,9 +1,10 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetAdminAnalyticsQuery } from "@/lib/redux/services/admin-api";
+import { formatMoney } from "@/lib/currency";
 import type { OrderStatus } from "@/lib/redux/restaurant-types";
 import type { UserRole } from "@/lib/constants/roles";
 
@@ -22,6 +23,7 @@ export function OverviewTab() {
   const t = useTranslations("AdminOverviewTab");
   const tStatus = useTranslations("OrderStatus");
   const tRole = useTranslations("UserRole");
+  const locale = useLocale();
   const { data, isLoading } = useGetAdminAnalyticsQuery();
 
   if (isLoading || !data) {
@@ -63,7 +65,7 @@ export function OverviewTab() {
               revenueEntries.map(([currency, total]) => (
                 <div key={currency} className="flex items-center justify-between text-sm">
                   <span className="text-text-muted">{currency}</span>
-                  <span className="font-medium text-text">{total.toFixed(2)}</span>
+                  <span className="font-medium text-text">{formatMoney(total, currency, locale)}</span>
                 </div>
               ))
             )}

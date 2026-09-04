@@ -22,6 +22,7 @@ import {
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
+import { formatMoney } from '../common/utils/currency';
 import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -240,7 +241,7 @@ export class OrdersService {
   private notifyNewOrderToOwner(order: OrderDocument): void {
     this.findOwnerId(order)
       .then((ownerId) => {
-        const body = `New order ${order.orderNumber} for ${order.currency} ${order.total.toFixed(2)} just came in.`;
+        const body = `New order ${order.orderNumber} for ${formatMoney(order.total, order.currency)} just came in.`;
         return this.notificationsService.notify({
           userId: ownerId,
           type: 'new_order',

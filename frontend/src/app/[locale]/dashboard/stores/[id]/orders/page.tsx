@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { useGetMyStoresQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreOrdersQuery, useUpdateOrderStatusMutation } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
@@ -106,6 +107,7 @@ function OrderActions({ order }: { order: Order }) {
 
 function OrderQueueCard({ order }: { order: Order }) {
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   const itemsSummary = order.items.map((item) => `${item.qty}× ${item.name}`).join(", ");
 
   return (
@@ -119,9 +121,7 @@ function OrderQueueCard({ order }: { order: Order }) {
           <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
         </div>
         <p className="text-sm text-text">{itemsSummary}</p>
-        <p className="text-sm font-medium text-text">
-          {order.currency} {order.total.toFixed(2)}
-        </p>
+        <p className="text-sm font-medium text-text">{formatMoney(order.total, order.currency, locale)}</p>
         <OrderActions order={order} />
       </CardContent>
     </Card>

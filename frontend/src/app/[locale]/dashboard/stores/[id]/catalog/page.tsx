@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
-import { useForm } from "react-hook-form";
+import { useLocale, useTranslations } from "next-intl";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { RequireRole } from "@/components/require-role";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { MoneyInput } from "@/components/ui/money-input";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -32,7 +33,9 @@ import {
   useDeleteProductMutation,
   useToggleProductAvailabilityMutation,
 } from "@/lib/redux/services/store-catalog-api";
+import { useGetMyStoresQuery } from "@/lib/redux/services/stores-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { Product, ProductCategory } from "@/lib/redux/restaurant-types";
 
 function PhotoIcon() {
@@ -80,17 +83,20 @@ interface ProductFormInput {
 function ProductFormModal({
   storeId,
   categoryId,
+  currency,
   product,
   open,
   onClose,
 }: {
   storeId: string;
   categoryId: string;
+  currency: string;
   product?: Product;
   open: boolean;
   onClose: () => void;
 }) {
   const t = useTranslations("CatalogManagerPage");
+  const locale = useLocale();
   const [createProduct, { isLoading: isCreating }] = useCreateProductMutation();
   const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
   const { toast } = useToast();
@@ -127,6 +133,7 @@ function ProductFormModal({
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors },
   } = useForm<ProductFormInput, unknown, ProductFormValues>({
@@ -189,15 +196,51 @@ function ProductFormModal({
         </FormField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label={t("price")} error={errors.price?.message} required>
-            <Input type="number" step="0.01" min="0" {...register("price")} />
+            <Controller
+              control={control}
+              name="price"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
           <FormField label={t("discountedPrice")} error={errors.discountedPrice?.message} hint={t("discountedPriceHint")}>
-            <Input type="number" step="0.01" min="0" {...register("discountedPrice")} />
+            <Controller
+              control={control}
+              name="discountedPrice"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label={t("costPrice")} error={errors.costPrice?.message} hint={t("costPriceHint")}>
-            <Input type="number" step="0.01" min="0" {...register("costPrice")} />
+            <Controller
+              control={control}
+              name="costPrice"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
           </FormField>
           <FormField label={t("unit")} error={errors.unit?.message} hint={t("unitHint")}>
             <Input {...register("unit")} />
@@ -217,11 +260,15 @@ type PendingDelete =
 
 function ProductRow({
   product,
+  currency,
+  locale,
   onEdit,
   onDelete,
   onToggle,
 }: {
   product: Product;
+  currency: string;
+  locale: string;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
@@ -244,11 +291,11 @@ function ProductRow({
           <span className="text-sm text-text-muted">
             {product.discountedPrice != null ? (
               <>
-                <span className="line-through">{product.price.toFixed(2)}</span>{" "}
-                <span className="text-text">{product.discountedPrice.toFixed(2)}</span>
+                <span className="line-through">{formatMoney(product.price, currency, locale)}</span>{" "}
+                <span className="text-text">{formatMoney(product.discountedPrice, currency, locale)}</span>
               </>
             ) : (
-              product.price.toFixed(2)
+              formatMoney(product.price, currency, locale)
             )}
             {product.unit ? ` · ${product.unit}` : ""}
           </span>
@@ -289,6 +336,8 @@ function CategoryNode({
   category,
   categories,
   products,
+  currency,
+  locale,
   onAddProduct,
   onEditProduct,
   onDeletePending,
@@ -297,6 +346,8 @@ function CategoryNode({
   category: ProductCategory;
   categories: ProductCategory[];
   products: Product[];
+  currency: string;
+  locale: string;
   onAddProduct: (categoryId: string) => void;
   onEditProduct: (product: Product) => void;
   onDeletePending: (pending: PendingDelete) => void;
@@ -334,6 +385,8 @@ function CategoryNode({
               <ProductRow
                 key={product._id}
                 product={product}
+                currency={currency}
+                locale={locale}
                 onEdit={() => onEditProduct(product)}
                 onDelete={() => onDeletePending({ kind: "product", id: product._id, name: product.name })}
                 onToggle={() => void toggleAvailability({ storeId, productId: product._id })}
@@ -350,6 +403,8 @@ function CategoryNode({
                 category={child}
                 categories={categories}
                 products={products}
+                currency={currency}
+                locale={locale}
                 onAddProduct={onAddProduct}
                 onEditProduct={onEditProduct}
                 onDeletePending={onDeletePending}
@@ -418,7 +473,10 @@ function AddCategoryForm({ storeId, categories }: { storeId: string; categories:
 
 function CatalogManager({ storeId }: { storeId: string }) {
   const t = useTranslations("CatalogManagerPage");
+  const locale = useLocale();
   const { data: catalog, isLoading, isError } = useGetStoreCatalogQuery(storeId);
+  const { data: stores, isLoading: isLoadingStore } = useGetMyStoresQuery();
+  const store = stores?.find((s) => s._id === storeId);
   const [deleteCategory, { isLoading: isDeletingCategory }] = useDeleteCategoryMutation();
   const [deleteProduct, { isLoading: isDeletingProduct }] = useDeleteProductMutation();
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -445,8 +503,9 @@ function CatalogManager({ storeId }: { storeId: string }) {
       });
   }
 
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isLoading || isLoadingStore) return <Skeleton className="h-64 w-full" />;
   if (isError || !catalog) return <Alert variant="danger">{t("couldNotLoadCatalog")}</Alert>;
+  if (!store) return <Alert variant="danger">{t("couldNotLoadCatalog")}</Alert>;
 
   const topLevel = childrenOf(catalog.categories, null);
 
@@ -464,6 +523,8 @@ function CatalogManager({ storeId }: { storeId: string }) {
             category={category}
             categories={catalog.categories}
             products={catalog.products}
+            currency={store.currency}
+            locale={locale}
             onAddProduct={setActiveCategoryId}
             onEditProduct={setEditingProduct}
             onDeletePending={setPendingDelete}
@@ -475,6 +536,7 @@ function CatalogManager({ storeId }: { storeId: string }) {
         <ProductFormModal
           storeId={storeId}
           categoryId={activeCategoryId}
+          currency={store.currency}
           open={!!activeCategoryId}
           onClose={() => setActiveCategoryId(null)}
         />
@@ -484,6 +546,7 @@ function CatalogManager({ storeId }: { storeId: string }) {
         <ProductFormModal
           storeId={storeId}
           categoryId={editingProduct.categoryId}
+          currency={store.currency}
           product={editingProduct}
           open={!!editingProduct}
           onClose={() => setEditingProduct(null)}

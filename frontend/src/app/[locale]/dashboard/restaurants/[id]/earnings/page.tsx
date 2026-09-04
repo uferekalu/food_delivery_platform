@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,6 +26,7 @@ import {
   useSetupStripePayoutMutation,
 } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { formatMoney } from "@/lib/currency";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function EarningsStat({ label, value }: { label: string; value: string }) {
@@ -298,6 +299,7 @@ function StripePayoutSetup({ restaurant }: { restaurant: Restaurant }) {
 
 function Earnings({ restaurant }: { restaurant: Restaurant }) {
   const t = useTranslations("EarningsPage");
+  const locale = useLocale();
   const { data, isLoading } = useGetRestaurantEarningsQuery(restaurant._id);
   const { data: providers } = useGetPaymentProvidersQuery(restaurant.currency);
   const paystackAvailable = providers?.includes("paystack") ?? false;
@@ -328,12 +330,12 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
           ) : (
             <Card>
               <CardContent className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                <EarningsStat label={t("grossRevenue")} value={`${data.currency} ${data.grossRevenue.toFixed(2)}`} />
+                <EarningsStat label={t("grossRevenue")} value={formatMoney(data.grossRevenue, data.currency, locale)} />
                 <EarningsStat
                   label={t("platformFee")}
-                  value={`-${data.currency} ${data.platformFeeTotal.toFixed(2)}`}
+                  value={`-${formatMoney(data.platformFeeTotal, data.currency, locale)}`}
                 />
-                <EarningsStat label={t("netEarned")} value={`${data.currency} ${data.netEarned.toFixed(2)}`} />
+                <EarningsStat label={t("netEarned")} value={formatMoney(data.netEarned, data.currency, locale)} />
               </CardContent>
               <CardContent className="border-t border-border pt-4 text-sm text-text-muted">
                 {t("fromDeliveredOrders", { count: data.deliveredOrders })}

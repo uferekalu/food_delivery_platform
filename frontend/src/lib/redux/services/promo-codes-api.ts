@@ -8,7 +8,10 @@ export interface ValidatePromoCodeInput {
 
 export type PromoCodeValidation =
   | { valid: true; promoCodeId: string; discountAmount: number }
-  | { valid: false; reason: string };
+  // `minOrderAmount` is only set for the min-order-not-met rejection — the backend has no
+  // currency in scope to format it with, so the caller builds its own currency-aware message
+  // using the cart's own currency instead of rendering `reason` verbatim for this one case.
+  | { valid: false; reason: string; minOrderAmount?: number };
 
 export const promoCodesApi = api.injectEndpoints({
   endpoints: (builder) => ({

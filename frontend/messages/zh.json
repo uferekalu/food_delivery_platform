@@ -146,7 +146,7 @@
     "quantity": "数量",
     "decreaseQuantity": "减少数量",
     "increaseQuantity": "增加数量",
-    "addToCartWithPrice": "加入购物车 — {currency} {amount}",
+    "addToCartWithPrice": "加入购物车 — {amount}",
     "logInToOrder": "登录后下单"
   },
   "HomePage": {
@@ -409,6 +409,7 @@
     "pickDateAndTime": "选择日期和时间",
     "mustBeInFuture": "必须是未来的时间",
     "couldNotValidateCode": "无法验证该优惠码",
+    "minOrderNotMet": "该优惠码要求最低订单金额为 {amount}",
     "couldNotPlaceOrder": "无法提交你的订单",
     "loadingYourCart": "正在加载你的购物车",
     "cartEmpty": "你的购物车是空的",
@@ -1071,13 +1072,13 @@
     "orderId": "订单 ID",
     "lookUp": "查找",
     "couldNotFindOrder": "未找到该 ID 对应的订单。",
-    "orderSummary": "{currency} {total} · 支付状态 {paymentStatus}",
+    "orderSummary": "{total} · 支付状态 {paymentStatus}",
     "refSuffix": " · 参考号 {ref}",
     "onlyDeliveredCanBeRefunded": "只有已送达且支付成功的订单才能退款。",
     "refundOrder": "退款订单",
     "refundOrderTitle": "退款订单 {orderNumber}？",
     "refundThisOrder": "退款此订单？",
-    "refundOrderDescription": "这将向顾客退款 {currency} {total}，且无法撤销。",
+    "refundOrderDescription": "这将向顾客退款 {total}，且无法撤销。",
     "refund": "退款"
   },
   "AdminRestaurantReviewPage": {
@@ -1207,7 +1208,7 @@
   },
   "RiderDashboardPage": {
     "deliverTo": "配送至 {line1}，{city}",
-    "deliveryFeeAmount": "配送费 {currency} {amount}",
+    "deliveryFeeAmount": "配送费 {amount}",
     "orderAccepted": "订单已接受",
     "couldNotAcceptOrder": "无法接受该订单",
     "accept": "接受",

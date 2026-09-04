@@ -146,7 +146,7 @@
     "quantity": "Cantidad",
     "decreaseQuantity": "Disminuir cantidad",
     "increaseQuantity": "Aumentar cantidad",
-    "addToCartWithPrice": "Agregar al carrito — {currency} {amount}",
+    "addToCartWithPrice": "Agregar al carrito — {amount}",
     "logInToOrder": "Inicia sesión para pedir"
   },
   "HomePage": {
@@ -409,6 +409,7 @@
     "pickDateAndTime": "Elige una fecha y hora",
     "mustBeInFuture": "Debe ser en el futuro",
     "couldNotValidateCode": "No se pudo validar ese código",
+    "minOrderNotMet": "Este código promocional requiere un pedido mínimo de {amount}",
     "couldNotPlaceOrder": "No se pudo realizar tu pedido",
     "loadingYourCart": "Cargando tu carrito",
     "cartEmpty": "Tu carrito está vacío",
@@ -1071,13 +1072,13 @@
     "orderId": "ID del pedido",
     "lookUp": "Buscar",
     "couldNotFindOrder": "No se encontró ningún pedido con ese ID.",
-    "orderSummary": "{currency} {total} · pago {paymentStatus}",
+    "orderSummary": "{total} · pago {paymentStatus}",
     "refSuffix": " · ref {ref}",
     "onlyDeliveredCanBeRefunded": "Solo se puede reembolsar un pedido entregado con un pago exitoso.",
     "refundOrder": "Reembolsar pedido",
     "refundOrderTitle": "¿Reembolsar el pedido {orderNumber}?",
     "refundThisOrder": "¿Reembolsar este pedido?",
-    "refundOrderDescription": "Esto reembolsará {currency} {total} al cliente y no se puede deshacer.",
+    "refundOrderDescription": "Esto reembolsará {total} al cliente y no se puede deshacer.",
     "refund": "Reembolsar"
   },
   "AdminRestaurantReviewPage": {
@@ -1207,7 +1208,7 @@
   },
   "RiderDashboardPage": {
     "deliverTo": "Entregar en {line1}, {city}",
-    "deliveryFeeAmount": "{currency} {amount} tarifa de entrega",
+    "deliveryFeeAmount": "{amount} tarifa de entrega",
     "orderAccepted": "Pedido aceptado",
     "couldNotAcceptOrder": "No se pudo aceptar el pedido",
     "accept": "Aceptar",

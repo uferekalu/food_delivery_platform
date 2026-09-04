@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useGetMyDeliveriesQuery } from "@/lib/redux/services/riders-api";
+import { formatMoney } from "@/lib/currency";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
 const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
@@ -26,6 +27,7 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
 
 function DeliveryRow({ order }: { order: Order }) {
   const tStatus = useTranslations("OrderStatus");
+  const locale = useLocale();
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0">
       <div className="flex flex-col">
@@ -33,9 +35,7 @@ function DeliveryRow({ order }: { order: Order }) {
         <span className="text-xs text-text-muted">{new Date(order.createdAt).toLocaleString()}</span>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-text">
-          {order.currency} {order.deliveryFee.toFixed(2)}
-        </span>
+        <span className="text-sm font-medium text-text">{formatMoney(order.deliveryFee, order.currency, locale)}</span>
         <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
       </div>
     </div>
@@ -44,6 +44,7 @@ function DeliveryRow({ order }: { order: Order }) {
 
 function DeliveryHistory() {
   const t = useTranslations("RiderDeliveriesPage");
+  const locale = useLocale();
   const { data: deliveries, isLoading } = useGetMyDeliveriesQuery();
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
@@ -52,8 +53,14 @@ function DeliveryHistory() {
   }
 
   const delivered = deliveries.filter((o) => o.status === "DELIVERED");
-  const totalEarnings = delivered.reduce((sum, o) => sum + o.deliveryFee, 0);
-  const currency = deliveries[0]?.currency ?? "";
+  // A rider could in principle deliver for restaurants/stores in different currencies — summing
+  // raw amounts across currencies into one number would silently produce a meaningless total, so
+  // earnings are grouped by currency and each shown on its own line (almost always just one).
+  const earningsByCurrency = delivered.reduce<Record<string, number>>((acc, o) => {
+    acc[o.currency] = (acc[o.currency] ?? 0) + o.deliveryFee;
+    return acc;
+  }, {});
+  const earningsEntries = Object.entries(earningsByCurrency);
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +69,9 @@ function DeliveryHistory() {
           <CardContent className="flex flex-col gap-1">
             <span className="text-sm text-text-muted">{t("totalEarnings")}</span>
             <span className="text-2xl font-bold text-text">
-              {currency} {totalEarnings.toFixed(2)}
+              {earningsEntries.length > 0
+                ? earningsEntries.map(([currency, total]) => formatMoney(total, currency, locale)).join(" + ")
+                : formatMoney(0, deliveries[0]?.currency, locale)}
             </span>
           </CardContent>
         </Card>
