@@ -7,12 +7,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Carousel } from "@/components/ui/carousel";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
+import { StoreCard } from "@/components/store-card";
 import { HeaderSearch } from "@/components/header-search";
 import { cn } from "@/lib/cn";
 import { Link } from "@/i18n/navigation";
 import { SmartLink } from "@/components/smart-link";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
+import { useListStoresQuery } from "@/lib/redux/services/stores-api";
 import { useGetMyOrdersQuery } from "@/lib/redux/services/orders-api";
 import type { OrderStatus } from "@/lib/redux/restaurant-types";
 
@@ -219,6 +221,22 @@ export default function Home() {
   const countries = Array.from(new Set((data?.items ?? []).map((r) => r.country))).sort();
   const featuredRestaurant = topRestaurants[0];
 
+  // Same "top-rated rail" treatment as restaurants above, one per store vertical — the
+  // marketplace now covers groceries and pharmacy & more too (docs/ROADMAP.md FDP-56 onward),
+  // so the homepage shouldn't read as food-only anymore.
+  const { data: groceriesData, isLoading: loadingGroceries } = useListStoresQuery({
+    type: "groceries",
+    sort: "rating",
+    limit: 50,
+  });
+  const topGroceries = groceriesData?.items.slice(0, 8) ?? [];
+  const { data: pharmacyData, isLoading: loadingPharmacy } = useListStoresQuery({
+    type: "pharmacy_beauty",
+    sort: "rating",
+    limit: 50,
+  });
+  const topPharmacies = pharmacyData?.items.slice(0, 8) ?? [];
+
   const deliveryMinutes = (data?.items ?? [])
     .map((r) => r.estimatedDeliveryMinutes)
     .filter((v): v is number => v != null);
@@ -299,7 +317,7 @@ export default function Home() {
           </h1>
           <p className="max-w-lg text-lg text-white/80">{t("heroDescription")}</p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/restaurants" className={cn(buttonVariants({ size: "lg" }), "bg-white text-brand-700 hover:bg-neutral-100")}>
+            <Link href="/categories" className={cn(buttonVariants({ size: "lg" }), "bg-white text-brand-700 hover:bg-neutral-100")}>
               {t("browseRestaurants")}
             </Link>
             <SmartLink
@@ -394,6 +412,64 @@ export default function Home() {
               <Carousel aria-label={t("topRestaurants")} itemClassName="w-72">
                 {topRestaurants.map((restaurant) => (
                   <RestaurantCard key={restaurant._id} restaurant={restaurant} />
+                ))}
+              </Carousel>
+            )}
+          </Container>
+        </section>
+      )}
+
+      {(loadingGroceries || topGroceries.length > 0) && (
+        <section className="bg-surface">
+          <Container className="flex flex-col gap-6 py-14">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-2xl font-bold text-text">{t("groceries")}</h2>
+                <p className="text-text-muted">{t("topGroceriesDescription")}</p>
+              </div>
+              <Link href="/categories?tab=groceries" className="text-sm font-medium text-primary hover:underline">
+                {t("seeAllGroceries")}
+              </Link>
+            </div>
+            {loadingGroceries ? (
+              <div className="flex gap-4 overflow-x-hidden pb-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-48 w-72 shrink-0" />
+                ))}
+              </div>
+            ) : (
+              <Carousel aria-label={t("groceries")} itemClassName="w-72">
+                {topGroceries.map((store) => (
+                  <StoreCard key={store._id} store={store} />
+                ))}
+              </Carousel>
+            )}
+          </Container>
+        </section>
+      )}
+
+      {(loadingPharmacy || topPharmacies.length > 0) && (
+        <section className="bg-surface-subtle">
+          <Container className="flex flex-col gap-6 py-14">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-2xl font-bold text-text">{t("pharmacyAndMore")}</h2>
+                <p className="text-text-muted">{t("topPharmaciesDescription")}</p>
+              </div>
+              <Link href="/categories?tab=pharmacy" className="text-sm font-medium text-primary hover:underline">
+                {t("seeAllPharmacies")}
+              </Link>
+            </div>
+            {loadingPharmacy ? (
+              <div className="flex gap-4 overflow-x-hidden pb-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-48 w-72 shrink-0" />
+                ))}
+              </div>
+            ) : (
+              <Carousel aria-label={t("pharmacyAndMore")} itemClassName="w-72">
+                {topPharmacies.map((store) => (
+                  <StoreCard key={store._id} store={store} />
                 ))}
               </Carousel>
             )}

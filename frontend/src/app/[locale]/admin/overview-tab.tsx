@@ -26,8 +26,8 @@ export function OverviewTab() {
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
       </div>
@@ -42,10 +42,12 @@ export function OverviewTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label={t("totalOrders")} value={data.orders.total} />
         <StatCard label={t("restaurantsApproved")} value={data.restaurants.approved} />
         <StatCard label={t("restaurantsPending")} value={data.restaurants.pending} />
+        <StatCard label={t("storesApproved")} value={data.stores.approved} />
+        <StatCard label={t("storesPending")} value={data.stores.pending} />
         <StatCard label={t("ridersPendingVerification")} value={data.riders.pending} />
       </div>
 

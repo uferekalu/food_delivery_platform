@@ -18,7 +18,9 @@ describe('AdminService', () => {
   let ridersService: jest.Mocked<Pick<RidersService, 'countByVerification'>>;
   let usersService: jest.Mocked<Pick<UsersService, 'countByRole'>>;
   let menuService: jest.Mocked<Pick<MenuService, 'getMenu'>>;
-  let storesService: jest.Mocked<Pick<StoresService, 'approve'>>;
+  let storesService: jest.Mocked<
+    Pick<StoresService, 'approve' | 'countByApproval'>
+  >;
   let productsService: jest.Mocked<Pick<ProductsService, 'getCatalog'>>;
 
   beforeEach(async () => {
@@ -27,7 +29,7 @@ describe('AdminService', () => {
     ridersService = { countByVerification: jest.fn() };
     usersService = { countByRole: jest.fn() };
     menuService = { getMenu: jest.fn() };
-    storesService = { approve: jest.fn() };
+    storesService = { approve: jest.fn(), countByApproval: jest.fn() };
     productsService = { getCatalog: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -56,6 +58,10 @@ describe('AdminService', () => {
       approved: 3,
       pending: 1,
     });
+    storesService.countByApproval.mockResolvedValue({
+      approved: 4,
+      pending: 2,
+    });
     ridersService.countByVerification.mockResolvedValue({
       verified: 2,
       pending: 1,
@@ -76,6 +82,7 @@ describe('AdminService', () => {
         revenueByCurrency: { NGN: 1000 },
       },
       restaurants: { approved: 3, pending: 1 },
+      stores: { approved: 4, pending: 2 },
       riders: { verified: 2, pending: 1 },
       users: { customer: 20, restaurant_owner: 3, rider: 3, admin: 1 },
     });

@@ -352,6 +352,7 @@ export interface AdminAnalytics {
     revenueByCurrency: Record<string, number>;
   };
   restaurants: { approved: number; pending: number };
+  stores: { approved: number; pending: number };
   riders: { verified: number; pending: number };
   users: Record<string, number>;
 }

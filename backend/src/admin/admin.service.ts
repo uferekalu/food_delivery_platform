@@ -18,6 +18,7 @@ export interface AdminAnalytics {
     revenueByCurrency: Record<string, number>;
   };
   restaurants: { approved: number; pending: number };
+  stores: { approved: number; pending: number };
   riders: { verified: number; pending: number };
   users: Record<UserRole, number>;
 }
@@ -40,10 +41,11 @@ export class AdminService {
   ) {}
 
   async getAnalytics(): Promise<AdminAnalytics> {
-    const [orderStats, restaurantStats, riderStats, userStats] =
+    const [orderStats, restaurantStats, storeStats, riderStats, userStats] =
       await Promise.all([
         this.ordersService.getAnalyticsSummary(),
         this.restaurantsService.countByApproval(),
+        this.storesService.countByApproval(),
         this.ridersService.countByVerification(),
         this.usersService.countByRole(),
       ]);
@@ -55,6 +57,7 @@ export class AdminService {
         revenueByCurrency: orderStats.revenueByCurrency,
       },
       restaurants: restaurantStats,
+      stores: storeStats,
       riders: riderStats,
       users: userStats,
     };

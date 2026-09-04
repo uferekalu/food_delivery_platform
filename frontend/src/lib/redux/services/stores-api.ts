@@ -66,6 +66,33 @@ export const storesApi = api.injectEndpoints({
       providesTags: (result) => (result ? [{ type: "Store", id: result._id }] : []),
     }),
 
+    // Unlike getStoreBySlug, this isn't filtered to approved stores — it's how an admin reviews
+    // a pending application (incl. its catalog) before approving it.
+    getStoreByIdForAdmin: builder.query<Store, string>({
+      query: (id) => `/stores/admin/${id}`,
+      providesTags: (result) => (result ? [{ type: "Store", id: result._id }] : []),
+    }),
+
+    listPendingStores: builder.query<Store[], void>({
+      query: () => "/stores/pending",
+      providesTags: (result) =>
+        result
+          ? [...result.map((s) => ({ type: "Store" as const, id: s._id })), { type: "Store" as const, id: "PENDING" }]
+          : [{ type: "Store", id: "PENDING" }],
+    }),
+
+    approveStore: builder.mutation<Store, string>({
+      // Lives under /admin, not /stores, since approval requires checking both a Store-owned
+      // invariant and a Product-owned one (docs/ROADMAP.md FDP-56, mirroring approveRestaurant).
+      query: (id) => ({ url: `/admin/stores/${id}/approve`, method: "PATCH" }),
+      invalidatesTags: (result, _error, id) => [
+        { type: "Store", id },
+        { type: "Store", id: "LIST" },
+        { type: "MyStores", id },
+        { type: "Store", id: "PENDING" },
+      ],
+    }),
+
     getMyStores: builder.query<Store[], void>({
       query: () => "/stores/mine",
       providesTags: (result) =>
@@ -99,6 +126,9 @@ export const storesApi = api.injectEndpoints({
 export const {
   useListStoresQuery,
   useGetStoreBySlugQuery,
+  useGetStoreByIdForAdminQuery,
+  useListPendingStoresQuery,
+  useApproveStoreMutation,
   useGetMyStoresQuery,
   useCreateStoreMutation,
   useUpdateStoreMutation,
