@@ -7,6 +7,7 @@ import { Container } from "@/components/ui/container";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs";
 import { OverviewTab } from "./overview-tab";
 import { RestaurantsTab } from "./restaurants-tab";
+import { StoresTab } from "./stores-tab";
 import { RidersTab } from "./riders-tab";
 import { PromoCodesTab } from "./promo-codes-tab";
 import { RefundsTab } from "./refunds-tab";
@@ -20,6 +21,7 @@ function AdminDashboard() {
       <TabList>
         <Tab value="overview">{t("overview")}</Tab>
         <Tab value="restaurants">{t("restaurants")}</Tab>
+        <Tab value="stores">{t("stores")}</Tab>
         <Tab value="riders">{t("riders")}</Tab>
         <Tab value="promo-codes">{t("promoCodes")}</Tab>
         <Tab value="refunds">{t("refunds")}</Tab>
@@ -29,6 +31,9 @@ function AdminDashboard() {
       </TabPanel>
       <TabPanel value="restaurants">
         <RestaurantsTab />
+      </TabPanel>
+      <TabPanel value="stores">
+        <StoresTab />
       </TabPanel>
       <TabPanel value="riders">
         <RidersTab />
