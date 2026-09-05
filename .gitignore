@@ -32,6 +32,9 @@ Thumbs.db
 # Testing
 .nyc_output/
 
+# Database backups (produced by `npm run backup` — real data, never committed)
+backend/backups/
+
 # Misc
 *.tsbuildinfo
 .turbo/

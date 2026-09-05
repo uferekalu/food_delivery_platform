@@ -121,3 +121,12 @@ npm run build
 
 `.env.example` documents required env vars — copy to `.env` for local dev, never commit real
 values. Needs a local or Atlas MongoDB reachable at `MONGODB_URI`.
+
+## Database migrations & backups
+
+`npm run migrate:create -- <name>` / `migrate:up` / `migrate:down` / `migrate:status`
+(`migrate-mongo`, see `docs/ARCHITECTURE.md` §15 and `docs/ENGINEERING_RULES.md` for exactly
+when a schema change needs one — a new optional field never does). `npm run backup` /
+`npm run restore -- <path> --yes` are the manual disaster-recovery scripts (same doc) — note
+`restore` takes an explicit `--yes` flag rather than an interactive prompt, since `readline`
+hangs indefinitely alongside a `mongoose` import under this project's `ts-node` setup.
