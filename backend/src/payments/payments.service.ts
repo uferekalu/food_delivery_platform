@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrdersService, REFUNDABLE_STATUSES } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
+import { RidersService } from '../riders/riders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { OrderDocument } from '../orders/schemas/order.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -23,6 +25,8 @@ export class PaymentsService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
+    private readonly ridersService: RidersService,
     private readonly notificationsService: NotificationsService,
     private readonly providerResolver: PaymentProviderResolver,
     private readonly config: ConfigService,
@@ -324,12 +328,31 @@ export class PaymentsService {
     );
     if (!event) return;
 
+    // A Stripe connected account belongs to exactly one of these three collections (docs/
+    // ROADMAP.md FDP-94 extended this beyond restaurants) — checked in turn since the webhook
+    // identifies the account only by its Stripe id, not which vendor type owns it. This is a
+    // rare event, not a hot path, so up to three sequential lookups cost nothing that matters.
     const restaurant =
       await this.restaurantsService.findByPayoutAccountReference(
         'stripe',
         event.accountId,
       );
-    if (!restaurant) {
+    const store = restaurant
+      ? null
+      : await this.storesService.findByPayoutAccountReference(
+          'stripe',
+          event.accountId,
+        );
+    const rider =
+      restaurant || store
+        ? null
+        : await this.ridersService.findByPayoutAccountReference(
+            'stripe',
+            event.accountId,
+          );
+
+    const record = restaurant ?? store ?? rider;
+    if (!record) {
       this.logger.warn(
         `Stripe account.updated webhook referenced an unknown account: ${event.accountId}`,
       );
@@ -337,49 +360,77 @@ export class PaymentsService {
     }
 
     const isActive = event.chargesEnabled && event.detailsSubmitted;
-    const wasActive = restaurant.payoutAccounts.some(
+    const wasActive = record.payoutAccounts.some(
       (account) => account.provider === 'stripe' && account.status === 'active',
     );
     if (isActive === wasActive) return; // no real change — Stripe re-sends this on any account edit
 
-    const updated = await this.restaurantsService.setPayoutAccountFromWebhook(
-      restaurant._id.toString(),
-      'stripe',
-      isActive ? 'active' : 'pending',
-      event.accountId,
-    );
+    const newStatus = isActive ? 'active' : 'pending';
+    let notifyUserId: string;
+    let name: string;
+    if (restaurant) {
+      await this.restaurantsService.setPayoutAccountFromWebhook(
+        restaurant._id.toString(),
+        'stripe',
+        newStatus,
+        event.accountId,
+      );
+      notifyUserId = String(restaurant.ownerId);
+      name = restaurant.name;
+    } else if (store) {
+      await this.storesService.setPayoutAccountFromWebhook(
+        store._id.toString(),
+        'stripe',
+        newStatus,
+        event.accountId,
+      );
+      notifyUserId = String(store.ownerId);
+      name = store.name;
+    } else {
+      const r = rider!;
+      await this.ridersService.setPayoutAccountFromWebhook(
+        r._id.toString(),
+        'stripe',
+        newStatus,
+        event.accountId,
+      );
+      notifyUserId = r.userId.toString();
+      name = `rider account ${r._id.toString()}`;
+    }
 
     // Only the pending->active transition is the security-relevant "new payout destination just
     // went live" moment (docs/ROADMAP.md FDP-59) — a still-pending account can't receive money,
     // so there's nothing to alert on yet, and this pass doesn't attempt a symmetric "payouts
     // paused" notification for the reverse (active->pending) transition.
-    if (isActive) this.notifyStripeAccountActivated(updated);
+    if (isActive) {
+      this.notifyStripeAccountActivated(notifyUserId, name, record._id);
+    }
   }
 
-  private notifyStripeAccountActivated(restaurant: {
-    _id: unknown;
-    ownerId: unknown;
-    name: string;
-  }): void {
-    const body = `The Stripe payout account for ${restaurant.name} is now fully connected and can receive payouts. If you didn't set this up, contact support immediately.`;
+  private notifyStripeAccountActivated(
+    notifyUserId: string,
+    name: string,
+    vendorId: unknown,
+  ): void {
+    const body = `The Stripe payout account for ${name} is now fully connected and can receive payouts. If you didn't set this up, contact support immediately.`;
     this.notificationsService
       .notify({
-        userId: String(restaurant.ownerId),
+        userId: notifyUserId,
         type: 'payout_account_changed',
         title: 'Payout account updated',
         body,
         metadata: {
-          restaurantId: String(restaurant._id),
+          vendorId: String(vendorId),
           provider: 'stripe',
         },
         email: {
-          subject: `Payout account updated — ${restaurant.name}`,
+          subject: `Payout account updated — ${name}`,
           html: `<p>${body}</p>`,
         },
       })
       .catch((err: Error) =>
         this.logger.error(
-          `Payout-change notification failed for restaurant ${String(restaurant._id)}: ${err.message}`,
+          `Payout-change notification failed for ${String(vendorId)}: ${err.message}`,
         ),
       );
   }

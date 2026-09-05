@@ -13,6 +13,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
+import { RidersService } from '../riders/riders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { PaystackAdapter } from './adapters/paystack.adapter';
@@ -23,6 +25,12 @@ import { ResolvePaystackAccountDto } from './dto/resolve-paystack-account.dto';
  * Lives in PaymentsModule (owns PaystackAdapter) rather than RestaurantsModule, but the routes
  * are namespaced under `/restaurants/:restaurantId/...` since that's what they're conceptually
  * about — a controller's routes aren't tied to which module it's declared in.
+ *
+ * Extended to stores and riders in docs/ROADMAP.md FDP-94 — `/stores/:storeId/...` mirrors the
+ * restaurant routes exactly (stores have an `ownerId` the same way restaurants do); riders are
+ * self-service only via `/riders/me/...` (no separate owner — see `RidersService`'s payout
+ * methods doc comment), matching the simplification `PayoutsController`'s
+ * `GET /payouts/riders/me` already made in FDP-93.
  */
 @ApiTags('payments')
 @Controller()
@@ -32,6 +40,8 @@ export class PaystackPayoutsController {
   constructor(
     private readonly paystackAdapter: PaystackAdapter,
     private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
+    private readonly ridersService: RidersService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -139,7 +149,12 @@ export class PaystackPayoutsController {
       { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
     );
 
-    this.notifyPayoutAccountChanged(updated, hadActiveAccount);
+    this.notifyPayoutAccountChanged(
+      String(updated.ownerId),
+      updated.name,
+      restaurantId,
+      hadActiveAccount,
+    );
 
     return {
       restaurant: updated,
@@ -147,39 +162,181 @@ export class PaystackPayoutsController {
     };
   }
 
+  /** Store counterpart of `resolveAccount` (docs/ROADMAP.md FDP-94) — identical reasoning. */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Roles('restaurant_owner', 'admin')
+  @Post('stores/:storeId/payout/paystack/resolve-account')
+  async resolveStoreAccount(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+    @Body() dto: ResolvePaystackAccountDto,
+  ) {
+    const store = await this.storesService.findByIdOrThrow(storeId);
+    this.storesService.assertOwnerOrAdmin(store, user);
+
+    return this.callPaystack('resolve account', () =>
+      this.paystackAdapter.resolveAccount(dto.accountNumber, dto.bankCode),
+    );
+  }
+
+  /** Store counterpart of `setup` (docs/ROADMAP.md FDP-94) — identical reasoning. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Roles('restaurant_owner', 'admin')
+  @Post('stores/:storeId/payout/paystack/setup')
+  async setupStore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+    @Body() dto: ResolvePaystackAccountDto,
+  ) {
+    const store = await this.storesService.findByIdOrThrow(storeId);
+    this.storesService.assertOwnerOrAdmin(store, user);
+
+    const hadActiveAccount = store.payoutAccounts.some(
+      (account) =>
+        account.provider === 'paystack' && account.status === 'active',
+    );
+
+    const resolved = await this.callPaystack('resolve account', () =>
+      this.paystackAdapter.resolveAccount(dto.accountNumber, dto.bankCode),
+    );
+    const { subaccountCode } = await this.callPaystack(
+      'create subaccount',
+      () =>
+        this.paystackAdapter.createSubaccount({
+          businessName: store.name,
+          bankCode: dto.bankCode,
+          accountNumber: dto.accountNumber,
+          percentageCharge: PLATFORM_COMMISSION_RATE * 100,
+        }),
+    );
+
+    const updated = await this.storesService.setPayoutAccount(
+      storeId,
+      user,
+      'paystack',
+      'active',
+      subaccountCode,
+      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    );
+
+    this.notifyPayoutAccountChanged(
+      String(updated.ownerId),
+      updated.name,
+      storeId,
+      hadActiveAccount,
+    );
+
+    return {
+      store: updated,
+      verifiedAccountName: resolved.accountName,
+    };
+  }
+
+  /** Rider counterpart of `resolveAccount` (docs/ROADMAP.md FDP-94) — self-service only, no id
+   * param (see class doc comment). */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Roles('rider')
+  @Post('riders/me/payout/paystack/resolve-account')
+  async resolveRiderAccount(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ResolvePaystackAccountDto,
+  ) {
+    // Confirms the caller actually has a rider profile before spending a Paystack call on their
+    // behalf — same ownership-gating reasoning as the restaurant/store variants, just via
+    // `findMine` instead of an explicit id param.
+    await this.ridersService.findMine(user.sub);
+
+    return this.callPaystack('resolve account', () =>
+      this.paystackAdapter.resolveAccount(dto.accountNumber, dto.bankCode),
+    );
+  }
+
+  /** Rider counterpart of `setup` (docs/ROADMAP.md FDP-94) — self-service only. Riders keep 100%
+   * of their delivery fees (docs/ARCHITECTURE.md §14/§18), so unlike the restaurant/store
+   * subaccount (which carries the platform's commission split as its stored default),
+   * `percentageCharge` here is 0 — nothing about a rider's payout account should ever cause
+   * Paystack to withhold a cut. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Roles('rider')
+  @Post('riders/me/payout/paystack/setup')
+  async setupRider(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ResolvePaystackAccountDto,
+  ) {
+    const rider = await this.ridersService.findMine(user.sub);
+
+    const hadActiveAccount = rider.payoutAccounts.some(
+      (account) =>
+        account.provider === 'paystack' && account.status === 'active',
+    );
+
+    const resolved = await this.callPaystack('resolve account', () =>
+      this.paystackAdapter.resolveAccount(dto.accountNumber, dto.bankCode),
+    );
+    const { subaccountCode } = await this.callPaystack(
+      'create subaccount',
+      () =>
+        this.paystackAdapter.createSubaccount({
+          businessName: resolved.accountName,
+          bankCode: dto.bankCode,
+          accountNumber: dto.accountNumber,
+          percentageCharge: 0,
+        }),
+    );
+
+    const updated = await this.ridersService.setPayoutAccount(
+      user.sub,
+      'paystack',
+      'active',
+      subaccountCode,
+      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    );
+
+    this.notifyPayoutAccountChanged(
+      user.sub,
+      resolved.accountName,
+      rider._id.toString(),
+      hadActiveAccount,
+    );
+
+    return {
+      rider: updated,
+      verifiedAccountName: resolved.accountName,
+    };
+  }
+
   /**
-   * Fraud-detection measure, not a functional requirement — a restaurant's payout destination
-   * silently changing is exactly what an attacker with a compromised owner account would do to
-   * redirect future earnings, so the owner always gets an email the moment it happens, whether
-   * they triggered it themselves or not (best-effort: failure here never blocks the setup that
-   * already succeeded, same as every other notify() call in this codebase).
+   * Fraud-detection measure, not a functional requirement — a vendor's/rider's payout
+   * destination silently changing is exactly what an attacker with a compromised account would
+   * do to redirect future earnings, so the owner always gets an email the moment it happens,
+   * whether they triggered it themselves or not (best-effort: failure here never blocks the
+   * setup that already succeeded, same as every other notify() call in this codebase).
    */
   private notifyPayoutAccountChanged(
-    restaurant: { _id: unknown; ownerId: unknown; name: string },
+    notifyUserId: string,
+    name: string,
+    vendorId: string,
     wasReplacement: boolean,
   ): void {
     const action = wasReplacement
       ? 'changed to a new bank account'
       : 'connected for the first time';
-    const body = `The Paystack payout account for ${restaurant.name} was just ${action}. Future orders will settle to this account. If you didn't make this change, contact support immediately.`;
+    const body = `The Paystack payout account for ${name} was just ${action}. Future orders will settle to this account. If you didn't make this change, contact support immediately.`;
     this.notificationsService
       .notify({
-        userId: String(restaurant.ownerId),
+        userId: notifyUserId,
         type: 'payout_account_changed',
         title: 'Payout account updated',
         body,
-        metadata: {
-          restaurantId: String(restaurant._id),
-          provider: 'paystack',
-        },
+        metadata: { vendorId, provider: 'paystack' },
         email: {
-          subject: `Payout account updated — ${restaurant.name}`,
+          subject: `Payout account updated — ${name}`,
           html: `<p>${body}</p>`,
         },
       })
       .catch((err: Error) =>
         this.logger.error(
-          `Payout-change notification failed for restaurant ${String(restaurant._id)}: ${err.message}`,
+          `Payout-change notification failed for ${vendorId}: ${err.message}`,
         ),
       );
   }

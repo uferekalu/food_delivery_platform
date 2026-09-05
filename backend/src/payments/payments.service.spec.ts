@@ -4,6 +4,8 @@ import { BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { OrdersService } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
+import { RidersService } from '../riders/riders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentProviderResolver } from './provider-resolver';
 import { StripeAdapter } from './adapters/stripe.adapter';
@@ -32,6 +34,18 @@ describe('PaymentsService', () => {
       | 'findByIdOrThrow'
       | 'findByPayoutAccountReference'
       | 'setPayoutAccountFromWebhook'
+    >
+  >;
+  let storesService: jest.Mocked<
+    Pick<
+      StoresService,
+      'findByPayoutAccountReference' | 'setPayoutAccountFromWebhook'
+    >
+  >;
+  let ridersService: jest.Mocked<
+    Pick<
+      RidersService,
+      'findByPayoutAccountReference' | 'setPayoutAccountFromWebhook'
     >
   >;
   let notificationsService: jest.Mocked<Pick<NotificationsService, 'notify'>>;
@@ -79,6 +93,14 @@ describe('PaymentsService', () => {
     restaurantsService.findByIdOrThrow.mockResolvedValue({
       payoutAccounts: [],
     } as never);
+    storesService = {
+      findByPayoutAccountReference: jest.fn().mockResolvedValue(null),
+      setPayoutAccountFromWebhook: jest.fn(),
+    };
+    ridersService = {
+      findByPayoutAccountReference: jest.fn().mockResolvedValue(null),
+      setPayoutAccountFromWebhook: jest.fn(),
+    };
     notificationsService = { notify: jest.fn().mockResolvedValue(undefined) };
     providerResolver = { resolve: jest.fn() };
     stripeAdapter = {
@@ -100,6 +122,8 @@ describe('PaymentsService', () => {
         PaymentsService,
         { provide: OrdersService, useValue: ordersService },
         { provide: RestaurantsService, useValue: restaurantsService },
+        { provide: StoresService, useValue: storesService },
+        { provide: RidersService, useValue: ridersService },
         { provide: NotificationsService, useValue: notificationsService },
         { provide: PaymentProviderResolver, useValue: providerResolver },
         {
@@ -744,6 +768,77 @@ describe('PaymentsService', () => {
         restaurantsService.setPayoutAccountFromWebhook,
       ).toHaveBeenCalledWith('restaurant-1', 'stripe', 'pending', 'acct_123');
       expect(notificationsService.notify).not.toHaveBeenCalled();
+    });
+
+    it('falls back to a matching store when no restaurant owns the account (docs/ROADMAP.md FDP-94)', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_store_1',
+        chargesEnabled: true,
+        detailsSubmitted: true,
+      });
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue(null);
+      const store = {
+        _id: { toString: () => 'store-1' },
+        ownerId: { toString: () => 'owner-1' },
+        name: 'Fresh Grocers',
+        payoutAccounts: [
+          { provider: 'stripe', status: 'pending', reference: 'acct_store_1' },
+        ],
+      };
+      storesService.findByPayoutAccountReference.mockResolvedValue(
+        store as never,
+      );
+      storesService.setPayoutAccountFromWebhook.mockResolvedValue(
+        store as never,
+      );
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(ridersService.findByPayoutAccountReference).not.toHaveBeenCalled();
+      expect(storesService.setPayoutAccountFromWebhook).toHaveBeenCalledWith(
+        'store-1',
+        'stripe',
+        'active',
+        'acct_store_1',
+      );
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'owner-1' }),
+      );
+    });
+
+    it('falls back to a matching rider when neither a restaurant nor a store owns the account', async () => {
+      stripeAdapter.parseAccountWebhookEvent.mockReturnValue({
+        accountId: 'acct_rider_1',
+        chargesEnabled: true,
+        detailsSubmitted: true,
+      });
+      restaurantsService.findByPayoutAccountReference.mockResolvedValue(null);
+      storesService.findByPayoutAccountReference.mockResolvedValue(null);
+      const rider = {
+        _id: { toString: () => 'rider-1' },
+        userId: { toString: () => 'rider-user-1' },
+        payoutAccounts: [
+          { provider: 'stripe', status: 'pending', reference: 'acct_rider_1' },
+        ],
+      };
+      ridersService.findByPayoutAccountReference.mockResolvedValue(
+        rider as never,
+      );
+      ridersService.setPayoutAccountFromWebhook.mockResolvedValue(
+        rider as never,
+      );
+
+      await service.handleStripeAccountWebhook(Buffer.from('{}'), 'sig');
+
+      expect(ridersService.setPayoutAccountFromWebhook).toHaveBeenCalledWith(
+        'rider-1',
+        'stripe',
+        'active',
+        'acct_rider_1',
+      );
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'rider-user-1' }),
+      );
     });
   });
 });

@@ -238,6 +238,97 @@ describe('StoresService', () => {
     });
   });
 
+  describe('setPayoutAccount (docs/ROADMAP.md FDP-94)', () => {
+    it('adds a new payout account entry, including bank details, for a provider the store has none of yet', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      const created = await service.create(owner.sub, baseDto);
+
+      const updated = await service.setPayoutAccount(
+        created._id.toString(),
+        owner,
+        'paystack',
+        'active',
+        'ACCT_test123',
+        { bankCode: '058', accountNumber: '0123456789' },
+      );
+
+      expect(
+        updated.payoutAccounts.map((a) => ({
+          provider: a.provider,
+          status: a.status,
+          reference: a.reference,
+          bankCode: a.bankCode,
+          accountNumber: a.accountNumber,
+        })),
+      ).toEqual([
+        {
+          provider: 'paystack',
+          status: 'active',
+          reference: 'ACCT_test123',
+          bankCode: '058',
+          accountNumber: '0123456789',
+        },
+      ]);
+    });
+
+    it('updates the existing entry in place rather than duplicating it', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      const created = await service.create(owner.sub, baseDto);
+
+      await service.setPayoutAccount(
+        created._id.toString(),
+        owner,
+        'paystack',
+        'active',
+        'ACCT_old',
+      );
+      const updated = await service.setPayoutAccount(
+        created._id.toString(),
+        owner,
+        'paystack',
+        'active',
+        'ACCT_new',
+      );
+
+      expect(updated.payoutAccounts).toHaveLength(1);
+      expect(updated.payoutAccounts[0].reference).toBe('ACCT_new');
+    });
+
+    it('rejects a caller who does not own the store', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      otherOwner.sub = '507f1f77bcf86cd799439012';
+      const created = await service.create(owner.sub, baseDto);
+
+      await expect(
+        service.setPayoutAccount(
+          created._id.toString(),
+          otherOwner,
+          'paystack',
+          'active',
+          'ACCT_test123',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('setPayoutAccountFromWebhook upserts with no ownership check, and findByPayoutAccountReference finds it back', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      const created = await service.create(owner.sub, baseDto);
+
+      await service.setPayoutAccountFromWebhook(
+        created._id.toString(),
+        'stripe',
+        'pending',
+        'acct_test456',
+      );
+
+      const found = await service.findByPayoutAccountReference(
+        'stripe',
+        'acct_test456',
+      );
+      expect(found?._id.toString()).toBe(created._id.toString());
+    });
+  });
+
   describe('findPendingApproval / countByApproval', () => {
     it('lists only unapproved stores, oldest first, and counts both buckets', async () => {
       const first = await service.create('owner-id', {

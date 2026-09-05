@@ -758,7 +758,6 @@
   "StorePayoutsPage": {
     "payouts": "打款",
     "storeNotFound": "未找到该店铺，或你无权访问。",
-    "onboardingNotAvailableYet": "店铺打款账户的连接功能暂未开放——一旦开放，此页面将显示你的打款记录。",
     "noPayoutsYet": "暂无打款记录",
     "payoutsAppearHere": "一旦你的店铺绑定了账户并有订单送达，打款记录将显示在这里。"
   },

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { OrdersModule } from '../orders/orders.module';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
+import { StoresModule } from '../stores/stores.module';
+import { RidersModule } from '../riders/riders.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersModule } from '../users/users.module';
 import { PaymentProviderResolver } from './provider-resolver';
@@ -27,7 +29,18 @@ import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
   // UsersModule (imports only RestaurantsModule, also non-circular) is needed by
   // FlutterwavePayoutsController — Flutterwave's subaccount API requires a business email, and
   // there's no restaurant-level email field, only the owning user's (docs/ROADMAP.md FDP-53).
-  imports: [OrdersModule, RestaurantsModule, NotificationsModule, UsersModule],
+  // StoresModule/RidersModule (docs/ROADMAP.md FDP-94) extend every payout-onboarding flow and
+  // the Stripe webhook lookup to stores/riders — RidersModule itself imports OrdersModule
+  // (already a direct import here too) and UsersModule, neither of which import PaymentsModule
+  // back, so this stays non-circular.
+  imports: [
+    OrdersModule,
+    RestaurantsModule,
+    StoresModule,
+    RidersModule,
+    NotificationsModule,
+    UsersModule,
+  ],
   controllers: [
     PaymentsController,
     PaystackPayoutsController,

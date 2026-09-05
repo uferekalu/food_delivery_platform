@@ -758,7 +758,6 @@
   "StorePayoutsPage": {
     "payouts": "Pagamentos",
     "storeNotFound": "Loja não encontrada, ou você não tem acesso a ela.",
-    "onboardingNotAvailableYet": "Conectar uma conta de pagamento para lojas ainda não está disponível — esta página mostrará seu histórico de pagamentos assim que estiver.",
     "noPayoutsYet": "Ainda não há pagamentos",
     "payoutsAppearHere": "Os pagamentos aparecem aqui assim que sua loja tiver uma conta conectada e pedidos entregues."
   },

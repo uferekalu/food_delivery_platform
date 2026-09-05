@@ -29,11 +29,15 @@ export interface OpeningHour {
   isClosed?: boolean;
 }
 
-// Vendor payouts epic (docs/ROADMAP.md FDP-51 onward).
+// Vendor payouts epic (docs/ROADMAP.md FDP-51 onward). bankCode/accountNumber added FDP-92 —
+// only ever populated for paystack/flutterwave (stripe's `reference` is a connected account id,
+// which is everything a Stripe transfer needs on its own).
 export interface PayoutAccount {
   provider: PaymentProvider;
   status: "pending" | "active";
   reference: string | null;
+  bankCode: string | null;
+  accountNumber: string | null;
 }
 
 export interface Restaurant {
@@ -92,6 +96,7 @@ export interface Store {
   avgRating: number;
   reviewCount: number;
   estimatedDeliveryMinutes: number | null;
+  payoutAccounts: PayoutAccount[];
   createdAt: string;
   updatedAt: string;
 }
@@ -290,6 +295,7 @@ export interface Rider {
   nextOfKinName: string;
   nextOfKinPhone: string;
   nextOfKinRelationship: string;
+  payoutAccounts: PayoutAccount[];
   createdAt: string;
   updatedAt: string;
 }

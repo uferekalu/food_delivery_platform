@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { Order, PaymentProvider, Restaurant } from "../restaurant-types";
+import type { Order, PaymentProvider, Restaurant, Rider, Store } from "../restaurant-types";
 
 export interface InitiatePaymentInput {
   orderId: string;
@@ -62,6 +62,25 @@ export interface SetupFlutterwavePayoutResult {
 // Stripe's account.updated webhook, not by this response.
 export interface SetupStripePayoutResult {
   onboardingUrl: string;
+}
+
+// Extended to stores and riders in docs/ROADMAP.md FDP-94 — same shapes as the restaurant ones
+// above (`resolveAccount`/`setup` per provider), just scoped to a store or the caller's own
+// rider profile instead. Riders take no id (self-service via /riders/me/... — see
+// `RidersService`'s payout methods doc comment for why there's no separate owner).
+export interface ResolveAccountInput {
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface SetupStorePayoutResult {
+  store: Store;
+  verifiedAccountName: string;
+}
+
+export interface SetupRiderPayoutResult {
+  rider: Rider;
+  verifiedAccountName: string;
 }
 
 export const paymentsApi = api.injectEndpoints({
@@ -133,6 +152,106 @@ export const paymentsApi = api.injectEndpoints({
         method: "POST",
       }),
     }),
+
+    // --- Store onboarding (docs/ROADMAP.md FDP-94) ---
+
+    resolveStorePaystackAccount: builder.mutation<
+      ResolvedPaystackAccount,
+      { storeId: string } & ResolveAccountInput
+    >({
+      query: ({ storeId, ...body }) => ({
+        url: `/stores/${storeId}/payout/paystack/resolve-account`,
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupStorePaystackPayout: builder.mutation<
+      SetupStorePayoutResult,
+      { storeId: string } & ResolveAccountInput
+    >({
+      query: ({ storeId, ...body }) => ({
+        url: `/stores/${storeId}/payout/paystack/setup`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { storeId }) => [{ type: "Payout", id: `STORE-${storeId}` }],
+    }),
+
+    resolveStoreFlutterwaveAccount: builder.mutation<
+      ResolvedFlutterwaveAccount,
+      { storeId: string } & ResolveAccountInput
+    >({
+      query: ({ storeId, ...body }) => ({
+        url: `/stores/${storeId}/payout/flutterwave/resolve-account`,
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupStoreFlutterwavePayout: builder.mutation<
+      SetupStorePayoutResult,
+      { storeId: string } & ResolveAccountInput
+    >({
+      query: ({ storeId, ...body }) => ({
+        url: `/stores/${storeId}/payout/flutterwave/setup`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { storeId }) => [{ type: "Payout", id: `STORE-${storeId}` }],
+    }),
+
+    setupStoreStripePayout: builder.mutation<SetupStripePayoutResult, string>({
+      query: (storeId) => ({
+        url: `/stores/${storeId}/payout/stripe/setup`,
+        method: "POST",
+      }),
+    }),
+
+    // --- Rider onboarding (docs/ROADMAP.md FDP-94) — self-service, no id (see class doc
+    // comment on the backend controllers for why: a rider has no separate owner to check
+    // ownership against). ---
+
+    resolveRiderPaystackAccount: builder.mutation<ResolvedPaystackAccount, ResolveAccountInput>({
+      query: (body) => ({
+        url: "/riders/me/payout/paystack/resolve-account",
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupRiderPaystackPayout: builder.mutation<SetupRiderPayoutResult, ResolveAccountInput>({
+      query: (body) => ({
+        url: "/riders/me/payout/paystack/setup",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Payout", id: "RIDER-ME" }],
+    }),
+
+    resolveRiderFlutterwaveAccount: builder.mutation<ResolvedFlutterwaveAccount, ResolveAccountInput>({
+      query: (body) => ({
+        url: "/riders/me/payout/flutterwave/resolve-account",
+        method: "POST",
+        body,
+      }),
+    }),
+
+    setupRiderFlutterwavePayout: builder.mutation<SetupRiderPayoutResult, ResolveAccountInput>({
+      query: (body) => ({
+        url: "/riders/me/payout/flutterwave/setup",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Payout", id: "RIDER-ME" }],
+    }),
+
+    setupRiderStripePayout: builder.mutation<SetupStripePayoutResult, void>({
+      query: () => ({
+        url: "/riders/me/payout/stripe/setup",
+        method: "POST",
+      }),
+    }),
   }),
 });
 
@@ -147,4 +266,14 @@ export const {
   useResolveFlutterwaveAccountMutation,
   useSetupFlutterwavePayoutMutation,
   useSetupStripePayoutMutation,
+  useResolveStorePaystackAccountMutation,
+  useSetupStorePaystackPayoutMutation,
+  useResolveStoreFlutterwaveAccountMutation,
+  useSetupStoreFlutterwavePayoutMutation,
+  useSetupStoreStripePayoutMutation,
+  useResolveRiderPaystackAccountMutation,
+  useSetupRiderPaystackPayoutMutation,
+  useResolveRiderFlutterwaveAccountMutation,
+  useSetupRiderFlutterwavePayoutMutation,
+  useSetupRiderStripePayoutMutation,
 } = paymentsApi;

@@ -758,7 +758,6 @@
   "StorePayoutsPage": {
     "payouts": "Auszahlungen",
     "storeNotFound": "Shop nicht gefunden, oder du hast keinen Zugriff darauf.",
-    "onboardingNotAvailableYet": "Das Verbinden eines Auszahlungskontos für Shops ist noch nicht verfügbar — diese Seite zeigt deinen Auszahlungsverlauf, sobald es soweit ist.",
     "noPayoutsYet": "Noch keine Auszahlungen",
     "payoutsAppearHere": "Auszahlungen erscheinen hier, sobald dein Shop ein verbundenes Konto und gelieferte Bestellungen hat."
   },
