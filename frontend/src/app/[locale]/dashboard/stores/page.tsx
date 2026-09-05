@@ -78,6 +78,12 @@ function MyStoresList() {
                 >
                   {t("orderQueue")}
                 </Link>
+                <Link
+                  href={`/dashboard/stores/${store._id}/delivery-zones`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  {t("deliveryZones")}
+                </Link>
                 <Button variant="ghost" size="sm" isLoading={toggling} onClick={() => void toggleOpen(store._id)}>
                   {store.isOpen ? t("close") : t("open")}
                 </Button>

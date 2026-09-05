@@ -15,46 +15,42 @@ import { DeliveryZonesService } from './delivery-zones.service';
 import { CreateDeliveryZoneDto } from './dto/create-delivery-zone.dto';
 import { UpdateDeliveryZoneDto } from './dto/update-delivery-zone.dto';
 
-// Owner-managed only (not @Public()) — unlike the menu, a restaurant's delivery-zone pricing
-// isn't customer-facing UI; the customer only ever sees its effect, the fee on their order.
+// Store (grocery/pharmacy) counterpart of DeliveryZonesController (docs/ROADMAP.md FDP-90) —
+// same owner-managed-only shape, same shared DeliveryZonesService, just a store instead of a
+// restaurant as the seller.
 @ApiTags('delivery-zones')
-@Controller('restaurants/:restaurantId/delivery-zones')
+@Controller('stores/:storeId/delivery-zones')
 @Roles('restaurant_owner', 'admin')
-export class DeliveryZonesController {
+export class StoreDeliveryZonesController {
   constructor(private readonly deliveryZonesService: DeliveryZonesService) {}
 
   @Get()
   list(
-    @Param('restaurantId') restaurantId: string,
+    @Param('storeId') storeId: string,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.deliveryZonesService.list('restaurant', restaurantId, user);
+    return this.deliveryZonesService.list('store', storeId, user);
   }
 
   @Post()
   create(
-    @Param('restaurantId') restaurantId: string,
+    @Param('storeId') storeId: string,
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: CreateDeliveryZoneDto,
   ) {
-    return this.deliveryZonesService.create(
-      'restaurant',
-      restaurantId,
-      user,
-      dto,
-    );
+    return this.deliveryZonesService.create('store', storeId, user, dto);
   }
 
   @Patch(':zoneId')
   update(
-    @Param('restaurantId') restaurantId: string,
+    @Param('storeId') storeId: string,
     @Param('zoneId') zoneId: string,
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: UpdateDeliveryZoneDto,
   ) {
     return this.deliveryZonesService.update(
-      'restaurant',
-      restaurantId,
+      'store',
+      storeId,
       zoneId,
       user,
       dto,
@@ -63,15 +59,10 @@ export class DeliveryZonesController {
 
   @Delete(':zoneId')
   delete(
-    @Param('restaurantId') restaurantId: string,
+    @Param('storeId') storeId: string,
     @Param('zoneId') zoneId: string,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.deliveryZonesService.delete(
-      'restaurant',
-      restaurantId,
-      zoneId,
-      user,
-    );
+    return this.deliveryZonesService.delete('store', storeId, zoneId, user);
   }
 }

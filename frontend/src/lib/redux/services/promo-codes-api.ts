@@ -1,10 +1,11 @@
 import { api } from "../api";
 
-export interface ValidatePromoCodeInput {
+// Exactly one of restaurantId/storeId, matching the cart's own sellerType (docs/ROADMAP.md
+// FDP-90) — a store cart validates against storeId, a restaurant cart against restaurantId.
+export type ValidatePromoCodeInput = {
   code: string;
-  restaurantId: string;
   subtotal: number;
-}
+} & ({ restaurantId: string; storeId?: never } | { storeId: string; restaurantId?: never });
 
 export type PromoCodeValidation =
   | { valid: true; promoCodeId: string; discountAmount: number }

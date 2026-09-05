@@ -85,12 +85,18 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
 - **Notification** (FDP-19) — userId, type, title, body, isRead, channels[] (`inapp` always +
   `email`/`sms` appended when that side channel was actually attempted — one row per
   notification event, not one row per channel), metadata
-- **DeliveryZone** — restaurantId, polygon/radius, baseFee, perKmFee
+- **DeliveryZone** — polygon/radius, baseFee, perKmFee, plus exactly one of restaurantId?/
+  storeId? (both nullable, docs/ROADMAP.md FDP-90 — a zone belongs to a restaurant or a store,
+  never both; `DeliveryZonesService` is shared by both `DeliveryZonesController`
+  (`restaurants/:restaurantId/delivery-zones`) and `StoreDeliveryZonesController`
+  (`stores/:storeId/delivery-zones`), parameterized by a `sellerType` argument)
 - **PromoCode** (FDP-11) — code (unique, uppercase), discountType (`percentage|fixed`),
-  discountValue, minOrderAmount?, maxDiscountAmount? (caps a percentage discount), restaurantId?
-  (`null` = platform-wide), expiresAt?, isActive, usageLimit?, usedCount — not in the original
-  domain model, added when "promo/coupon code redemption" was found to be a gap against
-  `PRODUCT_GUIDE.md`'s "modern platform" bar with no owning phase (see `docs/ROADMAP.md` FDP-9)
+  discountValue, minOrderAmount?, maxDiscountAmount? (caps a percentage discount), restaurantId?/
+  storeId? (both `null` = platform-wide; at most one set, docs/ROADMAP.md FDP-90 extended this
+  from restaurant-only to either seller type), expiresAt?, isActive, usageLimit?, usedCount — not
+  in the original domain model, added when "promo/coupon code redemption" was found to be a gap
+  against `PRODUCT_GUIDE.md`'s "modern platform" bar with no owning phase (see `docs/ROADMAP.md`
+  FDP-9)
 
 ## 4. Payment routing (Stripe / Paystack / Flutterwave)
 
@@ -575,3 +581,51 @@ asserting the token was actually revoked, not by anything throwing.
 paginated list, search, role/status filters, a role-change `Select` per row (the first UI ever
 built for the pre-existing role-grant endpoint), and Suspend (reason required, plain-text modal)/
 Reactivate actions.
+
+## 17. Store order parity (docs/ROADMAP.md FDP-90)
+
+Store (grocery/pharmacy) orders originally shipped (FDP-56) as a deliberately reduced version of
+a restaurant order — a flat 10% delivery fee regardless of distance, and promo codes rejected
+outright, since `PromoCode`/`DeliveryZone` were both restaurant-only schemas at the time. This
+closes both gaps; a store order now goes through exactly the same pricing logic a restaurant
+order does.
+
+**`DeliveryZonesService` is now seller-type-generic**, not restaurant-specific: every method
+(`list`/`create`/`update`/`delete`/`calculateFee`) takes a `DeliveryZoneSellerType`
+(`'restaurant' | 'store'`) as its first argument and dispatches internally — `calculateFee`
+itself only needs a minimal structural shape (`{ _id, address }`), which both
+`RestaurantDocument` and `StoreDocument` satisfy, rather than a restaurant-typed parameter. Two
+thin controllers share the one service: the existing `DeliveryZonesController`
+(`restaurants/:restaurantId/delivery-zones`) and a new `StoreDeliveryZonesController`
+(`stores/:storeId/delivery-zones`) — deliberately two controllers, not one generic
+`:sellerType/:sellerId/delivery-zones` route, since NestJS route params work more naturally this
+way and the two dashboard pages calling them already have distinct id params in scope. The
+`DeliveryZone` schema's `restaurantId` went from `required: true` to `default: null` alongside a
+new `storeId` (also `default: null`) — no migration needed (docs/ENGINEERING_RULES.md): every
+existing document already has a valid `restaurantId`, and Mongoose applies the schema default for
+the now-missing `storeId` on read, without rewriting anything on disk.
+
+**`PromoCodesService.validate()` takes a `PromoCodeSeller` discriminated union**
+(`{ sellerType: 'restaurant', sellerId } | { sellerType: 'store', sellerId }`) instead of a bare
+`restaurantId: string` — a promo scoped to the other seller type, or to a specific
+restaurant/store the cart doesn't belong to, is rejected the same way either direction. `PromoCode`
+gained a `storeId` field alongside `restaurantId` (both nullable, at most one ever set — enforced
+in `PromoCodesService.create`/`update`, not the schema, since Mongoose validators don't easily see
+sibling fields). `OrdersService.createStoreOrder` now calls `deliveryZonesService.calculateFee`
+and `promoCodesService.validate`/`redeem` exactly the way `createRestaurantOrder` always has,
+instead of a hardcoded flat-rate calculation and an unconditional rejection.
+
+**A real bug found while adding test coverage for this**: `PromoCodesService.create()` wasn't
+declared `async` — a plain function returning `this.promoCodeModel.create(dto)`. The new
+mutual-exclusivity check (`assertAtMostOneSeller`) throws *before* that return statement runs,
+so the throw happened synchronously, outside any promise — every caller (including
+`.rejects.toThrow()` in tests) expecting a rejected promise from a service method silently broke.
+Fixed by making `create()` `async`, which makes any throw inside it automatically become a
+rejected promise, matching `update()`'s existing (already-`async`) behavior.
+
+**Frontend**: new `dashboard/stores/[id]/delivery-zones/` page + form modal, mirroring the
+restaurant version almost exactly (different store-specific wording for the "no coordinates"
+warning, since reusing the restaurant-worded translation strings verbatim would have been wrong
+copy on the store page). `checkout/page.tsx`'s `promoCodesSupported` gate (which hid the entire
+promo-code UI section for a store cart) is removed — `applyPromo()` now sends `storeId` or
+`restaurantId` depending on `cart.sellerType`.

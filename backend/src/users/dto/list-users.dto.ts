@@ -5,7 +5,9 @@ import { USER_ROLES, USER_STATUSES } from '../schemas/user.schema';
 import type { UserRole, UserStatus } from '../schemas/user.schema';
 
 export class ListUsersDto {
-  @ApiPropertyOptional({ description: 'Case-insensitive substring match on name or email' })
+  @ApiPropertyOptional({
+    description: 'Case-insensitive substring match on name or email',
+  })
   @IsOptional()
   @IsString()
   search?: string;

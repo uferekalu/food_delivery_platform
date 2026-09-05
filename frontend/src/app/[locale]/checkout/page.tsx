@@ -143,12 +143,19 @@ function CheckoutForm() {
 
   async function applyPromo() {
     const code = promoInput.trim();
-    if (!code || !cart?.restaurantId) return;
+    if (!code || !cart) return;
+    const sellerRef =
+      cart.sellerType === "store" && cart.storeId
+        ? { storeId: cart.storeId }
+        : cart.restaurantId
+          ? { restaurantId: cart.restaurantId }
+          : null;
+    if (!sellerRef) return;
     setPromoError(null);
     try {
       const result = await validatePromoCode({
         code,
-        restaurantId: cart.restaurantId,
+        ...sellerRef,
         subtotal: cart.subtotal,
       }).unwrap();
       if (result.valid) {
@@ -231,10 +238,6 @@ function CheckoutForm() {
   const estTotal = Math.max(0, round2(subtotal + estDeliveryFee + estServiceFee - discount));
   const currency = cart.currency ?? "";
   const sellerName = cart.restaurantName ?? cart.storeName ?? "";
-  // Promo codes aren't offered for a store cart yet — PromoCode is restaurant-scoped only
-  // server-side (docs/ROADMAP.md FDP-77), so the section below is hidden rather than inviting
-  // an action that would always fail.
-  const promoCodesSupported = cart.sellerType !== "store";
 
   return (
     <Container className="max-w-5xl py-10">
@@ -349,7 +352,6 @@ function CheckoutForm() {
                 ))}
               </RadioGroup>
 
-              {promoCodesSupported && (
               <div className="border-t border-border pt-3">
                 {appliedPromo ? (
                   <Alert variant="success" title={t("promoApplied", { code: appliedPromo.code })}>
@@ -387,7 +389,6 @@ function CheckoutForm() {
                   </button>
                 )}
               </div>
-              )}
             </CardContent>
           </Card>
         )}

@@ -365,12 +365,10 @@ describe('Admin (e2e)', () => {
       items: { id: string; email: string; status: string }[];
       total: number;
     };
-    expect(
-      usersList.items.some((u) => u.email === customer.user.email),
-    ).toBe(true);
-    expect(
-      usersList.items.every((u) => u.status === 'active'),
-    ).toBe(true);
+    expect(usersList.items.some((u) => u.email === customer.user.email)).toBe(
+      true,
+    );
+    expect(usersList.items.every((u) => u.status === 'active')).toBe(true);
 
     // An admin can't suspend themselves — a lock-yourself-out footgun.
     await request(server)

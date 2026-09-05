@@ -5,11 +5,17 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { DeliveryZonesService } from './delivery-zones.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
 import {
   Restaurant,
   RestaurantDocument,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import {
+  Store,
+  StoreDocument,
+  StoreSchema,
+} from '../stores/schemas/store.schema';
 import {
   DeliveryZone,
   DeliveryZoneDocument,
@@ -25,6 +31,7 @@ describe('DeliveryZonesService', () => {
   let deliveryZonesService: DeliveryZonesService;
   let restaurantsService: RestaurantsService;
   let restaurantModel: Model<RestaurantDocument>;
+  let storeModel: Model<StoreDocument>;
   let zoneModel: Model<DeliveryZoneDocument>;
 
   const owner: AccessTokenPayload = {
@@ -49,21 +56,24 @@ describe('DeliveryZonesService', () => {
         MongooseModule.forRoot(mongod.getUri()),
         MongooseModule.forFeature([
           { name: Restaurant.name, schema: RestaurantSchema },
+          { name: Store.name, schema: StoreSchema },
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
         ]),
       ],
-      providers: [DeliveryZonesService, RestaurantsService],
+      providers: [DeliveryZonesService, RestaurantsService, StoresService],
     }).compile();
 
     deliveryZonesService = moduleRef.get(DeliveryZonesService);
     restaurantsService = moduleRef.get(RestaurantsService);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
     zoneModel = moduleRef.get(getModelToken(DeliveryZone.name));
   }, 60_000);
 
   afterEach(async () => {
     await Promise.all([
       restaurantModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
       zoneModel.deleteMany({}).exec(),
     ]);
   });
@@ -92,9 +102,31 @@ describe('DeliveryZonesService', () => {
     });
   }
 
+  async function createTestStore(
+    address: {
+      line1: string;
+      city: string;
+      state: string;
+      lat?: number;
+      lng?: number;
+    } = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+  ) {
+    return storeModel.create({
+      ownerId: owner.sub,
+      name: 'Corner Grocery',
+      slug: `corner-grocery-${Math.random()}`,
+      type: 'groceries',
+      currency: 'NGN',
+      country: 'Nigeria',
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
+      address,
+    });
+  }
+
   it('creates, lists, updates, and deletes zones for the owner', async () => {
     const restaurant = await createTestRestaurant();
     const zone = await deliveryZonesService.create(
+      'restaurant',
       restaurant._id.toString(),
       owner,
       { name: 'Nearby', maxDistanceKm: 5, baseFee: 300, perKmFee: 50 },
@@ -102,12 +134,14 @@ describe('DeliveryZonesService', () => {
     expect(zone.name).toBe('Nearby');
 
     const list = await deliveryZonesService.list(
+      'restaurant',
       restaurant._id.toString(),
       owner,
     );
     expect(list).toHaveLength(1);
 
     const updated = await deliveryZonesService.update(
+      'restaurant',
       restaurant._id.toString(),
       zone._id.toString(),
       owner,
@@ -116,11 +150,13 @@ describe('DeliveryZonesService', () => {
     expect(updated.baseFee).toBe(400);
 
     await deliveryZonesService.delete(
+      'restaurant',
       restaurant._id.toString(),
       zone._id.toString(),
       owner,
     );
     const afterDelete = await deliveryZonesService.list(
+      'restaurant',
       restaurant._id.toString(),
       owner,
     );
@@ -130,24 +166,35 @@ describe('DeliveryZonesService', () => {
   it('rejects a stranger from listing, creating, updating, or deleting zones', async () => {
     const restaurant = await createTestRestaurant();
     const zone = await deliveryZonesService.create(
+      'restaurant',
       restaurant._id.toString(),
       owner,
       { name: 'Nearby', maxDistanceKm: 5, baseFee: 300, perKmFee: 50 },
     );
 
     await expect(
-      deliveryZonesService.list(restaurant._id.toString(), stranger),
+      deliveryZonesService.list(
+        'restaurant',
+        restaurant._id.toString(),
+        stranger,
+      ),
     ).rejects.toThrow(ForbiddenException);
     await expect(
-      deliveryZonesService.create(restaurant._id.toString(), stranger, {
-        name: 'Intrusion',
-        maxDistanceKm: 5,
-        baseFee: 100,
-        perKmFee: 10,
-      }),
+      deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        stranger,
+        {
+          name: 'Intrusion',
+          maxDistanceKm: 5,
+          baseFee: 100,
+          perKmFee: 10,
+        },
+      ),
     ).rejects.toThrow(ForbiddenException);
     await expect(
       deliveryZonesService.update(
+        'restaurant',
         restaurant._id.toString(),
         zone._id.toString(),
         stranger,
@@ -156,6 +203,7 @@ describe('DeliveryZonesService', () => {
     ).rejects.toThrow(ForbiddenException);
     await expect(
       deliveryZonesService.delete(
+        'restaurant',
         restaurant._id.toString(),
         zone._id.toString(),
         stranger,
@@ -167,6 +215,7 @@ describe('DeliveryZonesService', () => {
     const restaurant = await createTestRestaurant();
     const other = await createTestRestaurant();
     const zone = await deliveryZonesService.create(
+      'restaurant',
       restaurant._id.toString(),
       owner,
       { name: 'Nearby', maxDistanceKm: 5, baseFee: 300, perKmFee: 50 },
@@ -174,6 +223,7 @@ describe('DeliveryZonesService', () => {
 
     await expect(
       deliveryZonesService.update(
+        'restaurant',
         other._id.toString(),
         zone._id.toString(),
         owner,
@@ -182,10 +232,80 @@ describe('DeliveryZonesService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  describe('calculateFee', () => {
-    it('falls back to the flat rate when the restaurant has no coordinates', async () => {
+  describe('store zones (docs/ROADMAP.md FDP-90)', () => {
+    it('creates, lists, updates, and deletes zones for a store owner, independent of restaurant zones', async () => {
+      const store = await createTestStore();
       const restaurant = await createTestRestaurant();
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
+      // A restaurant zone must never leak into a store's zone list, or vice versa.
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Restaurant zone',
+          maxDistanceKm: 5,
+          baseFee: 111,
+          perKmFee: 10,
+        },
+      );
+
+      const zone = await deliveryZonesService.create(
+        'store',
+        store._id.toString(),
+        owner,
+        { name: 'Store nearby', maxDistanceKm: 5, baseFee: 300, perKmFee: 50 },
+      );
+      expect(zone.name).toBe('Store nearby');
+
+      const list = await deliveryZonesService.list(
+        'store',
+        store._id.toString(),
+        owner,
+      );
+      expect(list).toHaveLength(1);
+      expect(list[0].name).toBe('Store nearby');
+
+      const updated = await deliveryZonesService.update(
+        'store',
+        store._id.toString(),
+        zone._id.toString(),
+        owner,
+        { baseFee: 400 },
+      );
+      expect(updated.baseFee).toBe(400);
+
+      await deliveryZonesService.delete(
+        'store',
+        store._id.toString(),
+        zone._id.toString(),
+        owner,
+      );
+      expect(
+        await deliveryZonesService.list('store', store._id.toString(), owner),
+      ).toHaveLength(0);
+    });
+
+    it('rejects a stranger from managing a store’s zones', async () => {
+      const store = await createTestStore();
+      await expect(
+        deliveryZonesService.create('store', store._id.toString(), stranger, {
+          name: 'Intrusion',
+          maxDistanceKm: 5,
+          baseFee: 100,
+          perKmFee: 10,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('calculateFee works for a store the same way it does for a restaurant', async () => {
+      const store = await createTestStore({
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        lat: 6.5,
+        lng: 3.3792,
+      });
+      await deliveryZonesService.create('store', store._id.toString(), owner, {
         name: 'Nearby',
         maxDistanceKm: 20,
         baseFee: 300,
@@ -193,6 +313,33 @@ describe('DeliveryZonesService', () => {
       });
 
       const fee = await deliveryZonesService.calculateFee(
+        'store',
+        store,
+        { line1: 'x', city: 'x', state: 'x', lat: 6.545, lng: 3.3792 }, // ~5km away
+        200,
+      );
+      expect(fee).toBeGreaterThan(300);
+      expect(fee).not.toBe(20); // not the flat 10%-of-subtotal fallback
+    });
+  });
+
+  describe('calculateFee', () => {
+    it('falls back to the flat rate when the restaurant has no coordinates', async () => {
+      const restaurant = await createTestRestaurant();
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Nearby',
+          maxDistanceKm: 20,
+          baseFee: 300,
+          perKmFee: 50,
+        },
+      );
+
+      const fee = await deliveryZonesService.calculateFee(
+        'restaurant',
         restaurant,
         { line1: 'x', city: 'x', state: 'x', lat: 6.5, lng: 3.4 },
         200,
@@ -210,6 +357,7 @@ describe('DeliveryZonesService', () => {
       });
 
       const fee = await deliveryZonesService.calculateFee(
+        'restaurant',
         restaurant,
         { line1: 'x', city: 'x', state: 'x', lat: 6.501, lng: 3.4 },
         200,
@@ -225,14 +373,20 @@ describe('DeliveryZonesService', () => {
         lat: 6.5,
         lng: 3.3792,
       });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Nearby',
-        maxDistanceKm: 20,
-        baseFee: 300,
-        perKmFee: 50,
-      });
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Nearby',
+          maxDistanceKm: 20,
+          baseFee: 300,
+          perKmFee: 50,
+        },
+      );
 
       const fee = await deliveryZonesService.calculateFee(
+        'restaurant',
         restaurant,
         {
           line1: 'x',
@@ -255,20 +409,31 @@ describe('DeliveryZonesService', () => {
         lat: 6.5,
         lng: 3.3792,
       });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Far',
-        maxDistanceKm: 50,
-        baseFee: 1000,
-        perKmFee: 0,
-      });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Near',
-        maxDistanceKm: 10,
-        baseFee: 100,
-        perKmFee: 0,
-      });
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Far',
+          maxDistanceKm: 50,
+          baseFee: 1000,
+          perKmFee: 0,
+        },
+      );
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Near',
+          maxDistanceKm: 10,
+          baseFee: 100,
+          perKmFee: 0,
+        },
+      );
 
       const fee = await deliveryZonesService.calculateFee(
+        'restaurant',
         restaurant,
         { line1: 'x', city: 'x', state: 'x', lat: 6.545, lng: 3.3792 }, // ~5km, inside both
         200,
