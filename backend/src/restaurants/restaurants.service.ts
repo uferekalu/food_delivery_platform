@@ -10,7 +10,7 @@ import { slugify } from '../common/utils/slugify';
 import { escapeRegExp } from '../common/utils/regex';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema';
-import type { PayoutAccountStatus } from './schemas/payout-account.schema';
+import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
 import type { PaymentProvider } from '../payments/payment-provider';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';

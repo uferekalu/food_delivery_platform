@@ -1,5 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import {
+  PayoutAccount,
+  PayoutAccountSchema,
+} from '../../common/schemas/payout-account.schema';
 
 export const VEHICLE_TYPES = ['bicycle', 'motorcycle', 'car', 'van'] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
@@ -110,6 +114,12 @@ export class Rider {
 
   @Prop({ type: String, required: true, trim: true })
   nextOfKinRelationship: string;
+
+  // Vendor payouts epic, extended to riders in FDP-91 — see PayoutAccount's doc comment. A
+  // rider owns their own payout account directly (no separate ownerId the way a restaurant/
+  // store has — `assertOwnerOrAdmin`-equivalent checks compare against `rider.userId` instead).
+  @Prop({ type: [PayoutAccountSchema], default: [] })
+  payoutAccounts: PayoutAccount[];
 }
 
 export type RiderDocument = HydratedDocument<Rider>;

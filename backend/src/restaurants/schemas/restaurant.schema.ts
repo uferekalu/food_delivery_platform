@@ -5,7 +5,10 @@ import {
   OpeningHour,
   OpeningHourSchema,
 } from '../../common/schemas/opening-hour.schema';
-import { PayoutAccount, PayoutAccountSchema } from './payout-account.schema';
+import {
+  PayoutAccount,
+  PayoutAccountSchema,
+} from '../../common/schemas/payout-account.schema';
 
 @Schema({ timestamps: true })
 export class Restaurant {
