@@ -10,6 +10,8 @@ import { slugify } from '../common/utils/slugify';
 import { escapeRegExp } from '../common/utils/regex';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { PaginatedResult } from '../restaurants/restaurants.service';
+import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
+import type { PaymentProvider } from '../payments/payment-provider';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -178,6 +180,86 @@ export class StoresService {
         'You do not have permission to modify this store',
       );
     }
+  }
+
+  // --- Vendor payouts, extended to stores (docs/ROADMAP.md FDP-94) — mirrors
+  // RestaurantsService's equivalent methods exactly; see that file's doc comments for the
+  // reasoning behind each parameter (this is the second domain this pattern applies to, but not
+  // yet worth extracting into a shared helper — see backend/CLAUDE.md on when to generalize).
+
+  async setPayoutAccount(
+    id: string,
+    requester: AccessTokenPayload,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+    bankDetails?: { bankCode: string; accountNumber: string },
+  ): Promise<StoreDocument> {
+    const store = await this.findByIdOrThrow(id);
+    this.assertOwnerOrAdmin(store, requester);
+    return this.applyPayoutAccountUpdate(
+      store,
+      provider,
+      status,
+      reference,
+      bankDetails,
+    );
+  }
+
+  /** Same upsert as `setPayoutAccount`, but for Stripe Connect's `account.updated` webhook,
+   * which has no authenticated user to check ownership against. */
+  async setPayoutAccountFromWebhook(
+    id: string,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+  ): Promise<StoreDocument> {
+    const store = await this.findByIdOrThrow(id);
+    return this.applyPayoutAccountUpdate(
+      store,
+      provider,
+      status,
+      reference,
+      undefined,
+    );
+  }
+
+  findByPayoutAccountReference(
+    provider: PaymentProvider,
+    reference: string,
+  ): Promise<StoreDocument | null> {
+    return this.storeModel
+      .findOne({ payoutAccounts: { $elemMatch: { provider, reference } } })
+      .exec();
+  }
+
+  private applyPayoutAccountUpdate(
+    store: StoreDocument,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+    bankDetails: { bankCode: string; accountNumber: string } | undefined,
+  ): Promise<StoreDocument> {
+    const bankCode = bankDetails?.bankCode ?? null;
+    const accountNumber = bankDetails?.accountNumber ?? null;
+    const existing = store.payoutAccounts.find(
+      (account) => account.provider === provider,
+    );
+    if (existing) {
+      existing.status = status;
+      existing.reference = reference;
+      existing.bankCode = bankCode;
+      existing.accountNumber = accountNumber;
+    } else {
+      store.payoutAccounts.push({
+        provider,
+        status,
+        reference,
+        bankCode,
+        accountNumber,
+      });
+    }
+    return store.save();
   }
 
   private async generateUniqueSlug(name: string): Promise<string> {

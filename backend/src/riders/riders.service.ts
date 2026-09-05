@@ -9,6 +9,8 @@ import { Model } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Rider, RiderDocument } from './schemas/rider.schema';
+import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
+import type { PaymentProvider } from '../payments/payment-provider';
 import { ApplyRiderDto } from './dto/apply-rider.dto';
 
 const MINIMUM_RIDER_AGE = 18;
@@ -98,6 +100,86 @@ export class RidersService {
   async toggleOnline(userId: string): Promise<RiderDocument> {
     const rider = await this.findMine(userId);
     rider.isOnline = !rider.isOnline;
+    return rider.save();
+  }
+
+  // --- Vendor payouts, extended to riders (docs/ROADMAP.md FDP-94) — a rider has no separate
+  // `ownerId` the way a restaurant/store has (`payout-account.schema.ts`'s doc comment already
+  // called this out at FDP-91): the rider IS the account owner, self-service only via their own
+  // `userId` — no admin-on-behalf-of variant, same simplification `PayoutsController`'s
+  // `GET /payouts/riders/me` already made in FDP-93.
+
+  async setPayoutAccount(
+    userId: string,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+    bankDetails?: { bankCode: string; accountNumber: string },
+  ): Promise<RiderDocument> {
+    const rider = await this.findMine(userId);
+    return this.applyPayoutAccountUpdate(
+      rider,
+      provider,
+      status,
+      reference,
+      bankDetails,
+    );
+  }
+
+  /** Same upsert as `setPayoutAccount`, but for Stripe Connect's `account.updated` webhook,
+   * which identifies the rider by their Stripe account reference, not a userId. */
+  async setPayoutAccountFromWebhook(
+    id: string,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+  ): Promise<RiderDocument> {
+    const rider = await this.riderModel.findById(id).exec();
+    if (!rider) throw new NotFoundException('Rider not found');
+    return this.applyPayoutAccountUpdate(
+      rider,
+      provider,
+      status,
+      reference,
+      undefined,
+    );
+  }
+
+  findByPayoutAccountReference(
+    provider: PaymentProvider,
+    reference: string,
+  ): Promise<RiderDocument | null> {
+    return this.riderModel
+      .findOne({ payoutAccounts: { $elemMatch: { provider, reference } } })
+      .exec();
+  }
+
+  private applyPayoutAccountUpdate(
+    rider: RiderDocument,
+    provider: PaymentProvider,
+    status: PayoutAccountStatus,
+    reference: string,
+    bankDetails: { bankCode: string; accountNumber: string } | undefined,
+  ): Promise<RiderDocument> {
+    const bankCode = bankDetails?.bankCode ?? null;
+    const accountNumber = bankDetails?.accountNumber ?? null;
+    const existing = rider.payoutAccounts.find(
+      (account) => account.provider === provider,
+    );
+    if (existing) {
+      existing.status = status;
+      existing.reference = reference;
+      existing.bankCode = bankCode;
+      existing.accountNumber = accountNumber;
+    } else {
+      rider.payoutAccounts.push({
+        provider,
+        status,
+        reference,
+        bankCode,
+        accountNumber,
+      });
+    }
     return rider.save();
   }
 

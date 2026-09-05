@@ -284,4 +284,98 @@ describe('RidersService', () => {
       });
     });
   });
+
+  describe('setPayoutAccount (docs/ROADMAP.md FDP-94)', () => {
+    it('adds a new payout account entry, including bank details, keyed off the userId — self-service, no ownerId to check', async () => {
+      const customer = await createCustomer();
+      await ridersService.apply(requesterFor(customer), {
+        vehicleType: 'motorcycle',
+        ...kycFields(),
+      });
+
+      const updated = await ridersService.setPayoutAccount(
+        customer._id.toString(),
+        'paystack',
+        'active',
+        'ACCT_test123',
+        { bankCode: '058', accountNumber: '0123456789' },
+      );
+
+      expect(
+        updated.payoutAccounts.map((a) => ({
+          provider: a.provider,
+          status: a.status,
+          reference: a.reference,
+          bankCode: a.bankCode,
+          accountNumber: a.accountNumber,
+        })),
+      ).toEqual([
+        {
+          provider: 'paystack',
+          status: 'active',
+          reference: 'ACCT_test123',
+          bankCode: '058',
+          accountNumber: '0123456789',
+        },
+      ]);
+    });
+
+    it('updates the existing entry in place rather than duplicating it', async () => {
+      const customer = await createCustomer();
+      await ridersService.apply(requesterFor(customer), {
+        vehicleType: 'motorcycle',
+        ...kycFields(),
+      });
+
+      await ridersService.setPayoutAccount(
+        customer._id.toString(),
+        'paystack',
+        'active',
+        'ACCT_old',
+      );
+      const updated = await ridersService.setPayoutAccount(
+        customer._id.toString(),
+        'paystack',
+        'active',
+        'ACCT_new',
+      );
+
+      expect(updated.payoutAccounts).toHaveLength(1);
+      expect(updated.payoutAccounts[0].reference).toBe('ACCT_new');
+    });
+
+    it('rejects a userId with no rider profile', async () => {
+      const customer = await createCustomer();
+
+      await expect(
+        ridersService.setPayoutAccount(
+          customer._id.toString(),
+          'paystack',
+          'active',
+          'ACCT_test123',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('setPayoutAccountFromWebhook upserts by rider id, and findByPayoutAccountReference finds it back', async () => {
+      const customer = await createCustomer();
+      const rider = await ridersService.apply(requesterFor(customer), {
+        vehicleType: 'motorcycle',
+        ...kycFields(),
+      });
+
+      await ridersService.setPayoutAccountFromWebhook(
+        rider._id.toString(),
+        'stripe',
+        'pending',
+        'acct_test456',
+      );
+
+      const found = await ridersService.findByPayoutAccountReference(
+        'stripe',
+        'acct_test456',
+      );
+      expect(found?._id.toString()).toBe(rider._id.toString());
+    });
+  });
 });

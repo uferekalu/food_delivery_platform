@@ -758,7 +758,6 @@
   "StorePayoutsPage": {
     "payouts": "Paiements",
     "storeNotFound": "Boutique introuvable, ou vous n'y avez pas accès.",
-    "onboardingNotAvailableYet": "La connexion d'un compte de paiement pour les boutiques n'est pas encore disponible — cette page affichera votre historique de paiements une fois que ce sera le cas.",
     "noPayoutsYet": "Aucun paiement pour le moment",
     "payoutsAppearHere": "Les paiements apparaissent ici une fois que votre boutique a un compte connecté et des commandes livrées."
   },

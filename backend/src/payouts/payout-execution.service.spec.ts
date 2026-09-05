@@ -25,6 +25,7 @@ import {
   RiderDocument,
   RiderSchema,
 } from '../riders/schemas/rider.schema';
+import type { PayoutAccount } from '../common/schemas/payout-account.schema';
 import { StripeAdapter } from '../payments/adapters/stripe.adapter';
 import { PaystackAdapter } from '../payments/adapters/paystack.adapter';
 import { FlutterwaveAdapter } from '../payments/adapters/flutterwave.adapter';
@@ -117,7 +118,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
   let counter = 0;
 
   async function createRestaurant(
-    payoutAccounts: unknown[] = [],
+    payoutAccounts: Partial<PayoutAccount>[] = [],
     ownerId = `owner-${++counter}`,
   ) {
     counter += 1;
@@ -351,29 +352,36 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       const older = await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-1',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 50,
         currency: 'NGN',
         provider: 'stripe',
         payoutAccountReference: 'acct_1',
         status: 'succeeded',
-        createdAt: new Date('2026-01-01'),
       });
+      // `timestamps: true` manages `createdAt` automatically and Mongoose's typed `.create()`
+      // input intentionally excludes it — backdating it for this ordering test has to go through
+      // a raw update instead.
+      await payoutModel
+        .updateOne({ _id: older._id }, { createdAt: new Date('2026-01-01') })
+        .exec();
       const newer = await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-1',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 75,
         currency: 'NGN',
         provider: 'stripe',
         payoutAccountReference: 'acct_1',
         status: 'succeeded',
-        createdAt: new Date('2026-02-01'),
       });
+      await payoutModel
+        .updateOne({ _id: newer._id }, { createdAt: new Date('2026-02-01') })
+        .exec();
       await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-2', // a different vendor — must never show up
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 999,
         currency: 'NGN',
         provider: 'stripe',
@@ -399,7 +407,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-1',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 50,
         currency: 'NGN',
         provider: 'stripe',
@@ -410,7 +418,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       await payoutModel.create({
         vendorType: 'rider',
         vendorId: 'rider-1',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 15,
         currency: 'NGN',
         provider: 'stripe',
@@ -421,7 +429,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-2',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 30,
         currency: 'NGN',
         provider: 'stripe',
@@ -459,7 +467,10 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
         reconciliationRequired: true,
       });
       await orderModel
-        .updateOne({ _id: order._id }, { vendorPayoutId: payout._id.toString() })
+        .updateOne(
+          { _id: order._id },
+          { vendorPayoutId: payout._id.toString() },
+        )
         .exec();
 
       const resolved = await executionService.resolveReconciliation(
@@ -491,7 +502,10 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
         reconciliationRequired: true,
       });
       await orderModel
-        .updateOne({ _id: order._id }, { vendorPayoutId: payout._id.toString() })
+        .updateOne(
+          { _id: order._id },
+          { vendorPayoutId: payout._id.toString() },
+        )
         .exec();
 
       const resolved = await executionService.resolveReconciliation(
@@ -510,7 +524,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       const payout = await payoutModel.create({
         vendorType: 'restaurant',
         vendorId: 'restaurant-1',
-        orderIds: [],
+        orderIds: [] as Types.ObjectId[],
         grossAmount: 85,
         currency: 'NGN',
         provider: 'stripe',

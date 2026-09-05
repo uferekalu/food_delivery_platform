@@ -802,3 +802,49 @@ checked, not from this system guessing.
 expected, not a bug) and the actual cutover of §14's instant charge-time split (a later ticket,
 once onboarding exists for every vendor type and the dashboards built here have had a chance to
 prove the batch out in practice).
+
+## 21. Store & rider payout onboarding (docs/ROADMAP.md FDP-94)
+
+Extends every payout-account onboarding flow (§4's Paystack/Flutterwave/Stripe Connect
+onboarding, previously restaurant-only since FDP-52/53/54) to stores and riders, closing the gap
+§20 called out — this is what actually lets a store or rider receive a real weekly payout, not
+just see an (until now, empty) history for one.
+
+**Stores** mirror restaurants exactly — `StoresService.setPayoutAccount`/
+`setPayoutAccountFromWebhook`/`findByPayoutAccountReference` are the same three methods
+`RestaurantsService` already had, and `PaystackPayoutsController`/`FlutterwavePayoutsController`/
+`StripePayoutsController` each gained a `stores/:storeId/payout/...` route group alongside their
+existing `restaurants/:restaurantId/...` one, same ownership-check pattern
+(`StoresService.assertOwnerOrAdmin`).
+
+**Riders are self-service only** — `riders/me/payout/...` (no id param), since a rider has no
+separate `ownerId` the way a restaurant/store does (the rider IS the account owner;
+`PayoutAccount`'s own doc comment already called this out at FDP-91).
+`RidersService.setPayoutAccount` takes a `userId`, not a rider id, resolving the rider profile
+via the same `findMine` every other rider "me" endpoint uses. Two rider-specific differences from
+the restaurant/store flow: (1) `businessEmail` for Flutterwave/Paystack's subaccount APIs comes
+straight from the access token (`user.email`) rather than a separate owner lookup, since a rider
+IS the authenticated caller; (2) the subaccount's stored default split (Paystack
+`percentageCharge`, Flutterwave `splitValue`) is `0`, not the platform's 15% commission — riders
+keep 100% of their delivery fees, so nothing about a rider's payout account should ever cause a
+provider to withhold a cut on their behalf. The rider onboarding forms on `/rider/deliveries`
+also skip the currency-availability gate the restaurant/store forms use
+(`GET /payments/providers?currency=...`) — unlike a restaurant/store, a rider isn't tied to one
+seller's currency, so all three providers' forms are simply offered until one succeeds.
+
+**Stripe Connect's webhook got genuinely more complex**, not just extended —
+`PaymentsService.handleStripeAccountWebhook` previously only ever looked up a Stripe account
+reference against `RestaurantsService`. It now checks Restaurant, then Store, then Rider in turn
+(a Stripe account belongs to exactly one), since the webhook identifies the account only by its
+Stripe id, never by which vendor type owns it. This is a rare event, not a hot path, so up to
+three sequential lookups cost nothing that matters.
+
+Frontend: the restaurant Earnings page's three onboarding forms
+(`PaystackPayoutSetup`/`FlutterwavePayoutSetup`/`StripePayoutSetup`) are duplicated (not shared
+via a generalized component) onto the new `dashboard/stores/[id]/payouts` page and the rider
+deliveries page — deliberately, matching this codebase's general preference for a second
+straightforward copy over a premature shared abstraction when the three shapes are similar but
+not identical (different mutations, different ownership/currency assumptions). No new translation
+keys were needed — every onboarding form reuses the existing `EarningsPage` namespace's copy
+verbatim, since the actual onboarding *steps* (pick a bank, verify, connect / redirect to Stripe)
+are identical regardless of vendor type.

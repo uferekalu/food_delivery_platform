@@ -6,14 +6,30 @@ import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useGetMyDeliveriesQuery } from "@/lib/redux/services/riders-api";
+import { useToast } from "@/components/ui/toast";
+import { useGetMyDeliveriesQuery, useGetMyRiderProfileQuery } from "@/lib/redux/services/riders-api";
 import { useListMyRiderPayoutsQuery } from "@/lib/redux/services/payouts-api";
 import type { PayoutStatus } from "@/lib/redux/services/payouts-api";
+import {
+  useListPaystackBanksQuery,
+  useResolveRiderPaystackAccountMutation,
+  useSetupRiderPaystackPayoutMutation,
+  useListFlutterwaveBanksQuery,
+  useResolveRiderFlutterwaveAccountMutation,
+  useSetupRiderFlutterwavePayoutMutation,
+  useSetupRiderStripePayoutMutation,
+} from "@/lib/redux/services/payments-api";
+import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
-import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
+import type { Order, OrderStatus, Rider } from "@/lib/redux/restaurant-types";
 
 const PAYOUT_STATUS_BADGE_VARIANT: Record<PayoutStatus, BadgeProps["variant"]> = {
   pending: "neutral",
@@ -105,11 +121,253 @@ function DeliveryHistory() {
   );
 }
 
-/** Weekly payout execution (docs/ROADMAP.md FDP-92/93) — the rider's own `Payout` audit trail.
- * Riders keep 100% of their delivery fees (no platform commission on this side), but still have
- * no way to onboard a payout account yet (FDP-94) — this section will simply stay empty for
- * every rider until then, which is expected, not a bug. */
-function RiderPayoutHistory() {
+/** Rider counterpart of the restaurant Earnings page's `PaystackPayoutSetup` (docs/ROADMAP.md
+ * FDP-94) — self-service, no currency gate the way restaurant/store onboarding has, since a
+ * rider isn't tied to a single seller's currency the way a restaurant/store is. */
+function PaystackPayoutSetup() {
+  const t = useTranslations("EarningsPage");
+  const { toast } = useToast();
+  const { data: banks, isLoading: banksLoading } = useListPaystackBanksQuery();
+  const [resolveAccount, { isLoading: resolving }] = useResolveRiderPaystackAccountMutation();
+  const [setupPayout, { isLoading: connecting }] = useSetupRiderPaystackPayoutMutation();
+
+  const [bankCode, setBankCode] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const bankOptions: SelectOption[] = (banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }));
+
+  function resetVerification() {
+    setVerifiedName(null);
+    setError(null);
+  }
+
+  async function handleVerify() {
+    setError(null);
+    try {
+      const result = await resolveAccount({ bankCode, accountNumber }).unwrap();
+      setVerifiedName(result.accountName);
+    } catch (err) {
+      setError(getErrorMessage(err, t("couldNotVerifyAccount")));
+    }
+  }
+
+  async function handleConnect() {
+    setError(null);
+    try {
+      await setupPayout({ bankCode, accountNumber }).unwrap();
+      toast({ title: t("payoutAccountConnected"), variant: "success" });
+    } catch (err) {
+      setError(getErrorMessage(err, t("couldNotConnectPayoutAccount")));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("connectPaystackAccount")}</CardTitle>
+        <CardDescription>{t("addBankDetailsDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error && <Alert variant="danger">{error}</Alert>}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label={t("bank")} required>
+            <Select
+              options={bankOptions}
+              value={bankCode}
+              onChange={(value) => {
+                setBankCode(value);
+                resetVerification();
+              }}
+              placeholder={banksLoading ? t("loadingBanks") : t("chooseYourBank")}
+              disabled={banksLoading}
+              searchable
+              searchPlaceholder={t("searchBanks")}
+            />
+          </FormField>
+          <FormField label={t("accountNumber")} required>
+            <Input
+              value={accountNumber}
+              onChange={(e) => {
+                setAccountNumber(e.target.value);
+                resetVerification();
+              }}
+              placeholder="0123456789"
+              inputMode="numeric"
+            />
+          </FormField>
+        </div>
+
+        {verifiedName ? (
+          <Alert variant="success" title={t("accountVerified")}>
+            {t("accountVerifiedDescription", { name: verifiedName })}
+          </Alert>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            isLoading={resolving}
+            disabled={!bankCode || accountNumber.trim().length < 10}
+            onClick={() => void handleVerify()}
+          >
+            {t("verifyAccount")}
+          </Button>
+        )}
+
+        {verifiedName && (
+          <Button size="sm" className="w-fit" isLoading={connecting} onClick={() => void handleConnect()}>
+            {t("connectPayoutAccount")}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Rider counterpart of the restaurant Earnings page's `FlutterwavePayoutSetup`. */
+function FlutterwavePayoutSetup() {
+  const t = useTranslations("EarningsPage");
+  const { toast } = useToast();
+  const { data: banks, isLoading: banksLoading } = useListFlutterwaveBanksQuery();
+  const [resolveAccount, { isLoading: resolving }] = useResolveRiderFlutterwaveAccountMutation();
+  const [setupPayout, { isLoading: connecting }] = useSetupRiderFlutterwavePayoutMutation();
+
+  const [bankCode, setBankCode] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const bankOptions: SelectOption[] = (banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }));
+
+  function resetVerification() {
+    setVerifiedName(null);
+    setError(null);
+  }
+
+  async function handleVerify() {
+    setError(null);
+    try {
+      const result = await resolveAccount({ bankCode, accountNumber }).unwrap();
+      setVerifiedName(result.accountName);
+    } catch (err) {
+      setError(getErrorMessage(err, t("couldNotVerifyAccount")));
+    }
+  }
+
+  async function handleConnect() {
+    setError(null);
+    try {
+      await setupPayout({ bankCode, accountNumber }).unwrap();
+      toast({ title: t("payoutAccountConnected"), variant: "success" });
+    } catch (err) {
+      setError(getErrorMessage(err, t("couldNotConnectPayoutAccount")));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("connectFlutterwaveAccount")}</CardTitle>
+        <CardDescription>{t("addBankDetailsDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error && <Alert variant="danger">{error}</Alert>}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label={t("bank")} required>
+            <Select
+              options={bankOptions}
+              value={bankCode}
+              onChange={(value) => {
+                setBankCode(value);
+                resetVerification();
+              }}
+              placeholder={banksLoading ? t("loadingBanks") : t("chooseYourBank")}
+              disabled={banksLoading}
+              searchable
+              searchPlaceholder={t("searchBanks")}
+            />
+          </FormField>
+          <FormField label={t("accountNumber")} required>
+            <Input
+              value={accountNumber}
+              onChange={(e) => {
+                setAccountNumber(e.target.value);
+                resetVerification();
+              }}
+              placeholder="0123456789"
+              inputMode="numeric"
+            />
+          </FormField>
+        </div>
+
+        {verifiedName ? (
+          <Alert variant="success" title={t("accountVerified")}>
+            {t("accountVerifiedDescription", { name: verifiedName })}
+          </Alert>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            isLoading={resolving}
+            disabled={!bankCode || accountNumber.trim().length < 10}
+            onClick={() => void handleVerify()}
+          >
+            {t("verifyAccount")}
+          </Button>
+        )}
+
+        {verifiedName && (
+          <Button size="sm" className="w-fit" isLoading={connecting} onClick={() => void handleConnect()}>
+            {t("connectPayoutAccount")}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Rider counterpart of the restaurant Earnings page's `StripePayoutSetup`. */
+function StripePayoutSetup({ rider }: { rider: Rider }) {
+  const t = useTranslations("EarningsPage");
+  const { toast } = useToast();
+  const [setupPayout, { isLoading }] = useSetupRiderStripePayoutMutation();
+  const hasPendingAccount = rider.payoutAccounts.some(
+    (account) => account.provider === "stripe" && account.status === "pending",
+  );
+
+  async function handleConnect() {
+    try {
+      const result = await setupPayout().unwrap();
+      window.location.href = result.onboardingUrl;
+    } catch (err) {
+      toast({ title: t("couldNotStartStripeOnboarding"), description: getErrorMessage(err), variant: "danger" });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("connectStripeAccount")}</CardTitle>
+        <CardDescription>{t("stripeDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {hasPendingAccount && <Alert variant="warning">{t("stripePendingWarning")}</Alert>}
+        <Button size="sm" className="w-fit" isLoading={isLoading} onClick={() => void handleConnect()}>
+          {hasPendingAccount ? t("continueOnboarding") : t("connectWithStripe")}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Weekly payout execution (docs/ROADMAP.md FDP-92/93/94) — the rider's own `Payout` audit
+ * trail, plus onboarding forms (shown until at least one provider is active) so a rider can
+ * actually receive the weekly batch — riders keep 100% of their delivery fees (no platform
+ * commission on this side). */
+function RiderPayoutList() {
   const t = useTranslations("RiderDeliveriesPage");
   const tStatus = useTranslations("PayoutStatus");
   const locale = useLocale();
@@ -154,6 +412,24 @@ function RiderPayoutHistory() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function RiderPayoutHistory() {
+  const { data: rider, isLoading } = useGetMyRiderProfileQuery();
+
+  if (isLoading || !rider) return <Skeleton className="h-32 w-full" />;
+
+  const hasAnyActiveAccount = rider.payoutAccounts.some((a) => a.status === "active");
+
+  return (
+    <div className="flex flex-col gap-6">
+      {!hasAnyActiveAccount && <PaystackPayoutSetup />}
+      {!hasAnyActiveAccount && <FlutterwavePayoutSetup />}
+      {!hasAnyActiveAccount && <StripePayoutSetup rider={rider} />}
+
+      <RiderPayoutList />
+    </div>
   );
 }
 

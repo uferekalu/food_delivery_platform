@@ -758,7 +758,6 @@
   "StorePayoutsPage": {
     "payouts": "Payouts",
     "storeNotFound": "Store not found, or you don't have access to it.",
-    "onboardingNotAvailableYet": "Connecting a payout account for stores isn't available yet — this page will show your payout history once it is.",
     "noPayoutsYet": "No payouts yet",
     "payoutsAppearHere": "Payouts appear here once your store has a connected account and delivered orders."
   },
