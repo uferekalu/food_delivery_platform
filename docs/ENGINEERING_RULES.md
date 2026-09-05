@@ -37,6 +37,19 @@ this file is the detailed version.
   happy path and one failure path (validation error / auth failure).
 - Every payment webhook handler has a test asserting it rejects an invalid signature.
 
+## Database migrations (docs/ROADMAP.md FDP-88)
+
+- Adding a new **optional** field with a sensible default needs nothing extra — Mongoose already
+  handles a document that predates the field (it reads back as `undefined`/the schema default).
+- Anything that **transforms or depends on existing documents' shape** needs a real
+  `migrate-mongo` migration in the same branch as the schema change: renaming/removing a field
+  that has real data, changing a field's type or shape, backfilling a new *required* field, or
+  any change where an old document would otherwise fail validation or silently misbehave under
+  the new schema.
+- Create one with `npm run migrate:create -- <name>` (from `backend/`), write both `up()` and
+  `down()`, and run `npm run migrate:up` against your local database before opening the PR to
+  confirm it actually applies cleanly. See docs/ARCHITECTURE.md §15 for the full setup.
+
 ## Validation & error handling
 
 - Every backend endpoint validates input via a DTO (`class-validator`) — no raw `req.body`

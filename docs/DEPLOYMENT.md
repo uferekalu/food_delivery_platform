@@ -42,6 +42,10 @@ tier once this is validated) is just a redeploy, not a code change.
    database: `npm run seed:admin -- you@example.com` (see `backend/CLAUDE.md`) — from a machine
    with `MONGODB_URI` pointed at the production cluster, since this is a one-off script, not
    something Railway runs automatically.
+6. **Every deploy that includes a new migration** (`backend/migrations/`, see
+   docs/ARCHITECTURE.md §15 and docs/ENGINEERING_RULES.md): run `npm run migrate:up` against the
+   production `MONGODB_URI` — Railway does not run this automatically, it has to be a deliberate
+   step, same as `seed:admin`. Check first with `npm run migrate:status`.
 
 ## Backend — Render (documented alternative)
 
@@ -54,7 +58,7 @@ tier once this is validated) is just a redeploy, not a code change.
 3. `MONGODB_URI` should point at a real MongoDB Atlas cluster — never the local dev database.
 4. `CORS_ORIGINS` and `FRONTEND_URL` must be the real deployed frontend URL, not
    `http://localhost:3000`.
-5. Same `seed:admin` step as above.
+5. Same `seed:admin` and `migrate:up` steps as above.
 
 ## Frontend — Vercel
 
@@ -96,9 +100,24 @@ for the one above):
 
 `.github/workflows/ci.yml` runs on every push/PR to `main`: backend (lint, build, unit tests,
 e2e tests) and frontend (lint, test, build) as two independent jobs. This is a **build/test
-gate only** — it does not deploy anything. Vercel and the backend host each have their own
-GitHub integration (configured once, in their respective dashboards during project creation)
-that redeploys automatically on a push to `main`, independent of this workflow.
+gate only** — it does not deploy anything. The backend host (Railway/Render) has its own GitHub
+integration that redeploys automatically on a push to `main`.
+
+**The frontend does not currently auto-deploy** (docs/ROADMAP.md FDP-67) — there is no working
+Vercel↔GitHub integration connected to this repo, so merging to `main` updates the code but not
+the live site. Every frontend-affecting merge needs a manual deploy from the **repo root** (not
+`frontend/` — see the CLI gotcha below): `npx vercel --prod --yes`. Reconnecting the GitHub
+integration in the Vercel dashboard (Project Settings → Git) removes the need for this; update
+this paragraph once that's done.
+
+## Database backups & disaster recovery
+
+See docs/ARCHITECTURE.md §15 for the full picture (migration tooling, backup scripts, recovery
+runbook). Operationally: confirm what Atlas backup tier the production cluster is actually on
+(Atlas dashboard → Clusters → Backup) — a free M0 cluster has no automated backup at all, in
+which case `npm run backup` (from `backend/`, pointed at the production `MONGODB_URI`) should be
+run on a real schedule (cron / Task Scheduler on a machine with network access to it) and its
+output copied to storage you control, since the script itself only produces a local dump.
 
 ## Error tracking (Sentry)
 

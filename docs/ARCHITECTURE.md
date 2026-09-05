@@ -390,9 +390,11 @@ product settings.
 
 - **Frontend → Vercel:** root directory `frontend/`, framework preset Next.js, env vars set in
   Vercel project settings (never committed)
-- **Backend → Render:** root directory `backend/`, Node web service, `render.yaml` blueprint
-  checked in (structure only — actual secret values set in Render dashboard)
-- **Database:** MongoDB Atlas (connection string via env var)
+- **Backend → Railway** (currently live host; Render is a documented fallback — see
+  `docs/DEPLOYMENT.md` for why and how to switch back): root directory `backend/`, Node web
+  service, `render.yaml` blueprint still checked in and functional for the Render path (structure
+  only — actual secret values set in whichever dashboard is hosting it)
+- **Database:** MongoDB Atlas (connection string via env var) — see §15 for migrations/backups
 - **Media:** Cloudinary (API key/secret via env var)
 - CORS on the backend is locked to the deployed frontend origin(s) + localhost for dev
 
@@ -473,3 +475,61 @@ parse safely no-ops on the other's event type. At charge time, a destination cha
 account, confirmed live that a destination account missing the `transfers` capability (i.e.
 `pending`) is rejected outright by Stripe, which is exactly the gate this codebase relies on
 rather than re-checking capability status itself before charging.
+
+*(This section describes the instant charge-time split model. docs/ROADMAP.md FDP-91 onward
+replaces it with a platform-controlled weekly batch payout — every order settles in full to the
+platform's own account, and a Monday job pays each vendor/rider their accrued share via the
+provider's Transfer API instead. This section is rewritten in that ticket once the code lands;
+until then it's still an accurate description of what's actually deployed.)*
+
+## 15. Database migrations, backups & disaster recovery
+
+(docs/ROADMAP.md FDP-88) The platform ran with zero migration tooling and no documented backup
+strategy for its first 87 tickets — every schema change was pure Mongoose-schema-drift (adding an
+optional field needs nothing extra; Mongoose just returns `undefined`/the field's `default` for
+documents that predate it) with no version tracking, and nothing stated what MongoDB Atlas
+backup tier/retention was actually in use. Both gaps are closed here.
+
+**Migrations — `migrate-mongo`.** `backend/migrate-mongo-config.js` points it at `MONGODB_URI`;
+migration files live in `backend/migrations/`, tracked in a `changelog` collection in the
+database itself (not in git) so `migrate-mongo status` always reflects what's actually been
+applied to that specific environment's data, independent of which commit is deployed. Commands:
+`npm run migrate:create -- <name>`, `migrate:up`, `migrate:down`, `migrate:status`. A baseline
+no-op migration (`migrations/20260905000000-baseline.js`) marks "migration tracking starts here"
+so `migrate-mongo up` has a defined starting point against the already-populated production
+database rather than nothing to compare against. See docs/ENGINEERING_RULES.md for exactly when
+a schema change needs a real migration from now on (short version: anything that transforms or
+depends on existing documents' shape — a rename, a required-field backfill, a type change — not
+just adding a new optional field, which still needs nothing).
+
+**Backups.** MongoDB Atlas's own Cloud Backup (continuous, point-in-time restore) only exists on
+paid dedicated clusters (M10 and up) — a free M0 shared cluster has **no automated backup
+whatsoever**. Whichever tier is actually in use should be confirmed in the Atlas dashboard under
+Clusters → Backup, and if that's ever unclear again, err on the side of assuming M0 (no
+protection) rather than assuming the paid tier's safety net is there. Two scripts exist as a
+tier-independent safety net either way, since they don't depend on anything Atlas-side:
+- `npm run backup` (`backend/scripts/backup-database.ts`) — dumps every collection to timestamped
+  EJSON files under `backend/backups/<timestamp>/` (gitignored; EJSON round-trips `ObjectId`/
+  `Date`/etc. exactly, unlike plain `JSON.stringify`). Produces a local dump only — it does not
+  upload anywhere, since no cloud storage bucket/credentials are configured for this project.
+  Run it on a schedule (cron / Windows Task Scheduler) from any machine with network access to
+  `MONGODB_URI`, then copy the output folder to storage you control.
+- `npm run restore -- <path> --yes` (`backend/scripts/restore-database.ts`) — fully replaces
+  (`deleteMany` + re-insert, never a merge) each collection in the dump. Requires the explicit
+  `--yes` flag; omitting it prints exactly what would be restored and changes nothing. (This
+  script deliberately does not use an interactive "type yes to confirm" prompt — a real, narrow
+  bug was found where Node's `readline` hangs indefinitely once a `mongoose` import is also
+  present, under this project's `ts-node` setup on Windows. An explicit flag sidesteps it and is
+  arguably the better design for an unattended/scriptable disaster-recovery tool anyway.)
+
+**Recovery runbook**, in order of preference:
+1. If Atlas Cloud Backup is active for the cluster's tier, use Atlas's own point-in-time restore
+   first — it's more complete (captures everything up to the moment of failure, not just the
+   last scheduled `npm run backup` run) and doesn't require finding/trusting a local dump file.
+2. Otherwise (M0, or Atlas restore unavailable for any reason), find the most recent
+   `backend/backups/<timestamp>/` folder (wherever it was copied to after the last `npm run
+   backup` run) and restore it: `npm run restore -- <path> --yes` against the target
+   `MONGODB_URI`.
+3. Either way, run `npm run migrate:status` immediately after restoring — a dump taken before a
+   since-applied migration needs that migration re-applied (`npm run migrate:up`) to bring the
+   restored data's shape back in line with the currently-deployed code.
