@@ -6,3 +6,7 @@ export type UserRole = (typeof USER_ROLES)[number];
 // Mirrors backend SELF_REGISTERABLE_ROLES — the choices offered on the register page.
 export const SELF_REGISTERABLE_ROLES = ["customer", "restaurant_owner"] as const;
 export type SelfRegisterableRole = (typeof SELF_REGISTERABLE_ROLES)[number];
+
+// Mirrors backend USER_STATUSES (docs/ROADMAP.md FDP-89).
+export const USER_STATUSES = ["active", "suspended"] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];

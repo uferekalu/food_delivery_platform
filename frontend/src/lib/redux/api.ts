@@ -123,6 +123,7 @@ export const api = createApi({
     "Notification",
     "PromoCode",
     "AdminAnalytics",
+    "User",
   ],
   endpoints: () => ({}),
 });

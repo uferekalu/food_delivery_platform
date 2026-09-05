@@ -1,3 +1,5 @@
+import type { UserRole, UserStatus } from "@/lib/constants/roles";
+
 export interface Address {
   line1: string;
   line2?: string;
@@ -343,6 +345,19 @@ export interface PromoCode {
   usedCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  status: UserStatus;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  isEmailVerified: boolean;
+  isPhoneVerified: boolean;
+  createdAt: string;
 }
 
 export interface AdminAnalytics {

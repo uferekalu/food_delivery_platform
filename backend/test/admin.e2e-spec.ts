@@ -9,7 +9,20 @@ import { Model } from 'mongoose';
 import { setupApp } from '../src/setup-app';
 import type { OrderDocument } from '../src/orders/schemas/order.schema';
 
-jest.setTimeout(60_000);
+// Bumped from 60_000 (docs/ROADMAP.md FDP-89) — the single lifecycle test below now does two
+// more real bcrypt-cost-12 logins plus several more Mongo round trips (user list/suspend/
+// reactivate), the same "meaningfully more real work per test" reasoning restaurants.e2e-spec.ts
+// already documents for its own bump to 60_000 (see backend/CLAUDE.md).
+jest.setTimeout(90_000);
+
+function extractCookie(
+  setCookieHeader: string[] | undefined,
+  name: string,
+): string {
+  const raw = setCookieHeader?.find((c) => c.startsWith(`${name}=`));
+  if (!raw) throw new Error(`Expected a Set-Cookie header for ${name}`);
+  return raw.split(';')[0];
+}
 
 // Valid rider KYC fields (docs/ROADMAP.md FDP-61) — see riders.e2e-spec.ts for the full field
 // rationale; only used here to get a rider profile through /riders/apply for the admin flow.
@@ -329,6 +342,91 @@ describe('Admin (e2e)', () => {
       .post(`/payments/${order._id.toString()}/refund`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(400);
+
+    // --- User management (docs/ROADMAP.md FDP-89) ---
+
+    // A non-admin can't list or suspend users.
+    await request(server)
+      .get('/users')
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect(403);
+    await request(server)
+      .patch(`/users/${customer.user.id}/suspend`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .send({ reason: 'Not an admin' })
+      .expect(403);
+
+    const usersListRes = await request(server)
+      .get('/users')
+      .query({ role: 'customer' })
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const usersList = usersListRes.body as {
+      items: { id: string; email: string; status: string }[];
+      total: number;
+    };
+    expect(
+      usersList.items.some((u) => u.email === customer.user.email),
+    ).toBe(true);
+    expect(
+      usersList.items.every((u) => u.status === 'active'),
+    ).toBe(true);
+
+    // An admin can't suspend themselves — a lock-yourself-out footgun.
+    await request(server)
+      .patch(`/users/${adminAccount.user.id}/suspend`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ reason: 'Testing self-suspend guard' })
+      .expect(400);
+
+    // A fresh login to capture a real, currently-valid refresh cookie for the "revoked
+    // immediately on suspend" assertion below.
+    const preSuspendLoginRes = await request(server)
+      .post('/auth/login')
+      .send({ email: customer.user.email, password: 'Str0ngPass1' })
+      .expect(200);
+    const customerRefreshCookie = extractCookie(
+      preSuspendLoginRes.headers['set-cookie'] as unknown as string[],
+      'refresh_token',
+    );
+
+    const suspendRes = await request(server)
+      .patch(`/users/${customer.user.id}/suspend`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ reason: 'Repeated policy violations' })
+      .expect(200);
+    expect(
+      (suspendRes.body as { status: string; suspendedReason: string }).status,
+    ).toBe('suspended');
+    expect(
+      (suspendRes.body as { status: string; suspendedReason: string })
+        .suspendedReason,
+    ).toBe('Repeated policy violations');
+
+    // A suspended user's correct-password login is rejected.
+    await request(server)
+      .post('/auth/login')
+      .send({ email: customer.user.email, password: 'Str0ngPass1' })
+      .expect(401);
+
+    // The refresh token captured above — still unexpired, not previously used — no longer
+    // works either: suspending revokes it immediately rather than waiting for it to expire.
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', [customerRefreshCookie])
+      .expect(401);
+
+    const reactivateRes = await request(server)
+      .patch(`/users/${customer.user.id}/reactivate`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect((reactivateRes.body as { status: string }).status).toBe('active');
+
+    // Login works again after reactivation.
+    await request(server)
+      .post('/auth/login')
+      .send({ email: customer.user.email, password: 'Str0ngPass1' })
+      .expect(200);
 
     // --- Analytics ---
     const analyticsRes = await request(server)

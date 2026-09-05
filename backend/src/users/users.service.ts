@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import type { QueryFilter } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
+import type { PaginatedResult } from '../restaurants/restaurants.service';
+import {
+  RefreshToken,
+  RefreshTokenDocument,
+} from '../auth/schemas/refresh-token.schema';
 import {
   USER_ROLES,
   User,
@@ -13,6 +19,8 @@ import { SavedAddress } from './schemas/saved-address.schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateSavedAddressDto } from './dto/create-saved-address.dto';
 import { UpdateSavedAddressDto } from './dto/update-saved-address.dto';
+import { ListUsersDto } from './dto/list-users.dto';
+import { escapeRegExp } from '../common/utils/regex';
 
 export interface CreateUserInput {
   email: string;
@@ -27,6 +35,8 @@ export interface CreateUserInput {
 export class UsersService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(RefreshToken.name)
+    private readonly refreshTokenModel: Model<RefreshTokenDocument>,
     private readonly restaurantsService: RestaurantsService,
   ) {}
 
@@ -95,6 +105,97 @@ export class UsersService {
     return this.userModel
       .findByIdAndUpdate(id, { role }, { returnDocument: 'after' })
       .exec();
+  }
+
+  /** Admin user management (docs/ROADMAP.md FDP-89) — paginated, optionally filtered by role/
+   * status/a case-insensitive substring match on name or email. Same pagination shape as
+   * RestaurantsService.findAllApproved. */
+  async listAll(query: ListUsersDto): Promise<PaginatedResult<UserDocument>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const filter: QueryFilter<UserDocument> = {};
+    if (query.role) filter.role = query.role;
+    if (query.status) filter.status = query.status;
+    if (query.search) {
+      const pattern = escapeRegExp(query.search.trim());
+      filter.$or = [
+        { name: { $regex: pattern, $options: 'i' } },
+        { email: { $regex: pattern, $options: 'i' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.userModel
+        .find(filter)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .exec(),
+      this.userModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  /**
+   * Bans/suspends a user (docs/ROADMAP.md FDP-89). Immediately revokes every one of their
+   * refresh tokens — same `updateMany({ revokedAt: null }, { revokedAt: new Date() })` pattern
+   * AuthService already uses for password-reset/reuse-detection — so silent token refresh stops
+   * working right away; a still-valid short-lived access token keeps working until it naturally
+   * expires (see the schema's `status` field comment for why that's an accepted tradeoff, not an
+   * oversight). `requesterId` blocks an admin from suspending their own account — a real
+   * lock-yourself-out footgun, not a hypothetical.
+   */
+  async suspend(
+    id: string,
+    requesterId: string,
+    reason: string,
+  ): Promise<UserDocument> {
+    if (id === requesterId) {
+      throw new BadRequestException('You cannot suspend your own account');
+    }
+    const user = await this.findByIdOrThrow(id);
+    if (user.status === 'suspended') {
+      throw new BadRequestException('This account is already suspended');
+    }
+
+    user.status = 'suspended';
+    user.suspendedAt = new Date();
+    user.suspendedReason = reason;
+    await user.save();
+
+    // RefreshToken.userId stores as a plain string, not a real ObjectId instance, in this
+    // project's Mongoose 9 setup — querying with a raw ObjectId here silently matches nothing
+    // and modifies zero documents with no error (see backend/CLAUDE.md's Mongoose 9 ObjectId
+    // note). Caught here only because a live test asserted the actual revocation took effect.
+    await this.refreshTokenModel
+      .updateMany(
+        { userId: user._id.toString(), revokedAt: null },
+        { revokedAt: new Date() },
+      )
+      .exec();
+
+    return user;
+  }
+
+  async reactivate(id: string): Promise<UserDocument> {
+    const user = await this.findByIdOrThrow(id);
+    if (user.status !== 'suspended') {
+      throw new BadRequestException('This account is not suspended');
+    }
+
+    user.status = 'active';
+    user.suspendedAt = null;
+    user.suspendedReason = null;
+    await user.save();
+    return user;
   }
 
   async updateProfile(
