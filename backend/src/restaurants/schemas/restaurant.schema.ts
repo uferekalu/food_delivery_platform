@@ -103,3 +103,9 @@ RestaurantSchema.index({ isApproved: 1, avgRating: -1 });
 RestaurantSchema.index({ isApproved: 1, priceLevel: 1 });
 RestaurantSchema.index({ isApproved: 1, estimatedDeliveryMinutes: 1 });
 RestaurantSchema.index({ isApproved: 1, createdAt: -1 });
+// "Near me" (docs/ROADMAP.md FDP-96) — powers `$geoNear` in `RestaurantsService.findNearby`.
+// Standalone (not compounded with `isApproved`) since 2dsphere indexes have their own compounding
+// rules and `$geoNear`'s own `query` option already applies the `isApproved` filter without
+// needing it baked into this index. A restaurant with no `address.location` set (owner never
+// entered coordinates) is automatically excluded from geo queries, not an indexing error.
+RestaurantSchema.index({ 'address.location': '2dsphere' });

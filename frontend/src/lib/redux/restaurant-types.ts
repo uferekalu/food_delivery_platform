@@ -68,6 +68,10 @@ export interface Restaurant {
 export const RESTAURANT_SORTS = ["newest", "rating", "price_asc", "price_desc", "delivery_time"] as const;
 export type RestaurantSort = (typeof RESTAURANT_SORTS)[number];
 
+// "Restaurants near me" (docs/ROADMAP.md FDP-96) — only ever present on a `/restaurants/nearby`
+// response, never a stored field.
+export type RestaurantWithDistance = Restaurant & { distanceKm: number };
+
 // Grocery/pharmacy marketplace (docs/ROADMAP.md FDP-56) — a close parallel of Restaurant/
 // MenuItem/MenuCategory above, not a replacement for them. `SellerType` is shared with Cart/
 // Order, which can belong to either vertical.
@@ -103,6 +107,9 @@ export interface Store {
 
 export const STORE_SORTS = ["newest", "rating", "delivery_time"] as const;
 export type StoreSort = (typeof STORE_SORTS)[number];
+
+// "Stores near me" (docs/ROADMAP.md FDP-96) — see RestaurantWithDistance above.
+export type StoreWithDistance = Store & { distanceKm: number };
 
 export interface ProductCategory {
   _id: string;

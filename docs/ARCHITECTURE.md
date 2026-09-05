@@ -828,3 +828,61 @@ not identical (different mutations, different ownership/currency assumptions). N
 keys were needed — every onboarding form reuses the existing `EarningsPage` namespace's copy
 verbatim, since the actual onboarding *steps* (pick a bank, verify, connect / redirect to Stripe)
 are identical regardless of vendor type.
+
+## 22. "Near me" geolocation discovery (docs/ROADMAP.md FDP-96)
+
+Real "restaurants/stores near me" discovery using MongoDB's native geospatial query support
+(`$geoNear` + a `2dsphere` index), not an in-memory haversine sort — `$geoNear` can filter by
+radius and paginate at the database level, which a plain `.find()` plus manual distance
+calculation can't do without loading every candidate document into memory first.
+
+**New `Address.location` field, alongside `lat`/`lng`, not replacing them.** A new
+`GeoPoint` subschema (`{ type: 'Point', coordinates: [lng, lat] }` — longitude first, GeoJSON's
+own fixed convention, the reverse of how `lat`/`lng` are ordered everywhere else in this
+codebase, called out explicitly in code comments so it's never silently gotten backwards) is
+synced onto `Address.location` by a new `toGeoPoint(lat, lng)` helper (`common/utils/geo.ts`,
+alongside the pre-existing `haversineDistanceKm`) whenever a restaurant/store is created or
+updated. It returns `null` (never throws) when either coordinate is missing — a restaurant/store
+that's never set coordinates simply never appears in "near me" results, the same graceful-
+fallback precedent §15's delivery-fee calculation already established for missing geo data.
+`RestaurantSchema`/`StoreSchema` each index `'address.location'` as `2dsphere`.
+
+**Dedicated `GET /restaurants/nearby` / `GET /stores/nearby` endpoints, not folded into the
+existing list/filter endpoints.** `$geoNear` must be the first stage of an aggregation pipeline,
+which doesn't compose with the existing simple `.find().sort().skip().limit()` list endpoints —
+reworking those to accommodate it risked regressing already-working browse/filter behavior for
+no benefit, so "near me" got its own small-blast-radius endpoint instead. Both are public
+(`@Public()`, matching every other browse endpoint) since anonymous visitors need "near me" to
+work too, and both are declared before their respective `:slug` route (same declaration-order
+requirement as the existing `mine`/`pending`/`admin/:id` routes) so `/nearby` isn't swallowed as
+a slug value.
+
+Each service's `findNearby(query)` runs a single aggregation: a `$geoNear` stage (`near: {type:
+'Point', coordinates: [lng, lat]}`, `spherical: true`, `distanceField: 'distanceMeters'`,
+`maxDistance` from the query's `radiusKm`, filtered to `isApproved: true` and, for stores, the
+required `type`) feeding a `$facet` that produces the paginated `items` and a `totalCount` in one
+round trip. Results are typed `RestaurantWithDistance`/`StoreWithDistance` (the base type plus a
+rounded `distanceKm`) — a shape that only ever exists on a `/nearby` response, never stored.
+`NearbyQueryDto` (`common/dto/`) validates `lat`/`lng` (`@IsLatitude`/`@IsLongitude`), an optional
+`radiusKm` (0.5–50, default 10) and pagination; `NearbyStoresQueryDto` extends it with a required
+`type`, mirroring `ListStoresDto`'s existing "a category listing always picks exactly one type"
+rule (§17).
+
+**Frontend**: a new `useGeolocation()` hook (`lib/geolocation.ts`) wraps the browser Geolocation
+API behind an explicit `request()` call — it never fires `getCurrentPosition()` on mount, since
+prompting for location before the visitor has any context is a well-documented way to get the
+permission reflexively denied. Errors are mapped from the three stable
+`GeolocationPositionError` codes to a translatable `"denied" | "unavailable" | "timeout"` union
+(plus `"unsupported"` for browsers without the API at all). The new `/near-me` page gates on this
+hook's state: an "enable location" prompt until coordinates are obtained, then a `Tabs` layout
+(Restaurants / Groceries / Pharmacy & more, mirroring `/categories`) each calling
+`useGetNearbyRestaurantsQuery`/`useGetNearbyStoresQuery` and rendering the existing
+`RestaurantCard`/`StoreCard` with their new optional `distanceKm` prop (shown as "• *N* km away"
+alongside the existing estimated-delivery-time line). A "Near me" link sits in the homepage
+hero's CTA row alongside the existing browse/partner links.
+
+A 2dsphere index gotcha worth knowing for future geo-query tests: Mongoose's `autoIndex` builds
+an index in the background, non-blocking, on model compile — a `$geoNear` query issued against a
+freshly-connected `mongodb-memory-server` before that index finishes building fails with "unable
+to find index for $geoNear query." Both new service spec files call `await
+restaurantModel.init()` / `await storeModel.init()` in `beforeAll` to wait for it explicitly.

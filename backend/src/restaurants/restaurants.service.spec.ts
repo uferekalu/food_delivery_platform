@@ -66,6 +66,11 @@ describe('RestaurantsService', () => {
 
     service = moduleRef.get(RestaurantsService);
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    // `findNearby`'s $geoNear needs the 2dsphere index to actually exist before it runs —
+    // Mongoose's `autoIndex` builds it in the background on model init, and without this
+    // explicit wait a geo query issued too soon after connecting can flake with "unable to find
+    // index for $geoNear query" (docs/ROADMAP.md FDP-96).
+    await restaurantModel.init();
   }, 60_000); // headroom for the 60s mongod launchTimeout above, not just module compile
 
   afterEach(async () => {
@@ -591,6 +596,90 @@ describe('RestaurantsService', () => {
 
       const counts = await service.countByApproval();
       expect(counts).toEqual({ approved: 1, pending: 2 });
+    });
+  });
+
+  describe('findNearby (docs/ROADMAP.md FDP-96)', () => {
+    // Roughly downtown Lagos — arbitrary, only the relative offsets below matter.
+    const origin = { lat: 6.5, lng: 3.35 };
+
+    async function createApprovedAt(
+      name: string,
+      lat?: number,
+      lng?: number,
+    ) {
+      const created = await service.create('507f1f77bcf86cd799439011', {
+        ...baseDto,
+        name,
+        address: { ...baseDto.address, lat, lng },
+      });
+      const restaurant = await service.approve(created._id.toString());
+      return restaurant;
+    }
+
+    it('returns approved restaurants within the radius, nearest first, with a computed distanceKm', async () => {
+      await createApprovedAt('Just around the corner', 6.501, 3.35); // ~0.11 km away
+      await createApprovedAt('A short ride away', 6.54, 3.35); // ~4.45 km away
+      await createApprovedAt('Way across town', 7.0, 3.35); // ~55.6 km away — outside 10km radius
+
+      const result = await service.findNearby({
+        ...origin,
+        radiusKm: 10,
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.items.map((r) => r.name)).toEqual([
+        'Just around the corner',
+        'A short ride away',
+      ]);
+      expect(result.items[0].distanceKm).toBeLessThan(result.items[1].distanceKm);
+      expect(result.items[0].distanceKm).toBeCloseTo(0.1, 1);
+      expect(result.total).toBe(2);
+    });
+
+    it('excludes a restaurant with no coordinates set, even though it is approved and otherwise within range', async () => {
+      await createApprovedAt('Never set a location', undefined, undefined);
+
+      const result = await service.findNearby({ ...origin, radiusKm: 50 });
+
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('excludes a restaurant with coordinates that is not approved yet', async () => {
+      await service.create('507f1f77bcf86cd799439011', {
+        ...baseDto,
+        name: 'Still pending',
+        address: { ...baseDto.address, lat: 6.501, lng: 3.35 },
+      });
+
+      const result = await service.findNearby({ ...origin, radiusKm: 10 });
+
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('paginates the result set', async () => {
+      await createApprovedAt('First', 6.501, 3.35);
+      await createApprovedAt('Second', 6.502, 3.35);
+      await createApprovedAt('Third', 6.503, 3.35);
+
+      const firstPage = await service.findNearby({
+        ...origin,
+        radiusKm: 10,
+        page: 1,
+        limit: 2,
+      });
+      const secondPage = await service.findNearby({
+        ...origin,
+        radiusKm: 10,
+        page: 2,
+        limit: 2,
+      });
+
+      expect(firstPage.items).toHaveLength(2);
+      expect(secondPage.items).toHaveLength(1);
+      expect(firstPage.total).toBe(3);
+      expect(firstPage.totalPages).toBe(2);
     });
   });
 });

@@ -104,6 +104,7 @@
   },
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "à {distance, number} km",
     "open": "Ouvert",
     "closed": "Fermé",
     "opensAt": "Ouvre à {time}",
@@ -192,6 +193,7 @@
     "viewCareers": "Voir les carrières",
     "goToMyDashboard": "Accéder à mon tableau de bord",
     "registerHere": "Inscrivez-vous ici",
+    "nearMeCta": "Près de moi",
     "arrivingSoon": "Arrivée imminente",
     "estimatedDelivery": "Livraison estimée",
     "deliveryTimeVaries": "Variable selon la commande",
@@ -1372,6 +1374,7 @@
   },
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "à {distance, number} km",
     "open": "Ouvert",
     "closed": "Fermé",
     "opensAt": "Ouvre à {time}",
@@ -1401,5 +1404,20 @@
     "startNewCartTitle": "Démarrer un nouveau panier ?",
     "startNewCartDescription": "Votre panier contient des articles d'un autre restaurant ou commerce. Ajouter cet article le videra.",
     "clearCartAndAdd": "Vider le panier et ajouter"
+  },
+  "NearMePage": {
+    "title": "Près de moi",
+    "subtitle": "Restaurants et commerces dans un rayon de {radiusKm, number} km.",
+    "restaurants": "Restaurants",
+    "groceries": "Épicerie",
+    "pharmacyBeauty": "Pharmacie & plus",
+    "useMyLocation": "Utiliser ma position",
+    "explainer": "Partagez votre position pour voir ce qui est à proximité et à quelle distance.",
+    "locationDenied": "L'accès à la position a été refusé. Activez-le dans les paramètres de votre navigateur et réessayez.",
+    "locationUnsupported": "Votre navigateur ne prend pas en charge le partage de position.",
+    "locationFailed": "Impossible d'obtenir votre position. Veuillez réessayer.",
+    "couldNotLoad": "Impossible de charger les résultats à proximité.",
+    "noneNearby": "Rien à proximité pour le moment",
+    "tryWiderArea": "Réessayez plus tard ou revenez une fois que d'autres commerces auront rejoint la plateforme dans votre région."
   }
 }

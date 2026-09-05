@@ -16,6 +16,7 @@ import { RestaurantsService } from './restaurants.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { ListRestaurantsDto } from './dto/list-restaurants.dto';
+import { NearbyQueryDto } from '../common/dto/nearby-query.dto';
 
 @ApiTags('restaurants')
 @Controller('restaurants')
@@ -26,6 +27,13 @@ export class RestaurantsController {
   @Get()
   findAll(@Query() query: ListRestaurantsDto) {
     return this.restaurantsService.findAllApproved(query);
+  }
+
+  // Also declared before `:slug` — same reason as `mine` below (docs/ROADMAP.md FDP-96).
+  @Public()
+  @Get('nearby')
+  findNearby(@Query() query: NearbyQueryDto) {
+    return this.restaurantsService.findNearby(query);
   }
 
   // Must be declared before GET /restaurants/:slug — Express/Nest matches routes for the

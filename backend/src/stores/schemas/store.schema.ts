@@ -102,3 +102,5 @@ export const StoreSchema = SchemaFactory.createForClass(Store);
 // reasoning as RestaurantSchema.
 StoreSchema.index({ isApproved: 1, type: 1, avgRating: -1 });
 StoreSchema.index({ isApproved: 1, type: 1, createdAt: -1 });
+// "Near me" (docs/ROADMAP.md FDP-96) — same reasoning as RestaurantSchema's equivalent index.
+StoreSchema.index({ 'address.location': '2dsphere' });

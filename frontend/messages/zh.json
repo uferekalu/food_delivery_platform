@@ -104,6 +104,7 @@
   },
   "RestaurantCard": {
     "estimatedMinutes": "约 {minutes} 分钟",
+    "distanceAway": "距您 {distance, number} 公里",
     "open": "营业中",
     "closed": "已打烊",
     "opensAt": "{time}开始营业",
@@ -192,6 +193,7 @@
     "viewCareers": "查看职位",
     "goToMyDashboard": "前往我的仪表盘",
     "registerHere": "在此注册",
+    "nearMeCta": "附近",
     "arrivingSoon": "即将送达",
     "estimatedDelivery": "预计送达时间",
     "deliveryTimeVaries": "因订单而异",
@@ -1372,6 +1374,7 @@
   },
   "StoreCard": {
     "estimatedMinutes": "约 {minutes} 分钟",
+    "distanceAway": "距您 {distance, number} 公里",
     "open": "营业中",
     "closed": "已打烊",
     "opensAt": "{time}开始营业",
@@ -1401,5 +1404,20 @@
     "startNewCartTitle": "开始新的购物车？",
     "startNewCartDescription": "你的购物车中有来自另一家餐厅或商店的商品。添加此商品将清空购物车。",
     "clearCartAndAdd": "清空购物车并添加"
+  },
+  "NearMePage": {
+    "title": "附近",
+    "subtitle": "{radiusKm, number} 公里范围内的餐厅和商店。",
+    "restaurants": "餐厅",
+    "groceries": "生鲜杂货",
+    "pharmacyBeauty": "药妆及更多",
+    "useMyLocation": "使用我的位置",
+    "explainer": "分享您的位置，即可查看附近有哪些商家及距离。",
+    "locationDenied": "位置访问被拒绝。请在浏览器设置中启用后重试。",
+    "locationUnsupported": "您的浏览器不支持位置共享。",
+    "locationFailed": "无法获取您的位置，请重试。",
+    "couldNotLoad": "无法加载附近的结果。",
+    "noneNearby": "附近暂无结果",
+    "tryWiderArea": "请稍后再试，或等您所在地区有更多商家入驻后再来查看。"
   }
 }

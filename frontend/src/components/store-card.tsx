@@ -23,7 +23,14 @@ export function PillIcon({ className = "size-12" }: { className?: string }) {
   );
 }
 
-export function StoreCard({ store }: { store: Store }) {
+export function StoreCard({
+  store,
+  distanceKm,
+}: {
+  store: Store;
+  /** "Stores near me" (docs/ROADMAP.md FDP-96) — only ever passed on the near-me page. */
+  distanceKm?: number;
+}) {
   const t = useTranslations("StoreCard");
   const locale = useLocale();
   const icon = store.type === "groceries" ? <BasketIcon className="size-10" /> : <PillIcon className="size-10" />;
@@ -57,6 +64,7 @@ export function StoreCard({ store }: { store: Store }) {
             {store.estimatedDeliveryMinutes
               ? ` • ${t("estimatedMinutes", { minutes: store.estimatedDeliveryMinutes })}`
               : ""}
+            {distanceKm != null ? ` • ${t("distanceAway", { distance: distanceKm })}` : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">

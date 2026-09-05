@@ -16,6 +16,7 @@ import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { ListStoresDto } from './dto/list-stores.dto';
+import { NearbyStoresQueryDto } from './dto/nearby-stores-query.dto';
 
 @ApiTags('stores')
 @Controller('stores')
@@ -26,6 +27,13 @@ export class StoresController {
   @Get()
   findAll(@Query() query: ListStoresDto) {
     return this.storesService.findAllApproved(query);
+  }
+
+  // Also declared before `:slug` — same reason as `mine` below (docs/ROADMAP.md FDP-96).
+  @Public()
+  @Get('nearby')
+  findNearby(@Query() query: NearbyStoresQueryDto) {
+    return this.storesService.findNearby(query);
   }
 
   // Must be declared before GET /stores/:slug — same route-matching-order reasoning as

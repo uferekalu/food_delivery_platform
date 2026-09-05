@@ -326,6 +326,12 @@ export default function Home() {
             >
               {partnerCta.label}
             </SmartLink>
+            <Link
+              href="/near-me"
+              className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "text-white hover:bg-white/10")}
+            >
+              {t("nearMeCta")}
+            </Link>
           </div>
         </Container>
       </section>
