@@ -93,6 +93,19 @@ export class Order {
   @Prop({ type: Number, required: true, min: 0 })
   restaurantPayoutAmount: number;
 
+  // Weekly batch payout tracking (docs/ROADMAP.md FDP-91 onward) — `null` means "not yet paid
+  // out." Two separate fields, not one, because a single DELIVERED order's earnings split two
+  // ways that are settled independently: the vendor's cut (restaurantPayoutAmount) and the
+  // rider's cut (deliveryFee) can land in two *different* Payout documents, on two different
+  // schedules, to two different people. Stores as a plain string, like every other id field in
+  // this codebase's Mongoose 9 setup (see backend/CLAUDE.md's ObjectId note) — never query with
+  // a raw ObjectId.
+  @Prop({ type: String, default: null, index: true })
+  vendorPayoutId: string | null;
+
+  @Prop({ type: String, default: null, index: true })
+  riderPayoutId: string | null;
+
   // Copied from the restaurant at order time (docs/ARCHITECTURE.md §3) — the platform never
   // does cross-currency conversion, so this never needs to be recomputed later.
   @Prop({ type: String, required: true })

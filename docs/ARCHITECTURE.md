@@ -65,6 +65,12 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
   never customer-facing — sales-report COGS/margin, `docs/ROADMAP.md` FDP-64), imageUrl,
   isAvailable, modifierGroups[]
 - **ModifierGroup** (embedded) — name, min, max, options[{ name, priceDelta }]
+- **Store** (`docs/ROADMAP.md` FDP-56) — ownerId, name, slug, type (`groceries|pharmacy_beauty`),
+  tags[], description, logoUrl, coverUrl, complianceDocumentUrl?, **currency**, country,
+  address+geo, openingHours[], isOpen, isApproved, avgRating, payoutAccounts[] (FDP-91) —
+  Product/ProductCategory are its menu-equivalent, structurally parallel to Restaurant/
+  MenuItem/MenuCategory but a separate collection (FDP-56's own domain, not "restaurant with a
+  flag")
 - **Cart** — userId, restaurantId (one active restaurant per cart), items[{ menuItemId, qty,
   selectedModifiers, notes }]
 - **Order** — orderNumber, customerId, restaurantId, riderId?, items snapshot (incl. **costPrice?**
@@ -78,8 +84,11 @@ Core entities (Mongoose schemas in `backend/src/**/schemas`):
   REFUNDED`
 - **Payment** — orderId, provider (`stripe|paystack|flutterwave`), providerRef, amount,
   currency, status (`initiated|succeeded|failed|refunded`), rawWebhookPayload
-- **Rider** — userId, vehicleType, isOnline, currentLocation{lat,lng}, isVerified, documents[]
-  (Cloudinary), rating
+- **Rider** — userId, vehicleType, isOnline, isVerified, rating, KYC fields (governmentId*,
+  proofOfAddressDocumentUrl, driversLicense*, vehiclePlateNumber, guarantor, nextOfKin* — FDP-61),
+  payoutAccounts[] (FDP-91). No stored location field — live location during an active delivery
+  is relayed through `RealtimeGateway`, not persisted on the document (see §17's — no, see the
+  realtime gateway's own doc comment)
 - **Review** — targetType (`restaurant|rider`), targetId, orderId, authorId, rating, comment,
   images[]
 - **Notification** (FDP-19) — userId, type, title, body, isRead, channels[] (`inapp` always +
@@ -483,11 +492,14 @@ account, confirmed live that a destination account missing the `transfers` capab
 `pending`) is rejected outright by Stripe, which is exactly the gate this codebase relies on
 rather than re-checking capability status itself before charging.
 
-*(This section describes the instant charge-time split model. docs/ROADMAP.md FDP-91 onward
-replaces it with a platform-controlled weekly batch payout — every order settles in full to the
-platform's own account, and a Monday job pays each vendor/rider their accrued share via the
-provider's Transfer API instead. This section is rewritten in that ticket once the code lands;
-until then it's still an accurate description of what's actually deployed.)*
+*(This section describes the instant charge-time split model, still what's actually live today.
+docs/ROADMAP.md FDP-91 onward is building a platform-controlled weekly batch payout as a
+deliberate staged rollout, not a single big-bang cutover — FDP-91 lays down the ledger schema
+foundation (§18) without touching this instant-split path at all, so a vendor's payouts never
+have a gap where neither mechanism is live. The actual cutover (removing this section's
+provider-split calls from `PaymentsService.initiatePayment`, once the batch job and its Transfer-
+API execution are built and tested) happens in a later ticket in this same sequence, and that's
+when this section gets rewritten — until then it's still accurate.)*
 
 ## 15. Database migrations, backups & disaster recovery
 
@@ -629,3 +641,38 @@ warning, since reusing the restaurant-worded translation strings verbatim would 
 copy on the store page). `checkout/page.tsx`'s `promoCodesSupported` gate (which hid the entire
 promo-code UI section for a store cart) is removed — `applyPromo()` now sends `storeId` or
 `restaurantId` depending on `cart.sellerType`.
+
+## 18. Payout ledger foundation (docs/ROADMAP.md FDP-91)
+
+First step of replacing §14's instant charge-time provider split with a platform-controlled
+weekly batch payout (a deliberate, staged rollout — see §14's note). This ticket is purely
+additive: a new schema and a read-only aggregation service, with **zero changes** to the
+existing instant-split payment flow, so nothing about how vendors currently get paid changes
+until the follow-up tickets that actually execute a transfer and schedule the weekly run land.
+
+**`PayoutAccount` moved to `common/`** (from `restaurants/schemas/`) once `Store` and `Rider`
+both needed their own `payoutAccounts` array, the same "move once a second domain needs it"
+pattern `Address`/`OpeningHour` already went through.
+
+**New `Payout` schema** (`backend/src/payouts/schemas/payout.schema.ts`) — one document per
+payout *attempt* for one vendor or rider: `vendorType` (`'restaurant' | 'store' | 'rider'`),
+`vendorId` (plain string, no `ref` — deliberately polymorphic), `orderIds` (the exact
+`DELIVERED` orders this attempt covers), `grossAmount`, `currency`, `provider`,
+`payoutAccountReference` (snapshotted, not looked up live), `status`
+(`'pending' | 'processing' | 'succeeded' | 'failed'`), `providerTransferReference`,
+`failureReason`, `retryCount`. Registered in a new `PayoutsModule`, not yet written to by
+anything — the follow-up ticket that actually creates these needs no further module wiring.
+
+**`Order` gained two independent payout-tracking fields**: `vendorPayoutId` and `riderPayoutId`
+(both nullable strings), not one — a single delivered order's earnings split two ways that
+settle on separate schedules to separate people: the vendor's cut (`restaurantPayoutAmount`,
+already net of the platform's commission) and the rider's cut (`deliveryFee`, riders keep 100%
+of this — the platform's commission only ever comes from the vendor side, never the rider side).
+Marking one paid must never imply the other is.
+
+**`PayoutsService.getUnpaidVendorEarnings`/`getUnpaidRiderEarnings`** — the one place that
+answers "what does this vendor/rider currently have coming to them," grouped by currency (a
+vendor could in principle have delivered orders in more than one). Built as its own
+independently-testable service now specifically so the weekly-batch job (the next ticket in this
+sequence) can call it directly rather than duplicating this aggregation inline in a cron
+handler.

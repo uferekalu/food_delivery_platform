@@ -5,6 +5,10 @@ import {
   OpeningHour,
   OpeningHourSchema,
 } from '../../common/schemas/opening-hour.schema';
+import {
+  PayoutAccount,
+  PayoutAccountSchema,
+} from '../../common/schemas/payout-account.schema';
 
 // Glovo's own vertical split (docs/ROADMAP.md FDP-56) — a store belongs to exactly one, and a
 // category-listing page only ever shows stores of that one type (confirmed against the real
@@ -76,6 +80,10 @@ export class Store {
   /** Gate set by an admin — unapproved stores don't appear in public listings. */
   @Prop({ type: Boolean, default: false })
   isApproved: boolean;
+
+  // Vendor payouts epic, extended to stores in FDP-91 — see PayoutAccount's doc comment.
+  @Prop({ type: [PayoutAccountSchema], default: [] })
+  payoutAccounts: PayoutAccount[];
 
   @Prop({ type: Number, default: 0 })
   avgRating: number;
