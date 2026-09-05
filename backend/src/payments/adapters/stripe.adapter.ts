@@ -46,29 +46,9 @@ export class StripeAdapter implements PaymentAdapter {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: { orderId: params.orderId },
-      // Vendor payouts epic (docs/ROADMAP.md FDP-54) — a destination charge: `transfer_data
-      // .destination` is the restaurant's connected Express account, and Stripe automatically
-      // transfers `amount - application_fee_amount` to it once the charge settles. Same "what
-      // the platform keeps" framing as Paystack's `transaction_charge` (docs/ROADMAP.md FDP-52)
-      // — `application_fee_amount` is computed from `restaurantPayoutAmount`, never a flat
-      // percentage of the whole total, for the same reason documented on
-      // InitiatePaymentParams.restaurantPayoutAmount. Only ever set once the connected account
-      // is fully onboarded (`payoutAccounts` entry status 'active', gated in
-      // PaymentsService.initiatePayment) — Stripe rejects `transfer_data.destination` for an
-      // account still missing the `transfers` capability, confirmed live against the sandbox.
-      ...(params.restaurantPayoutAccountReference &&
-      params.restaurantPayoutAmount != null
-        ? {
-            payment_intent_data: {
-              application_fee_amount: Math.round(
-                (params.amount - params.restaurantPayoutAmount) * 100,
-              ),
-              transfer_data: {
-                destination: params.restaurantPayoutAccountReference,
-              },
-            },
-          }
-        : {}),
+      // No destination-charge split here (removed docs/ROADMAP.md FDP-95) — the full amount
+      // settles to the platform's own account; see `transfer()` below for how a vendor's cut
+      // actually reaches them now (a separate, later transfer driven by the weekly batch).
     });
 
     if (!session.url) {

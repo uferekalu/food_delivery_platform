@@ -91,7 +91,7 @@ describe('StripeAdapter', () => {
     });
   });
 
-  describe('initiate — split payment (FDP-54)', () => {
+  describe('initiate', () => {
     let adapter: StripeAdapter;
     let createMock: jest.Mock<
       Promise<{ id: string; url: string }>,
@@ -114,33 +114,8 @@ describe('StripeAdapter', () => {
       } as unknown as Stripe;
     });
 
-    it("adds transfer_data/application_fee_amount — application_fee_amount is what the PLATFORM keeps, the connected account automatically receives the rest (Stripe's destination-charge model)", async () => {
-      await adapter.initiate({
-        orderId: 'order-1',
-        orderNumber: 'ORD-1',
-        amount: 115, // order.total: subtotal 100 + deliveryFee 10 + serviceFee 5
-        currency: 'USD',
-        customerEmail: 'jane@example.com',
-        successUrl: 'http://localhost:3000',
-        cancelUrl: 'http://localhost:3000',
-        restaurantPayoutAccountReference: 'acct_test123',
-        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
-      });
-
-      const body = createMock.mock.calls[0][0] as unknown as {
-        payment_intent_data?: {
-          application_fee_amount: number;
-          transfer_data: { destination: string };
-        };
-      };
-      expect(body.payment_intent_data).toEqual({
-        application_fee_amount: 3000, // (115 - 85) * 100 cents
-        transfer_data: { destination: 'acct_test123' },
-      });
-    });
-
-    it('omits payment_intent_data entirely when the restaurant has no active payout account', async () => {
-      await adapter.initiate({
+    it('creates a checkout session for the full order amount and returns its url/reference — no vendor-split fields (docs/ROADMAP.md FDP-95 removed the instant charge-time split)', async () => {
+      const result = await adapter.initiate({
         orderId: 'order-1',
         orderNumber: 'ORD-1',
         amount: 115,
@@ -150,8 +125,13 @@ describe('StripeAdapter', () => {
         cancelUrl: 'http://localhost:3000',
       });
 
+      expect(result).toEqual({
+        redirectUrl: 'https://checkout.stripe.com/session/abc',
+        reference: 'cs_test_abc',
+      });
       const body = createMock.mock.calls[0][0];
       expect(body.payment_intent_data).toBeUndefined();
+      expect(body).not.toHaveProperty('transfer_data');
     });
   });
 

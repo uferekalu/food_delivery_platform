@@ -12,27 +12,10 @@ export interface InitiatePaymentParams {
   customerEmail: string;
   successUrl: string;
   cancelUrl: string;
-  /**
-   * Vendor payouts epic (docs/ROADMAP.md FDP-52 onward) — the restaurant's active payout-account
-   * reference for *this* provider (Paystack `subaccount_code`, Flutterwave subaccount id, a
-   * Stripe connected account id), if one exists. An adapter that doesn't support automated
-   * splits yet (or when this is unset, meaning the restaurant hasn't onboarded one) just ignores
-   * it — the full amount settles to the platform's own account, per Restaurant.payoutAccounts'
-   * doc comment.
-   */
-  restaurantPayoutAccountReference?: string;
-  /**
-   * The exact amount (major currency unit, same as `amount`) owed to the restaurant for *this*
-   * order — Order.restaurantPayoutAmount, i.e. the food subtotal minus the platform's
-   * commission. Deliberately NOT `amount * (1 - commissionRate)`: `amount` is the order total,
-   * which also includes the delivery fee (owed to the rider, a separate concern this split
-   * doesn't touch) and the service fee (the platform's own revenue) — splitting on the whole
-   * total would hand the restaurant a cut of both by mistake. An adapter that supports splits
-   * uses this to compute exactly how much of the charge should go to the platform vs. the
-   * restaurant's account, so the restaurant receives precisely this amount and the platform's
-   * main account receives everything else (its commission + the delivery fee + the service fee).
-   */
-  restaurantPayoutAmount?: number;
+  // No vendor-split fields here (removed docs/ROADMAP.md FDP-95) — every charge settles in full
+  // to the platform's own account; a vendor's cut is paid out separately by the weekly batch
+  // (docs/ARCHITECTURE.md §19), straight into whichever payout account they've onboarded. See
+  // §14 for why this replaced the original instant charge-time provider split.
 }
 
 export interface InitiatePaymentResult {

@@ -143,45 +143,7 @@ describe('PaystackAdapter', () => {
       ).rejects.toThrow('Invalid key');
     });
 
-    it('splits the transaction via subaccount when the restaurant has an active payout account — computing transaction_charge from restaurantPayoutAmount, never a flat percentage of the whole total', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        json: () =>
-          Promise.resolve({
-            status: true,
-            data: {
-              authorization_url: 'https://checkout.paystack.com/abc',
-              reference: 'ORD-1-abcd',
-            },
-          }),
-      });
-      global.fetch = fetchMock as never;
-
-      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
-      await adapter.initiate({
-        orderId: 'order-1',
-        orderNumber: 'ORD-1',
-        amount: 115, // order.total: subtotal 100 + deliveryFee 10 + serviceFee 5
-        currency: 'NGN',
-        customerEmail: 'jane@example.com',
-        successUrl: 'http://localhost:3000',
-        cancelUrl: 'http://localhost:3000',
-        restaurantPayoutAccountReference: 'ACCT_test123',
-        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
-      });
-
-      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(init.body as string) as {
-        subaccount: string;
-        transaction_charge: number;
-        bearer: string;
-      };
-      expect(body.subaccount).toBe('ACCT_test123');
-      // Platform keeps everything except the restaurant's share: (115 - 85) * 100 kobo
-      expect(body.transaction_charge).toBe(3000);
-      expect(body.bearer).toBe('account');
-    });
-
-    it('omits the split fields entirely when the restaurant has no active payout account', async () => {
+    it('never sends a subaccount split (docs/ROADMAP.md FDP-95 removed the instant charge-time split — every charge settles in full to the platform account)', async () => {
       const fetchMock = jest.fn().mockResolvedValue({
         json: () =>
           Promise.resolve({
