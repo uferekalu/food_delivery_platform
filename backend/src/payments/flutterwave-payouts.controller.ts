@@ -132,6 +132,7 @@ export class FlutterwavePayoutsController {
       'flutterwave',
       'active',
       subaccountId,
+      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
     );
 
     this.notifyPayoutAccountChanged(updated, hadActiveAccount);

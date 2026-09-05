@@ -297,4 +297,86 @@ describe('StripeAdapter', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('transfer (docs/ROADMAP.md FDP-92)', () => {
+    let adapter: StripeAdapter;
+
+    beforeEach(() => {
+      adapter = new StripeAdapter(configWith(TEST_WEBHOOK_SECRET));
+    });
+
+    const params = {
+      destinationAccountId: 'acct_test123',
+      amount: 85,
+      currency: 'USD',
+      reference: 'payout-1',
+      description: 'Weekly payout',
+    };
+
+    it('creates a standalone transfer with the reference as its idempotency key, returning the transfer id', async () => {
+      const createMock = jest.fn().mockResolvedValue({ id: 'tr_test_abc' });
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        transfers: { create: createMock },
+      } as unknown as Stripe;
+
+      const result = await adapter.transfer(params);
+
+      expect(result).toEqual({ transferReference: 'tr_test_abc' });
+      expect(createMock).toHaveBeenCalledWith(
+        {
+          amount: 8500,
+          currency: 'usd',
+          destination: 'acct_test123',
+          description: 'Weekly payout',
+          transfer_group: 'payout-1',
+        },
+        { idempotencyKey: 'payout-1' },
+      );
+    });
+
+    it('throws a plain Error on a confirmed rejection (e.g. an invalid/disabled destination account) — safe to retry', async () => {
+      const createMock = jest.fn().mockRejectedValue(
+        new Stripe.errors.StripeInvalidRequestError({
+          message: 'No such destination account',
+        }),
+      );
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        transfers: { create: createMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.transfer(params)).rejects.toThrow(
+        'No such destination account',
+      );
+    });
+
+    it('throws TransferOutcomeUnknownError (not a plain Error) on a connection error — outcome genuinely unknown', async () => {
+      const createMock = jest
+        .fn()
+        .mockRejectedValue(
+          new Stripe.errors.StripeConnectionError({ message: 'ECONNRESET' }),
+        );
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        transfers: { create: createMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.transfer(params)).rejects.toMatchObject({
+        name: 'TransferOutcomeUnknownError',
+      });
+    });
+
+    it("throws TransferOutcomeUnknownError on Stripe's own 5xx (StripeAPIError) — its docs say a valid request may still have been processed", async () => {
+      const createMock = jest
+        .fn()
+        .mockRejectedValue(
+          new Stripe.errors.StripeAPIError({ message: 'internal error' }),
+        );
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        transfers: { create: createMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.transfer(params)).rejects.toMatchObject({
+        name: 'TransferOutcomeUnknownError',
+      });
+    });
+  });
 });

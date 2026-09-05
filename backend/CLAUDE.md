@@ -49,15 +49,33 @@ working inside `backend/`.
   `RestaurantsService.findByIdOrThrow` + `assertOwnerOrAdmin` before every mutation. `@Roles()`
   only checks the role *label* (e.g. "is this a restaurant_owner at all"); it can't know which
   restaurant a given owner is allowed to touch, so ownership is always a second, explicit check.
-- **Mongoose 9 `ObjectId`-ref fields store as plain strings in this project**, not real
-  `ObjectId` instances — confirmed live (`RefreshToken.userId`, `ref: 'User'`): a document
-  created with a string value stays a string in the database, `typeof` confirms it at read-back.
-  Querying such a field with a raw `Types.ObjectId` (e.g. `updateMany({ userId: someObjectId })`)
-  silently matches **zero** documents — no error, no cast, just `matchedCount: 0`. Always compare
-  with `.toString()` on both sides of a query against one of these fields (`{ userId:
-  user._id.toString() }`), never a bare `ObjectId`. Caught in `UsersService.suspend()`
-  (docs/ROADMAP.md FDP-89) only because a live integration test asserted the actual DB write took
-  effect, not because it threw or logged anything.
+- **Mongoose 9 `ObjectId`-ref fields don't reliably cast between `string` and `ObjectId` in this
+  project's `@nestjs/mongoose` setup — always compare with `.toString()` on BOTH sides of any
+  query against one, never mix.** Confirmed two distinct, compounding ways this bites:
+  1. **Write side**: assign a plain string to an `@Prop({ type: Types.ObjectId, ... })` field and
+     it's stored as a string, not cast to a real `ObjectId` — `typeof` confirms it at read-back
+     (`RefreshToken.userId`). Querying that field with a raw `Types.ObjectId` instance (e.g.
+     `updateMany({ userId: someObjectId })`) then silently matches **zero** documents — no error,
+     no cast, just `matchedCount: 0`. Caught in `UsersService.suspend()` (docs/ROADMAP.md FDP-89)
+     only because a live integration test asserted the DB write took effect, not because anything
+     threw or logged.
+  2. **Query side, the reverse direction — confirmed live during FDP-92**: assign a genuine
+     `ObjectId` (e.g. `order.restaurantId = restaurant._id`, not `.toString()`'d) and the field
+     *is* stored as a real `ObjectId` this time — but then querying it with a **string** (e.g.
+     `orderModel.find({ restaurantId: vendorId })` where `vendorId` is a string) still silently
+     matches **zero** documents. A bare, non-decorator `new mongoose.Schema({...})` with the
+     identical field options does NOT reproduce this — it's specific to schemas built via
+     `@Prop()`/`SchemaFactory.createForClass()`. Root cause not fully isolated beyond that; the
+     fix is the same either way. This is exactly why every service method in this codebase
+     already takes `id: string` and threads ids through as strings end-to-end (`.toString()` at
+     every read of a hydrated document's `_id`/ref field, never the raw value) — that convention
+     isn't stylistic, it's the only thing keeping every query in the app on the same (string) side
+     of this gap. A test fixture that "helpfully" writes a real hydrated document's `_id` straight
+     onto another document's ref field (`restaurantId: restaurant._id` instead of
+     `restaurant._id.toString()`) breaks that convention and can silently zero out every query
+     against it — happened in `payout-execution.service.spec.ts` (docs/ROADMAP.md FDP-92) and cost
+     real time to isolate, since the failure looks identical to "no matching data" rather than a
+     type mismatch.
 
 ## Module layout
 
@@ -134,6 +152,22 @@ npm run build
 
 `.env.example` documents required env vars — copy to `.env` for local dev, never commit real
 values. Needs a local or Atlas MongoDB reachable at `MONGODB_URI`.
+
+## Weekly payout batch (docs/ROADMAP.md FDP-92)
+
+`PayoutSchedulerService` runs `PayoutExecutionService.runWeeklyBatch()` every Monday at 00:00 UTC
+(`@nestjs/schedule`, registered globally via `ScheduleModule.forRoot()` in `app.module.ts`) — real
+transfers to every vendor/rider with an active payout account, via each provider's Transfer API.
+`POST /payouts/run-weekly-batch` (admin-only) runs the same batch on demand, for testing or
+retrying after a fixed account issue rather than waiting for next Monday. See
+`docs/ARCHITECTURE.md` §19 for the full money-safety design (atomic order claiming, confirmed-vs-
+ambiguous failure handling, `reconciliationRequired`).
+
+**Operational prerequisite this code cannot itself satisfy**: the platform's live Paystack
+account needs transfer OTP disabled (Paystack dashboard → Settings → Preferences → Transfers),
+or `PaystackAdapter.transfer` will come back rejected for every real transfer attempt — Paystack's
+API otherwise requires a human to finalize each transfer with a one-time code, which an automated
+weekly cron has no way to provide.
 
 ## Database migrations & backups
 

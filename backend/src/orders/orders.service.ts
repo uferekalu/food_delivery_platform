@@ -813,15 +813,22 @@ export class OrdersService {
    * — `initiatePayment` can be called more than once for the same still-`PENDING_PAYMENT` order
    * (a retry, or switching provider), and a customer who completes payment on an *earlier*
    * session must not become unfindable once a later attempt overwrites the single `paymentRef`
-   * field. */
+   * field.
+   *
+   * `settledViaInstantSplit` (docs/ROADMAP.md FDP-92) mirrors `paymentProvider`'s own "reflects
+   * the latest attempt" semantics — overwritten on every call, not accumulated, since only the
+   * most recent attempt's reference is the one that can actually get paid. See
+   * `Order.settledViaInstantSplit`'s doc comment for why this exists at all. */
   async setPaymentRef(
     order: OrderDocument,
     provider: PaymentProvider,
     paymentRef: string,
+    settledViaInstantSplit = false,
   ): Promise<OrderDocument> {
     order.paymentProvider = provider;
     order.paymentRef = paymentRef;
     order.paymentRefs.push(paymentRef);
+    order.settledViaInstantSplit = settledViaInstantSplit;
     return order.save();
   }
 

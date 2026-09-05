@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
+import type { PaymentProvider } from '../payments/payment-provider';
 
 export interface UnpaidEarningsGroup {
+  provider: PaymentProvider;
   currency: string;
   grossAmount: number;
   orderIds: string[];
@@ -31,10 +33,18 @@ export class PayoutsService {
 
   /**
    * Every `DELIVERED` order for this restaurant/store whose vendor cut hasn't been included in a
-   * payout yet, grouped by currency (almost always one group, but a vendor could in principle
-   * have delivered orders in more than one currency over the platform's lifetime). Uses
-   * `Order.restaurantPayoutAmount` — already net of the platform's commission, see
-   * `docs/ARCHITECTURE.md` §14.
+   * payout yet, grouped by (provider, currency) — not just currency. This matters for real
+   * transfer execution (docs/ROADMAP.md FDP-92): the money currently sits in the platform's own
+   * balance *with whichever provider actually processed the charge* (a customer can override the
+   * default provider per order, `InitiatePaymentDto.provider`), so a transfer for a given group
+   * has to go out through that same provider — Stripe can't move money that Paystack collected.
+   * Almost always one group per vendor, but not guaranteed. Uses `Order.restaurantPayoutAmount`
+   * — already net of the platform's commission, see `docs/ARCHITECTURE.md` §14.
+   *
+   * Excludes any order with `settledViaInstantSplit: true` — the provider already sent that
+   * vendor their cut automatically at charge time (§14's still-live instant split, running in
+   * parallel with this batch throughout the staged rollout), so including it here would pay the
+   * same order out a second time. See `Order.settledViaInstantSplit`'s doc comment.
    */
   async getUnpaidVendorEarnings(
     vendorType: 'restaurant' | 'store',
@@ -46,13 +56,19 @@ export class PayoutsService {
         : { sellerType: 'store' as const, storeId: vendorId };
 
     const orders = await this.orderModel
-      .find({ ...filter, status: 'DELIVERED', vendorPayoutId: null })
-      .select('_id currency restaurantPayoutAmount')
+      .find({
+        ...filter,
+        status: 'DELIVERED',
+        vendorPayoutId: null,
+        settledViaInstantSplit: { $ne: true },
+      })
+      .select('_id currency paymentProvider restaurantPayoutAmount')
       .exec();
 
-    return this.groupByCurrency(
+    return this.groupByProviderAndCurrency(
       orders.map((o) => ({
         id: o._id.toString(),
+        provider: o.paymentProvider,
         currency: o.currency,
         amount: o.restaurantPayoutAmount,
       })),
@@ -67,31 +83,39 @@ export class PayoutsService {
   ): Promise<UnpaidEarningsGroup[]> {
     const orders = await this.orderModel
       .find({ riderId: riderUserId, status: 'DELIVERED', riderPayoutId: null })
-      .select('_id currency deliveryFee')
+      .select('_id currency paymentProvider deliveryFee')
       .exec();
 
-    return this.groupByCurrency(
+    return this.groupByProviderAndCurrency(
       orders.map((o) => ({
         id: o._id.toString(),
+        provider: o.paymentProvider,
         currency: o.currency,
         amount: o.deliveryFee,
       })),
     );
   }
 
-  private groupByCurrency(
-    rows: { id: string; currency: string; amount: number }[],
+  private groupByProviderAndCurrency(
+    rows: {
+      id: string;
+      provider: PaymentProvider;
+      currency: string;
+      amount: number;
+    }[],
   ): UnpaidEarningsGroup[] {
     const groups = new Map<string, UnpaidEarningsGroup>();
     for (const row of rows) {
-      const group = groups.get(row.currency) ?? {
+      const key = `${row.provider}:${row.currency}`;
+      const group = groups.get(key) ?? {
+        provider: row.provider,
         currency: row.currency,
         grossAmount: 0,
         orderIds: [],
       };
       group.grossAmount = round2(group.grossAmount + row.amount);
       group.orderIds.push(row.id);
-      groups.set(row.currency, group);
+      groups.set(key, group);
     }
     return Array.from(groups.values());
   }

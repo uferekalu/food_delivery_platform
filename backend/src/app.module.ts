@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { envValidationSchema } from './common/config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -55,6 +56,9 @@ import { PayoutsModule } from './payouts/payouts.module';
       }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Backs PayoutSchedulerService's weekly Monday cron (docs/ROADMAP.md FDP-92) — registered
+    // globally here (once) rather than per-module, per @nestjs/schedule's own convention.
+    ScheduleModule.forRoot(),
     DatabaseModule,
     HealthModule,
     UsersModule,

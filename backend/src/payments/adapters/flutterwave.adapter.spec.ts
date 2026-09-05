@@ -421,4 +421,71 @@ describe('FlutterwaveAdapter', () => {
       );
     });
   });
+
+  describe('transfer (docs/ROADMAP.md FDP-92)', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    const params = {
+      bankCode: '044',
+      accountNumber: '0123456789',
+      amount: 85,
+      currency: 'NGN',
+      reference: 'payout-1',
+      narration: 'Weekly payout',
+    };
+
+    it('returns the transfer id on success, sending the raw bank details (no subaccount API for Flutterwave transfers)', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: 'success',
+            data: { id: 998877, reference: 'payout-1' },
+          }),
+      });
+      global.fetch = fetchMock as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const result = await adapter.transfer(params);
+
+      expect(result).toEqual({ transferReference: '998877' });
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as {
+        account_bank: string;
+        account_number: string;
+        amount: number;
+      };
+      expect(body).toEqual({
+        account_bank: '044',
+        account_number: '0123456789',
+        amount: 85, // major unit, no ×100 — same as initiate()
+        currency: 'NGN',
+        narration: 'Weekly payout',
+        reference: 'payout-1',
+      });
+    });
+
+    it('throws a plain Error on a confirmed rejection (safe to retry)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({ status: 'error', message: 'Invalid account' }),
+      }) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.transfer(params)).rejects.toThrow('Invalid account');
+    });
+
+    it('throws TransferOutcomeUnknownError (not a plain Error) on a network-layer failure — outcome genuinely unknown', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('fetch failed')) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.transfer(params)).rejects.toMatchObject({
+        name: 'TransferOutcomeUnknownError',
+      });
+    });
+  });
 });

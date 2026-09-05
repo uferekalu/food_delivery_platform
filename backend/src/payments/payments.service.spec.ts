@@ -168,6 +168,7 @@ describe('PaymentsService', () => {
         order,
         'stripe',
         'cs_test_abc',
+        false, // no active payout account -> no instant split applied (docs/ROADMAP.md FDP-92)
       );
     });
 
@@ -210,6 +211,7 @@ describe('PaymentsService', () => {
         order,
         'paystack',
         'ORD-1-abcd',
+        false,
       );
     });
 
@@ -243,6 +245,14 @@ describe('PaymentsService', () => {
           restaurantPayoutAccountReference: 'ACCT_test123',
           restaurantPayoutAmount: 85,
         }),
+      );
+      // docs/ROADMAP.md FDP-92 — the split was actually applied, so the weekly batch must never
+      // pay this order's vendor cut out again.
+      expect(ordersService.setPaymentRef).toHaveBeenCalledWith(
+        order,
+        'paystack',
+        'ORD-1-abcd',
+        true,
       );
     });
 

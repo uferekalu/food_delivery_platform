@@ -320,6 +320,37 @@ describe('RestaurantsService', () => {
         ),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('persists bank details when given (docs/ROADMAP.md FDP-92 — needed for real transfer execution), and leaves them null when omitted', async () => {
+      const created = await service.create('owner-id', baseDto);
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const withBankDetails = await service.setPayoutAccount(
+        created._id.toString(),
+        requester,
+        'paystack',
+        'active',
+        'ACCT_test123',
+        { bankCode: '058', accountNumber: '0123456789' },
+      );
+      expect(withBankDetails.payoutAccounts[0].bankCode).toBe('058');
+      expect(withBankDetails.payoutAccounts[0].accountNumber).toBe(
+        '0123456789',
+      );
+
+      const withoutBankDetails = await service.setPayoutAccount(
+        created._id.toString(),
+        requester,
+        'stripe',
+        'pending',
+        'acct_test456',
+      );
+      const stripeAccount = withoutBankDetails.payoutAccounts.find(
+        (a) => a.provider === 'stripe',
+      );
+      expect(stripeAccount?.bankCode).toBeNull();
+      expect(stripeAccount?.accountNumber).toBeNull();
+    });
   });
 
   describe('setPayoutAccountFromWebhook / findByPayoutAccountReference (FDP-54)', () => {

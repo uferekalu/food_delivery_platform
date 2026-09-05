@@ -211,6 +211,7 @@ export class RestaurantsService {
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,
+    bankDetails?: { bankCode: string; accountNumber: string },
   ): Promise<RestaurantDocument> {
     const restaurant = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(restaurant, requester);
@@ -219,6 +220,7 @@ export class RestaurantsService {
       provider,
       status,
       reference,
+      bankDetails,
     );
   }
 
@@ -242,6 +244,7 @@ export class RestaurantsService {
       provider,
       status,
       reference,
+      undefined,
     );
   }
 
@@ -262,15 +265,26 @@ export class RestaurantsService {
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,
+    bankDetails: { bankCode: string; accountNumber: string } | undefined,
   ): Promise<RestaurantDocument> {
+    const bankCode = bankDetails?.bankCode ?? null;
+    const accountNumber = bankDetails?.accountNumber ?? null;
     const existing = restaurant.payoutAccounts.find(
       (account) => account.provider === provider,
     );
     if (existing) {
       existing.status = status;
       existing.reference = reference;
+      existing.bankCode = bankCode;
+      existing.accountNumber = accountNumber;
     } else {
-      restaurant.payoutAccounts.push({ provider, status, reference });
+      restaurant.payoutAccounts.push({
+        provider,
+        status,
+        reference,
+        bankCode,
+        accountNumber,
+      });
     }
     return restaurant.save();
   }

@@ -8,6 +8,7 @@ import type {
   VerifyPaymentResult,
   WebhookEvent,
 } from './payment-adapter.interface';
+import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
 
 // Stripe Checkout (a hosted redirect session) rather than embedded Elements/card fields — no
 // PCI scope on this server, no Stripe.js frontend integration to maintain, and the redirect
@@ -202,5 +203,57 @@ export class StripeAdapter implements PaymentAdapter {
       chargesEnabled: account.charges_enabled ?? false,
       detailsSubmitted: account.details_submitted ?? false,
     };
+  }
+
+  // --- Weekly payout execution (docs/ROADMAP.md FDP-92) ---
+
+  /**
+   * Moves money from the platform's own Stripe balance to a restaurant/store/rider's connected
+   * account — a standalone transfer, not the destination-charge split `initiate()` used to set up
+   * (that model is being retired in favor of this one, see docs/ARCHITECTURE.md §14). `reference`
+   * doubles as the idempotency key: a retried call with the same `reference` returns the original
+   * transfer instead of creating a second one, which only protects against *this process* retrying
+   * the same attempt — PayoutExecutionService never reuses a `reference` across genuinely separate
+   * attempts, so this is defense-in-depth, not the primary safety mechanism (see that service for
+   * the claim/reconciliation design that is).
+   */
+  async transfer(params: {
+    destinationAccountId: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    description: string;
+  }): Promise<{ transferReference: string }> {
+    try {
+      const transfer = await this.stripe.transfers.create(
+        {
+          amount: Math.round(params.amount * 100),
+          currency: params.currency.toLowerCase(),
+          destination: params.destinationAccountId,
+          description: params.description,
+          transfer_group: params.reference,
+        },
+        { idempotencyKey: params.reference },
+      );
+      return { transferReference: transfer.id };
+    } catch (error) {
+      // StripeConnectionError (never reached Stripe) and StripeAPIError (Stripe's own 5xx — its
+      // docs say explicitly a valid request may still have been processed) both mean the outcome
+      // is genuinely unknown, not a confirmed rejection. Everything else (StripeInvalidRequestError
+      // for a bad/disabled destination account, etc.) is Stripe clearly telling us it did not
+      // transfer the money.
+      if (
+        error instanceof Stripe.errors.StripeConnectionError ||
+        error instanceof Stripe.errors.StripeAPIError
+      ) {
+        throw new TransferOutcomeUnknownError(
+          `Stripe transfer outcome unknown: ${error.message}`,
+          { cause: error },
+        );
+      }
+      throw new Error(
+        error instanceof Error ? error.message : 'Stripe transfer failed',
+      );
+    }
   }
 }

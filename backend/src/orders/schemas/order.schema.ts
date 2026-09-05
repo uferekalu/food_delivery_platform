@@ -106,6 +106,20 @@ export class Order {
   @Prop({ type: String, default: null, index: true })
   riderPayoutId: string | null;
 
+  // Set once, by `OrdersService.setPaymentRef`, from whether `PaymentsService.initiatePayment`
+  // actually applied a provider-side split for this order's *latest* payment attempt (docs/
+  // ROADMAP.md FDP-92) — true only when the seller had an active payout account for the provider
+  // used, meaning the provider itself already sent the vendor their cut automatically at charge
+  // time. Critical for the weekly-batch payout rollout: `PayoutsService.getUnpaidVendorEarnings`
+  // excludes any order with this set, so the same order's vendor cut is never paid out a SECOND
+  // time by the batch job on top of what the instant split already sent — both mechanisms run in
+  // parallel during the staged rollout (docs/ARCHITECTURE.md §14), and this flag is what keeps
+  // them from double-paying each other. Never set for a rider — riders have no instant-split
+  // mechanism, so `riderPayoutId`/`getUnpaidRiderEarnings` has no equivalent collision to guard
+  // against.
+  @Prop({ type: Boolean, default: false })
+  settledViaInstantSplit: boolean;
+
   // Copied from the restaurant at order time (docs/ARCHITECTURE.md §3) — the platform never
   // does cross-currency conversion, so this never needs to be recomputed later.
   @Prop({ type: String, required: true })

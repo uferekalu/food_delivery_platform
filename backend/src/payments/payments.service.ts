@@ -139,7 +139,17 @@ export class PaymentsService {
       );
     }
 
-    await this.ordersService.setPaymentRef(order, provider, result.reference);
+    // Whether the provider-side split was actually requested for THIS attempt — same condition
+    // each adapter's own `initiate()` checks (docs/ROADMAP.md FDP-92): a store order or a
+    // restaurant with no active account for this provider means the full amount settled to the
+    // platform's own account instead, so it's still fully owed via the weekly batch.
+    const settledViaInstantSplit = !!payoutAccount?.reference;
+    await this.ordersService.setPaymentRef(
+      order,
+      provider,
+      result.reference,
+      settledViaInstantSplit,
+    );
     return { redirectUrl: result.redirectUrl };
   }
 

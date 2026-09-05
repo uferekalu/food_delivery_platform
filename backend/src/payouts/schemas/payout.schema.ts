@@ -85,6 +85,20 @@ export class Payout {
 
   @Prop({ type: Number, default: 0, min: 0 })
   retryCount: number;
+
+  /**
+   * Set true (docs/ROADMAP.md FDP-92) only when `transfer()` threw `TransferOutcomeUnknownError`
+   * — the attempt failed in a way that leaves genuine doubt about whether the money actually
+   * moved (a network-layer error, not a confirmed provider rejection). A `true` here means this
+   * attempt's `orderIds` are deliberately still claimed (their `vendorPayoutId`/`riderPayoutId`
+   * still points at this document) rather than released back to the unpaid pool, so the next
+   * weekly run does NOT blindly retry and risk double-paying — an admin must check the provider's
+   * own dashboard and resolve this one manually (FDP-93). A `false`/default here on a `failed`
+   * status means the rejection was clean and confirmed (e.g. an inactive destination account) and
+   * the orders were already released for automatic retry next run.
+   */
+  @Prop({ type: Boolean, default: false, index: true })
+  reconciliationRequired: boolean;
 }
 
 export type PayoutDocument = HydratedDocument<Payout>;
