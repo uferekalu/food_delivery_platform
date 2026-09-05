@@ -19,7 +19,14 @@ export function PlateIcon({ className = "size-12" }: { className?: string }) {
   );
 }
 
-export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+export function RestaurantCard({
+  restaurant,
+  distanceKm,
+}: {
+  restaurant: Restaurant;
+  /** "Restaurants near me" (docs/ROADMAP.md FDP-96) — only ever passed on the near-me page. */
+  distanceKm?: number;
+}) {
   const t = useTranslations("RestaurantCard");
   const locale = useLocale();
   const scheduleStatus = getOpenStatus(restaurant.openingHours, restaurant.country);
@@ -55,6 +62,7 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
             {restaurant.estimatedDeliveryMinutes
               ? ` • ${t("estimatedMinutes", { minutes: restaurant.estimatedDeliveryMinutes })}`
               : ""}
+            {distanceKm != null ? ` • ${t("distanceAway", { distance: distanceKm })}` : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">

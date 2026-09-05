@@ -1,5 +1,12 @@
 import { api } from "../api";
-import type { Address, OpeningHour, PaginatedResult, Restaurant, RestaurantSort } from "../restaurant-types";
+import type {
+  Address,
+  OpeningHour,
+  PaginatedResult,
+  Restaurant,
+  RestaurantSort,
+  RestaurantWithDistance,
+} from "../restaurant-types";
 
 export interface ListRestaurantsParams {
   search?: string;
@@ -8,6 +15,15 @@ export interface ListRestaurantsParams {
   maxPriceLevel?: number;
   maxDeliveryMinutes?: number;
   sort?: RestaurantSort;
+  page?: number;
+  limit?: number;
+}
+
+// "Restaurants near me" (docs/ROADMAP.md FDP-96).
+export interface NearbyRestaurantsParams {
+  lat: number;
+  lng: number;
+  radiusKm?: number;
   page?: number;
   limit?: number;
 }
@@ -57,6 +73,17 @@ export const restaurantsApi = api.injectEndpoints({
     getRestaurantBySlug: builder.query<Restaurant, string>({
       query: (slug) => `/restaurants/${slug}`,
       providesTags: (result) => (result ? [{ type: "Restaurant", id: result._id }] : []),
+    }),
+
+    getNearbyRestaurants: builder.query<PaginatedResult<RestaurantWithDistance>, NearbyRestaurantsParams>({
+      query: (params) => `/restaurants/nearby${toQueryString({ ...params })}`,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.items.map((r) => ({ type: "Restaurant" as const, id: r._id })),
+              { type: "Restaurant" as const, id: "NEARBY" },
+            ]
+          : [{ type: "Restaurant" as const, id: "NEARBY" }],
     }),
 
     // Unlike getRestaurantBySlug, this isn't filtered to approved restaurants — it's how an
@@ -119,6 +146,7 @@ export const restaurantsApi = api.injectEndpoints({
 export const {
   useListRestaurantsQuery,
   useGetRestaurantBySlugQuery,
+  useGetNearbyRestaurantsQuery,
   useGetRestaurantByIdForAdminQuery,
   useGetMyRestaurantsQuery,
   useCreateRestaurantMutation,

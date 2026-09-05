@@ -104,6 +104,7 @@
   },
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "a {distance, number} km",
     "open": "Aberto",
     "closed": "Fechado",
     "opensAt": "Abre às {time}",
@@ -192,6 +193,7 @@
     "viewCareers": "Ver vagas",
     "goToMyDashboard": "Ir para meu painel",
     "registerHere": "Cadastre-se aqui",
+    "nearMeCta": "Perto de mim",
     "arrivingSoon": "Chegando em breve",
     "estimatedDelivery": "Entrega estimada",
     "deliveryTimeVaries": "Varia conforme o pedido",
@@ -1372,6 +1374,7 @@
   },
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "a {distance, number} km",
     "open": "Aberto",
     "closed": "Fechado",
     "opensAt": "Abre às {time}",
@@ -1401,5 +1404,20 @@
     "startNewCartTitle": "Iniciar um novo carrinho?",
     "startNewCartDescription": "Seu carrinho tem itens de outro restaurante ou loja. Adicionar este item irá esvaziá-lo.",
     "clearCartAndAdd": "Esvaziar carrinho e adicionar"
+  },
+  "NearMePage": {
+    "title": "Perto de mim",
+    "subtitle": "Restaurantes e lojas a até {radiusKm, number} km de você.",
+    "restaurants": "Restaurantes",
+    "groceries": "Mercados",
+    "pharmacyBeauty": "Farmácia e mais",
+    "useMyLocation": "Usar minha localização",
+    "explainer": "Compartilhe sua localização para ver o que há por perto e a que distância fica.",
+    "locationDenied": "O acesso à localização foi negado. Ative-o nas configurações do seu navegador e tente novamente.",
+    "locationUnsupported": "Seu navegador não oferece suporte a compartilhamento de localização.",
+    "locationFailed": "Não foi possível obter sua localização. Tente novamente.",
+    "couldNotLoad": "Não foi possível carregar os resultados próximos.",
+    "noneNearby": "Nada por perto ainda",
+    "tryWiderArea": "Tente novamente mais tarde ou volte quando mais lugares se juntarem à plataforma na sua região."
   }
 }

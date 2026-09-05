@@ -61,6 +61,9 @@ describe('StoresService', () => {
 
     service = moduleRef.get(StoresService);
     storeModel = moduleRef.get(getModelToken(Store.name));
+    // See RestaurantsService's equivalent spec for why this explicit wait matters for
+    // `findNearby`'s $geoNear (docs/ROADMAP.md FDP-96).
+    await storeModel.init();
   }, 60_000);
 
   afterEach(async () => {
@@ -353,6 +356,54 @@ describe('StoresService', () => {
 
       const counts = await service.countByApproval();
       expect(counts).toEqual({ approved: 1, pending: 2 });
+    });
+  });
+
+  describe('findNearby (docs/ROADMAP.md FDP-96)', () => {
+    const origin = { lat: 6.5, lng: 3.35 };
+
+    async function createApprovedAt(
+      name: string,
+      type: 'groceries' | 'pharmacy_beauty',
+      lat?: number,
+      lng?: number,
+    ) {
+      const created = await service.create('507f1f77bcf86cd799439011', {
+        ...baseDto,
+        name,
+        type,
+        address: { ...baseDto.address, lat, lng },
+      });
+      return service.approve(created._id.toString());
+    }
+
+    it('returns approved stores of the requested type within the radius, nearest first', async () => {
+      await createApprovedAt('Nearby Groceries', 'groceries', 6.501, 3.35);
+      await createApprovedAt('Far Groceries', 'groceries', 7.0, 3.35); // ~55.6 km — outside 10km
+      await createApprovedAt('Nearby Pharmacy', 'pharmacy_beauty', 6.502, 3.35);
+
+      const result = await service.findNearby({
+        ...origin,
+        type: 'groceries',
+        radiusKm: 10,
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.items.map((s) => s.name)).toEqual(['Nearby Groceries']);
+      expect(result.items[0].distanceKm).toBeCloseTo(0.1, 1);
+    });
+
+    it('excludes a store with no coordinates set', async () => {
+      await createApprovedAt('No location', 'groceries', undefined, undefined);
+
+      const result = await service.findNearby({
+        ...origin,
+        type: 'groceries',
+        radiusKm: 50,
+      });
+
+      expect(result.items).toHaveLength(0);
     });
   });
 });

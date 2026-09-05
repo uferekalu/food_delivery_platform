@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, QueryFilter } from 'mongoose';
 import { slugify } from '../common/utils/slugify';
 import { escapeRegExp } from '../common/utils/regex';
+import { toGeoPoint } from '../common/utils/geo';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { PaginatedResult } from '../restaurants/restaurants.service';
 import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
@@ -17,6 +18,11 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { ListStoresDto } from './dto/list-stores.dto';
 import type { StoreSort } from './dto/list-stores.dto';
+import type { NearbyStoresQueryDto } from './dto/nearby-stores-query.dto';
+
+/** A store with its computed distance from the query point, in kilometres (docs/ROADMAP.md
+ * FDP-96) — never a stored field, only ever present on `findNearby`'s output. */
+export type StoreWithDistance = Store & { distanceKm: number };
 
 const SORT_SPECS: Record<StoreSort, Record<string, 1 | -1>> = {
   newest: { createdAt: -1 },
@@ -34,7 +40,16 @@ export class StoresService {
 
   async create(ownerId: string, dto: CreateStoreDto): Promise<StoreDocument> {
     const slug = await this.generateUniqueSlug(dto.name);
-    return this.storeModel.create({ ...dto, ownerId, slug });
+    return this.storeModel.create({
+      ...dto,
+      ownerId,
+      slug,
+      // "Near me" (docs/ROADMAP.md FDP-96) — see toGeoPoint's doc comment.
+      address: {
+        ...dto.address,
+        location: toGeoPoint(dto.address.lat, dto.address.lng),
+      },
+    });
   }
 
   async findAllApproved(
@@ -74,6 +89,54 @@ export class StoresService {
         .exec(),
       this.storeModel.countDocuments(filter).exec(),
     ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  /** "Stores near me" (docs/ROADMAP.md FDP-96) — see
+   * `RestaurantsService.findNearby`'s doc comment for the full `$geoNear`/`$facet` reasoning,
+   * identical here aside from the extra required `type` filter. */
+  async findNearby(
+    query: NearbyStoresQueryDto,
+  ): Promise<PaginatedResult<StoreWithDistance>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const radiusKm = query.radiusKm ?? 10;
+
+    const [result] = await this.storeModel
+      .aggregate<{
+        items: (StoreWithDistance & { distanceMeters: number })[];
+        totalCount: { count: number }[];
+      }>([
+        {
+          $geoNear: {
+            near: { type: 'Point', coordinates: [query.lng, query.lat] },
+            distanceField: 'distanceMeters',
+            maxDistance: radiusKm * 1000,
+            spherical: true,
+            query: { isApproved: true, type: query.type },
+          },
+        },
+        {
+          $facet: {
+            items: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+            totalCount: [{ $count: 'count' }],
+          },
+        },
+      ])
+      .exec();
+
+    const total = result.totalCount[0]?.count ?? 0;
+    const items = result.items.map((item) => ({
+      ...item,
+      distanceKm: Math.round((item.distanceMeters / 1000) * 10) / 10,
+    }));
 
     return {
       items,
@@ -128,6 +191,10 @@ export class StoresService {
     const store = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(store, requester);
     Object.assign(store, dto);
+    // "Near me" (docs/ROADMAP.md FDP-96) — same reasoning as RestaurantsService.update.
+    if (dto.address) {
+      store.address.location = toGeoPoint(dto.address.lat, dto.address.lng);
+    }
     return store.save();
   }
 

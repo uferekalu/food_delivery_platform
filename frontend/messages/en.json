@@ -104,6 +104,7 @@
   },
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "{distance, number} km away",
     "open": "Open",
     "closed": "Closed",
     "opensAt": "Opens at {time}",
@@ -192,6 +193,7 @@
     "viewCareers": "View careers",
     "goToMyDashboard": "Go to my dashboard",
     "registerHere": "Register here",
+    "nearMeCta": "Near me",
     "arrivingSoon": "Arriving soon",
     "estimatedDelivery": "Estimated delivery",
     "deliveryTimeVaries": "Varies by order",
@@ -1372,6 +1374,7 @@
   },
   "StoreCard": {
     "estimatedMinutes": "~{minutes} min",
+    "distanceAway": "{distance, number} km away",
     "open": "Open",
     "closed": "Closed",
     "opensAt": "Opens at {time}",
@@ -1401,5 +1404,20 @@
     "startNewCartTitle": "Start a new cart?",
     "startNewCartDescription": "Your cart has items from a different restaurant or store. Adding this item will clear it.",
     "clearCartAndAdd": "Clear cart and add"
+  },
+  "NearMePage": {
+    "title": "Near me",
+    "subtitle": "Restaurants and stores within {radiusKm, number} km of you.",
+    "restaurants": "Restaurants",
+    "groceries": "Groceries",
+    "pharmacyBeauty": "Pharmacy & more",
+    "useMyLocation": "Use my location",
+    "explainer": "Share your location to see what's nearby and how far it is.",
+    "locationDenied": "Location access was denied. Enable it in your browser settings and try again.",
+    "locationUnsupported": "Your browser doesn't support location sharing.",
+    "locationFailed": "We couldn't get your location. Please try again.",
+    "couldNotLoad": "Couldn't load nearby results.",
+    "noneNearby": "Nothing nearby yet",
+    "tryWiderArea": "Try again later or check back once more places join the platform in your area."
   }
 }

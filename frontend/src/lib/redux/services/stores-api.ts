@@ -6,6 +6,7 @@ import type {
   Store,
   StoreSort,
   StoreType,
+  StoreWithDistance,
 } from "../restaurant-types";
 
 export interface ListStoresParams {
@@ -15,6 +16,17 @@ export interface ListStoresParams {
   minRating?: number;
   maxDeliveryMinutes?: number;
   sort?: StoreSort;
+  page?: number;
+  limit?: number;
+}
+
+// "Stores near me" (docs/ROADMAP.md FDP-96) — `type` required, same reasoning as
+// ListStoresParams (a category-listing view always picks exactly one type).
+export interface NearbyStoresParams {
+  lat: number;
+  lng: number;
+  type: StoreType;
+  radiusKm?: number;
   page?: number;
   limit?: number;
 }
@@ -64,6 +76,17 @@ export const storesApi = api.injectEndpoints({
     getStoreBySlug: builder.query<Store, string>({
       query: (slug) => `/stores/${slug}`,
       providesTags: (result) => (result ? [{ type: "Store", id: result._id }] : []),
+    }),
+
+    getNearbyStores: builder.query<PaginatedResult<StoreWithDistance>, NearbyStoresParams>({
+      query: (params) => `/stores/nearby${toQueryString({ ...params })}`,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.items.map((s) => ({ type: "Store" as const, id: s._id })),
+              { type: "Store" as const, id: "NEARBY" },
+            ]
+          : [{ type: "Store" as const, id: "NEARBY" }],
     }),
 
     // Unlike getStoreBySlug, this isn't filtered to approved stores — it's how an admin reviews
@@ -126,6 +149,7 @@ export const storesApi = api.injectEndpoints({
 export const {
   useListStoresQuery,
   useGetStoreBySlugQuery,
+  useGetNearbyStoresQuery,
   useGetStoreByIdForAdminQuery,
   useListPendingStoresQuery,
   useApproveStoreMutation,

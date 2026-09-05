@@ -104,6 +104,7 @@
   },
   "RestaurantCard": {
     "estimatedMinutes": "~{minutes} Min.",
+    "distanceAway": "{distance, number} km entfernt",
     "open": "Geöffnet",
     "closed": "Geschlossen",
     "opensAt": "Öffnet um {time}",
@@ -192,6 +193,7 @@
     "viewCareers": "Stellenangebote ansehen",
     "goToMyDashboard": "Zu meinem Dashboard",
     "registerHere": "Hier registrieren",
+    "nearMeCta": "In meiner Nähe",
     "arrivingSoon": "Trifft bald ein",
     "estimatedDelivery": "Geschätzte Lieferzeit",
     "deliveryTimeVaries": "Abhängig von der Bestellung",
@@ -1372,6 +1374,7 @@
   },
   "StoreCard": {
     "estimatedMinutes": "~{minutes} Min.",
+    "distanceAway": "{distance, number} km entfernt",
     "open": "Geöffnet",
     "closed": "Geschlossen",
     "opensAt": "Öffnet um {time}",
@@ -1401,5 +1404,20 @@
     "startNewCartTitle": "Neuen Warenkorb starten?",
     "startNewCartDescription": "Dein Warenkorb enthält Artikel eines anderen Restaurants oder Shops. Das Hinzufügen dieses Artikels leert ihn.",
     "clearCartAndAdd": "Warenkorb leeren und hinzufügen"
+  },
+  "NearMePage": {
+    "title": "In meiner Nähe",
+    "subtitle": "Restaurants und Läden im Umkreis von {radiusKm, number} km.",
+    "restaurants": "Restaurants",
+    "groceries": "Lebensmittel",
+    "pharmacyBeauty": "Apotheke & mehr",
+    "useMyLocation": "Meinen Standort verwenden",
+    "explainer": "Teile deinen Standort, um zu sehen, was in der Nähe ist und wie weit es entfernt ist.",
+    "locationDenied": "Der Standortzugriff wurde verweigert. Aktiviere ihn in deinen Browser-Einstellungen und versuche es erneut.",
+    "locationUnsupported": "Dein Browser unterstützt die Standortfreigabe nicht.",
+    "locationFailed": "Wir konnten deinen Standort nicht ermitteln. Bitte versuche es erneut.",
+    "couldNotLoad": "Ergebnisse in der Nähe konnten nicht geladen werden.",
+    "noneNearby": "Noch nichts in der Nähe",
+    "tryWiderArea": "Versuche es später erneut oder schau wieder vorbei, sobald weitere Anbieter in deiner Gegend dazukommen."
   }
 }
