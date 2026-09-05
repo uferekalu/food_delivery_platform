@@ -49,6 +49,15 @@ working inside `backend/`.
   `RestaurantsService.findByIdOrThrow` + `assertOwnerOrAdmin` before every mutation. `@Roles()`
   only checks the role *label* (e.g. "is this a restaurant_owner at all"); it can't know which
   restaurant a given owner is allowed to touch, so ownership is always a second, explicit check.
+- **Mongoose 9 `ObjectId`-ref fields store as plain strings in this project**, not real
+  `ObjectId` instances — confirmed live (`RefreshToken.userId`, `ref: 'User'`): a document
+  created with a string value stays a string in the database, `typeof` confirms it at read-back.
+  Querying such a field with a raw `Types.ObjectId` (e.g. `updateMany({ userId: someObjectId })`)
+  silently matches **zero** documents — no error, no cast, just `matchedCount: 0`. Always compare
+  with `.toString()` on both sides of a query against one of these fields (`{ userId:
+  user._id.toString() }`), never a bare `ObjectId`. Caught in `UsersService.suspend()`
+  (docs/ROADMAP.md FDP-89) only because a live integration test asserted the actual DB write took
+  effect, not because it threw or logged anything.
 
 ## Module layout
 
@@ -90,8 +99,12 @@ guards, decorators) only — domain logic never lives there.
 - `restaurants.e2e-spec.ts`'s single lifecycle test does several sequential registrations (each
   a bcrypt cost-12 hash) plus a full create/approve/browse/menu-CRUD/ownership sequence in one
   `it()` — its `jest.setTimeout` is `60_000`, higher than the other specs' `30_000`, because it
-  does meaningfully more real work per test. If a new e2e test times out on a correct
-  implementation, check whether it's actually this — a slow/cold machine, not a bug — before
+  does meaningfully more real work per test. `admin.e2e-spec.ts` is the same pattern taken
+  further — one single-`it()` lifecycle test covering nearly every admin flow, bumped to
+  `90_000` (docs/ROADMAP.md FDP-89) once user-management assertions (two more bcrypt logins,
+  several more round trips) pushed it past `60_000` on a loaded machine. If a new e2e test times
+  out on a correct implementation, check whether it's actually this — a slow/cold machine, not a
+  bug, and whether the test file's own `jest.setTimeout` just needs bumping — before
   reaching for `--detectOpenHandles`.
 - `test/jest-e2e.json` sets `maxWorkers: 1` **deliberately** — every e2e spec file starts its
   own `mongodb-memory-server` instance, and Jest's default parallel-worker execution tries to

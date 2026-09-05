@@ -53,7 +53,8 @@ hosting).
 Core entities (Mongoose schemas in `backend/src/**/schemas`):
 
 - **User** — email, phone, passwordHash, role (`customer|restaurant_owner|rider|admin`), name,
-  avatarUrl (Cloudinary), addresses[], isEmailVerified
+  avatarUrl (Cloudinary), addresses[], isEmailVerified, status (`active|suspended`,
+  docs/ROADMAP.md FDP-89 — see §16)
 - **Address** — label, line1/2, city, state, country, postalCode, lat/lng, isDefault
 - **Restaurant** — ownerId, name, slug, description, logoUrl, coverUrl, address+geo,
   cuisineTypes[], **currency** (ISO 4217 — source of truth for order currency), country,
@@ -533,3 +534,44 @@ tier-independent safety net either way, since they don't depend on anything Atla
 3. Either way, run `npm run migrate:status` immediately after restoring — a dump taken before a
    since-applied migration needs that migration re-applied (`npm run migrate:up`) to bring the
    restored data's shape back in line with the currently-deployed code.
+
+## 16. Admin user management (docs/ROADMAP.md FDP-89)
+
+Closes an audit-identified gap: there was no way to ban/suspend a user, no general user list, and
+the only way to grant `admin`/`rider` was a raw `PATCH /users/:id/role` call with no UI in front
+of it.
+
+**Suspension, not deletion.** `User.status` (`'active' | 'suspended'`, default `'active'`) plus
+`suspendedAt`/`suspendedReason` for the audit trail — a suspended account's data stays intact
+(orders, reviews, saved addresses), unlike a delete, which would also break every existing
+document that references that user's id. An admin can't suspend their own account
+(`UsersService.suspend` throws if `id === requesterId`) — a real lock-yourself-out risk, not a
+hypothetical.
+
+**Enforcement is a deliberate two-tier design, not full coverage everywhere:**
+- `AuthService.login`/the phone-login branch/`exchangeOAuthToken` all check `status` before
+  issuing tokens (shared `assertActive()` helper) — a suspended account can't start a new
+  session.
+- `UsersService.suspend()` immediately revokes every one of that user's `RefreshToken` documents
+  (same `updateMany({ revokedAt: null }, { revokedAt: new Date() })` pattern
+  `AuthService.resetPassword`/reuse-detection already use), so silent token refresh stops working
+  right away — `AuthService.refresh()` also checks `status` directly as a backstop, but in the
+  normal flow it never even reaches that check, since the presented token is already revoked.
+- **What's deliberately NOT done**: `JwtAccessStrategy.validate()` does not query the database on
+  every request — it trusts the signed access-token payload, as it always has. This means a
+  suspended user's still-valid access token (≤15 min, `JWT_ACCESS_EXPIRES_IN`) keeps authenticating
+  existing requests until it naturally expires. Adding a DB lookup there would close this window
+  completely but adds a query to every single authenticated request in the app; the ~15-minute
+  worst case was judged an acceptable tradeoff rather than a real security gap, since it only
+  matters for someone already mid-session at the exact moment they're suspended.
+
+**A real Mongoose 9 pitfall hit building this** — see backend/CLAUDE.md's "Stack specifics" note:
+`RefreshToken.userId` stores as a plain string in this project's setup, not a real `ObjectId`, so
+the revocation `updateMany` must query with `user._id.toString()`, never a bare `ObjectId`
+(silently matches zero documents otherwise, no error). Caught by a live integration test
+asserting the token was actually revoked, not by anything throwing.
+
+**Frontend**: new Admin → Users tab (`frontend/src/app/[locale]/admin/users-tab.tsx`) —
+paginated list, search, role/status filters, a role-change `Select` per row (the first UI ever
+built for the pre-existing role-grant endpoint), and Suspend (reason required, plain-text modal)/
+Reactivate actions.

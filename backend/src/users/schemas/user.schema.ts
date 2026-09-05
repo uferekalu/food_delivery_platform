@@ -23,6 +23,9 @@ export const SELF_REGISTERABLE_ROLES = [
 ] as const;
 export type SelfRegisterableRole = (typeof SELF_REGISTERABLE_ROLES)[number];
 
+export const USER_STATUSES = ['active', 'suspended'] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({
@@ -72,6 +75,20 @@ export class User {
 
   @Prop({ type: [Types.ObjectId], ref: 'Restaurant', default: [] })
   favoriteRestaurantIds: Types.ObjectId[];
+
+  // Admin ban/suspend (docs/ROADMAP.md FDP-89). Suspending immediately revokes every one of this
+  // user's refresh tokens (see UsersService.suspend) so silent token refresh stops working right
+  // away; a still-valid ~15-min access token keeps working until it naturally expires, since
+  // JwtAccessStrategy deliberately doesn't hit the DB on every request (see
+  // docs/ARCHITECTURE.md §16) — an accepted small window, not an oversight.
+  @Prop({ type: String, enum: USER_STATUSES, required: true, default: 'active' })
+  status: UserStatus;
+
+  @Prop({ type: Date, default: null })
+  suspendedAt: Date | null;
+
+  @Prop({ type: String, default: null })
+  suspendedReason: string | null;
 }
 
 export type UserDocument = HydratedDocument<User>;

@@ -54,6 +54,19 @@ export interface PublicUser {
   isPhoneVerified: boolean;
 }
 
+// Admin ban/suspend (docs/ROADMAP.md FDP-89) — checked at every point an *existing* user
+// re-authenticates (login, phone login, OAuth exchange, refresh). Not checked in register()
+// since a brand-new user is always created 'active'. Deliberately the same message regardless
+// of which path called it, so a suspended account can't be distinguished from other auth
+// failures by response text alone.
+function assertActive(user: UserDocument): void {
+  if (user.status === 'suspended') {
+    throw new UnauthorizedException(
+      'This account has been suspended. Contact support for help.',
+    );
+  }
+}
+
 function toPublicUser(user: UserDocument): PublicUser {
   return {
     id: user._id.toString(),
@@ -144,6 +157,7 @@ export class AuthService {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    assertActive(user);
 
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), tokens };
@@ -234,6 +248,7 @@ export class AuthService {
           'No account found with this phone number',
         );
       }
+      assertActive(user);
       const tokens = await this.issueTokens(user);
       return { purpose: 'login', user: toPublicUser(user), tokens };
     }
@@ -319,6 +334,7 @@ export class AuthService {
     const user = await this.usersService.findById(payload.sub);
     if (!user)
       throw new UnauthorizedException('Invalid or expired sign-in link');
+    assertActive(user);
 
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), tokens };
@@ -353,6 +369,10 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+    // Backstop only — UsersService.suspend() already revokes every one of this user's refresh
+    // tokens immediately, so a suspended user's refresh normally never reaches this line at all
+    // (it's rejected above as an already-revoked token first).
+    assertActive(user);
 
     const tokens = await this.issueTokens(user);
     stored.revokedAt = new Date();

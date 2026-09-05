@@ -45,6 +45,10 @@ import {
   RiderSchema,
 } from '../riders/schemas/rider.schema';
 import { User, UserDocument, UserSchema } from '../users/schemas/user.schema';
+import {
+  RefreshToken,
+  RefreshTokenSchema,
+} from '../auth/schemas/refresh-token.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 jest.setTimeout(30_000);
@@ -82,6 +86,7 @@ describe('ReviewsService', () => {
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
           { name: Rider.name, schema: RiderSchema },
           { name: User.name, schema: UserSchema },
+          { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
       providers: [

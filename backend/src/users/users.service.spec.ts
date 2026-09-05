@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { UsersService } from './users.service';
@@ -10,6 +10,11 @@ import {
   RestaurantDocument,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import {
+  RefreshToken,
+  RefreshTokenDocument,
+  RefreshTokenSchema,
+} from '../auth/schemas/refresh-token.schema';
 import { User, UserDocument, UserSchema } from './schemas/user.schema';
 
 jest.setTimeout(30_000);
@@ -21,6 +26,7 @@ describe('UsersService', () => {
   let restaurantsService: RestaurantsService;
   let userModel: Model<UserDocument>;
   let restaurantModel: Model<RestaurantDocument>;
+  let refreshTokenModel: Model<RefreshTokenDocument>;
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
@@ -34,6 +40,7 @@ describe('UsersService', () => {
         MongooseModule.forFeature([
           { name: User.name, schema: UserSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
+          { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
       providers: [UsersService, RestaurantsService],
@@ -43,12 +50,14 @@ describe('UsersService', () => {
     restaurantsService = moduleRef.get(RestaurantsService);
     userModel = moduleRef.get(getModelToken(User.name));
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    refreshTokenModel = moduleRef.get(getModelToken(RefreshToken.name));
   }, 60_000);
 
   afterEach(async () => {
     await Promise.all([
       userModel.deleteMany({}).exec(),
       restaurantModel.deleteMany({}).exec(),
+      refreshTokenModel.deleteMany({}).exec(),
     ]);
   });
 
@@ -214,6 +223,94 @@ describe('UsersService', () => {
       await expect(
         usersService.addFavorite(user._id.toString(), user._id.toString()),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('listAll', () => {
+    it('paginates and filters by role/status/search', async () => {
+      await createUser(); // customer, Jane Doe
+      const owner = await userModel.create({
+        email: 'owner@example.com',
+        passwordHash: 'irrelevant',
+        name: 'Restaurant Owner',
+        role: 'restaurant_owner',
+      });
+      await usersService.suspend(
+        owner._id.toString(),
+        'someone-else',
+        'Fraud reported by a customer',
+      );
+
+      const byRole = await usersService.listAll({ role: 'restaurant_owner', page: 1, limit: 20 });
+      expect(byRole.items).toHaveLength(1);
+      expect(byRole.items[0].email).toBe('owner@example.com');
+
+      const byStatus = await usersService.listAll({ status: 'suspended', page: 1, limit: 20 });
+      expect(byStatus.total).toBe(1);
+      expect(byStatus.items[0].status).toBe('suspended');
+
+      const bySearch = await usersService.listAll({ search: 'jane', page: 1, limit: 20 });
+      expect(bySearch.items).toHaveLength(1);
+      expect(bySearch.items[0].name).toBe('Jane Doe');
+    });
+  });
+
+  describe('suspend/reactivate', () => {
+    async function createRefreshTokenFor(userId: string) {
+      return refreshTokenModel.create({
+        userId,
+        tokenHash: `hash-${Math.random()}`,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      });
+    }
+
+    it('suspends a user, records the reason, and revokes every outstanding refresh token', async () => {
+      const user = await createUser();
+      const token = await createRefreshTokenFor(user._id.toString());
+
+      const suspended = await usersService.suspend(
+        user._id.toString(),
+        'admin-id',
+        'Repeated policy violations',
+      );
+      expect(suspended.status).toBe('suspended');
+      expect(suspended.suspendedReason).toBe('Repeated policy violations');
+      expect(suspended.suspendedAt).toBeInstanceOf(Date);
+
+      const refreshed = await refreshTokenModel.findById(token._id).exec();
+      expect(refreshed?.revokedAt).not.toBeNull();
+    });
+
+    it('refuses to let an admin suspend their own account', async () => {
+      const user = await createUser();
+      await expect(
+        usersService.suspend(user._id.toString(), user._id.toString(), 'Testing'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('refuses to suspend an already-suspended account', async () => {
+      const user = await createUser();
+      await usersService.suspend(user._id.toString(), 'admin-id', 'First reason');
+      await expect(
+        usersService.suspend(user._id.toString(), 'admin-id', 'Second reason'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('reactivates a suspended user, clearing the suspension fields', async () => {
+      const user = await createUser();
+      await usersService.suspend(user._id.toString(), 'admin-id', 'Reason');
+
+      const reactivated = await usersService.reactivate(user._id.toString());
+      expect(reactivated.status).toBe('active');
+      expect(reactivated.suspendedAt).toBeNull();
+      expect(reactivated.suspendedReason).toBeNull();
+    });
+
+    it('refuses to reactivate an account that is not suspended', async () => {
+      const user = await createUser();
+      await expect(usersService.reactivate(user._id.toString())).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

@@ -202,6 +202,18 @@ describe('AuthService', () => {
       expect(tokens.accessToken).toEqual(expect.any(String));
       expect(tokens.refreshToken).toEqual(expect.any(String));
     });
+
+    it('rejects a correct password for a suspended account', async () => {
+      const passwordHash = await bcrypt.hash('CorrectPass1', 12);
+      const user = await createUser(passwordHash);
+      user.status = 'suspended';
+      await user.save();
+      usersService.findByEmailWithPassword.mockResolvedValue(user);
+
+      await expect(
+        authService.login('jane@example.com', 'CorrectPass1'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('refresh token rotation', () => {
@@ -242,6 +254,26 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
       await expect(authService.refresh(second.refreshToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects a still-unrevoked refresh token once the account is suspended', async () => {
+      // Exercises the assertActive() backstop in refresh() specifically — a token that is NOT
+      // itself revoked (unlike the normal UsersService.suspend() flow, which does revoke every
+      // outstanding token) must still be rejected once the user backing it is suspended.
+      const passwordHash = await bcrypt.hash('CorrectPass1', 12);
+      const user = await createUser(passwordHash);
+      usersService.findById.mockResolvedValue(user);
+      usersService.findByEmailWithPassword.mockResolvedValue(user);
+
+      const { tokens } = await authService.login('jane@example.com', 'CorrectPass1');
+
+      user.status = 'suspended';
+      await user.save();
+      usersService.findById.mockResolvedValue(user);
+
+      await expect(authService.refresh(tokens.refreshToken)).rejects.toThrow(
         UnauthorizedException,
       );
     });

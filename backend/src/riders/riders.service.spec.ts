@@ -15,6 +15,10 @@ import {
   Restaurant,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import {
+  RefreshToken,
+  RefreshTokenSchema,
+} from '../auth/schemas/refresh-token.schema';
 import { Rider, RiderDocument, RiderSchema } from './schemas/rider.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
@@ -41,6 +45,7 @@ describe('RidersService', () => {
           { name: Rider.name, schema: RiderSchema },
           { name: User.name, schema: UserSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
+          { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
       providers: [RidersService, UsersService, RestaurantsService],
