@@ -93,14 +93,19 @@ describe('StripeAdapter', () => {
 
   describe('initiate — split payment (FDP-54)', () => {
     let adapter: StripeAdapter;
-    let createMock: jest.Mock<Promise<{ id: string; url: string }>, [Record<string, unknown>]>;
+    let createMock: jest.Mock<
+      Promise<{ id: string; url: string }>,
+      [Record<string, unknown>]
+    >;
 
     beforeEach(() => {
       adapter = new StripeAdapter(configWith(TEST_WEBHOOK_SECRET));
-      createMock = jest.fn().mockResolvedValue({
-        id: 'cs_test_abc',
-        url: 'https://checkout.stripe.com/session/abc',
-      });
+      createMock = jest
+        .fn<Promise<{ id: string; url: string }>, [Record<string, unknown>]>()
+        .mockResolvedValue({
+          id: 'cs_test_abc',
+          url: 'https://checkout.stripe.com/session/abc',
+        });
       // The Stripe SDK client is constructed internally, not injected — overriding the method
       // directly on the real client instance is the simplest way to intercept the network call
       // without mocking the `stripe` package's constructor.
