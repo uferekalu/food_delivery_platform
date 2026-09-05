@@ -345,4 +345,187 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
     expect(reloaded?.riderPayoutId).not.toBeNull();
     expect(reloaded?.vendorPayoutId).not.toBe(reloaded?.riderPayoutId);
   });
+
+  describe('dashboards (docs/ROADMAP.md FDP-93)', () => {
+    it('listForVendor returns only that vendor’s own payouts, most recent first', async () => {
+      const older = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [],
+        grossAmount: 50,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'succeeded',
+        createdAt: new Date('2026-01-01'),
+      });
+      const newer = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [],
+        grossAmount: 75,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'succeeded',
+        createdAt: new Date('2026-02-01'),
+      });
+      await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-2', // a different vendor — must never show up
+        orderIds: [],
+        grossAmount: 999,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_2',
+        status: 'succeeded',
+      });
+
+      const result = await executionService.listForVendor(
+        'restaurant',
+        'restaurant-1',
+        1,
+        20,
+      );
+
+      expect(result.total).toBe(2);
+      expect(result.items.map((p) => p._id.toString())).toEqual([
+        newer._id.toString(),
+        older._id.toString(),
+      ]);
+    });
+
+    it('listAll applies status/vendorType/reconciliationRequired filters together', async () => {
+      await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [],
+        grossAmount: 50,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await payoutModel.create({
+        vendorType: 'rider',
+        vendorId: 'rider-1',
+        orderIds: [],
+        grossAmount: 15,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_2',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-2',
+        orderIds: [],
+        grossAmount: 30,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_3',
+        status: 'succeeded',
+        reconciliationRequired: false,
+      });
+
+      const result = await executionService.listAll({
+        page: 1,
+        limit: 20,
+        status: 'failed',
+        vendorType: 'restaurant',
+        reconciliationRequired: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.items[0].vendorId).toBe('restaurant-1');
+    });
+
+    it('resolveReconciliation(true) marks the payout succeeded without releasing its claimed orders', async () => {
+      const order = await createDeliveredOrder({
+        restaurantId: 'restaurant-1',
+        vendorPayoutId: 'placeholder',
+      });
+      const payout = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [order._id],
+        grossAmount: 85,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await orderModel
+        .updateOne({ _id: order._id }, { vendorPayoutId: payout._id.toString() })
+        .exec();
+
+      const resolved = await executionService.resolveReconciliation(
+        payout._id.toString(),
+        'admin-1',
+        true,
+      );
+
+      expect(resolved.status).toBe('succeeded');
+      expect(resolved.reconciliationRequired).toBe(false);
+      expect(resolved.reconciledBy).toBe('admin-1');
+      const reloadedOrder = await orderModel.findById(order._id).exec();
+      expect(reloadedOrder?.vendorPayoutId).toBe(payout._id.toString());
+    });
+
+    it('resolveReconciliation(false) marks the payout failed and releases its claimed orders back to the unpaid pool', async () => {
+      const order = await createDeliveredOrder({
+        restaurantId: 'restaurant-1',
+      });
+      const payout = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [order._id],
+        grossAmount: 85,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await orderModel
+        .updateOne({ _id: order._id }, { vendorPayoutId: payout._id.toString() })
+        .exec();
+
+      const resolved = await executionService.resolveReconciliation(
+        payout._id.toString(),
+        'admin-1',
+        false,
+      );
+
+      expect(resolved.status).toBe('failed');
+      expect(resolved.reconciliationRequired).toBe(false);
+      const reloadedOrder = await orderModel.findById(order._id).exec();
+      expect(reloadedOrder?.vendorPayoutId).toBeNull();
+    });
+
+    it('rejects resolving a payout that was never flagged for reconciliation', async () => {
+      const payout = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [],
+        grossAmount: 85,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'succeeded',
+        reconciliationRequired: false,
+      });
+
+      await expect(
+        executionService.resolveReconciliation(
+          payout._id.toString(),
+          'admin-1',
+          true,
+        ),
+      ).rejects.toThrow('This payout is not flagged for reconciliation');
+    });
+  });
 });

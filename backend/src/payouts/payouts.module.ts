@@ -11,6 +11,9 @@ import { Rider, RiderSchema } from '../riders/schemas/rider.schema';
 import { PaymentsModule } from '../payments/payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersModule } from '../users/users.module';
+import { RestaurantsModule } from '../restaurants/restaurants.module';
+import { StoresModule } from '../stores/stores.module';
+import { RidersModule } from '../riders/riders.module';
 import { PayoutsService } from './payouts.service';
 import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutSchedulerService } from './payout-scheduler.service';
@@ -39,6 +42,13 @@ import { PayoutsController } from './payouts.controller';
     PaymentsModule,
     NotificationsModule,
     UsersModule,
+    // Payout dashboards (docs/ROADMAP.md FDP-93) — PayoutsController needs the real
+    // RestaurantsService/StoresService/RidersService (ownership checks, `findMine`), not just
+    // the raw models the block above registers for PayoutExecutionService's bulk queries. Same
+    // non-circularity reasoning: nothing these three import depends back on PayoutsModule.
+    RestaurantsModule,
+    StoresModule,
+    RidersModule,
   ],
   controllers: [PayoutsController],
   providers: [PayoutsService, PayoutExecutionService, PayoutSchedulerService],

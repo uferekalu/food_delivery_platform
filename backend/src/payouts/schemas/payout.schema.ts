@@ -99,6 +99,19 @@ export class Payout {
    */
   @Prop({ type: Boolean, default: false, index: true })
   reconciliationRequired: boolean;
+
+  /**
+   * Set once (docs/ROADMAP.md FDP-93) by an admin's `POST /payouts/:id/resolve-reconciliation`
+   * — the human-in-the-loop close-out for a `reconciliationRequired` payout, after they've
+   * actually checked the provider's own dashboard for whether the transfer went through.
+   * `reconciledBy` is the admin user id, kept for audit purposes even though `reconciliationRequired`
+   * flipping to `false` is what actually changes behavior (the admin dashboard stops flagging it).
+   */
+  @Prop({ type: Date, default: null })
+  reconciledAt: Date | null;
+
+  @Prop({ type: String, default: null })
+  reconciledBy: string | null;
 }
 
 export type PayoutDocument = HydratedDocument<Payout>;

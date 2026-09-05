@@ -482,6 +482,12 @@
     "CANCELLED": "Cancelado",
     "REFUNDED": "Reembolsado"
   },
+  "PayoutStatus": {
+    "pending": "Pendiente",
+    "processing": "En proceso",
+    "succeeded": "Pagado",
+    "failed": "Fallido"
+  },
   "NotificationsPage": {
     "viewOrder": "Ver pedido",
     "markRead": "Marcar como leído",
@@ -744,9 +750,17 @@
     "manageCatalog": "Administrar catálogo",
     "orderQueue": "Cola de pedidos",
     "deliveryZones": "Zonas de entrega",
+    "payouts": "Pagos",
     "close": "Cerrar",
     "alsoRunARestaurant": "¿También tienes un restaurante?",
     "addRestaurant": "Añadir un restaurante"
+  },
+  "StorePayoutsPage": {
+    "payouts": "Pagos",
+    "storeNotFound": "Tienda no encontrada, o no tienes acceso a ella.",
+    "onboardingNotAvailableYet": "Conectar una cuenta de pago para tiendas aún no está disponible — esta página mostrará tu historial de pagos cuando lo esté.",
+    "noPayoutsYet": "Aún no hay pagos",
+    "payoutsAppearHere": "Los pagos aparecen aquí una vez que tu tienda tenga una cuenta conectada y pedidos entregados."
   },
   "NewStorePage": {
     "addAStore": "Añadir una tienda",
@@ -945,7 +959,10 @@
     "netEarned": "Neto ganado",
     "fromDeliveredOrders": "{count, plural, one {De # pedido entregado.} other {De # pedidos entregados.}}",
     "restaurantNotFound": "Restaurante no encontrado",
-    "mayNotExistOrNoAccess": "Puede que no exista, o que no tengas acceso a él."
+    "mayNotExistOrNoAccess": "Puede que no exista, o que no tengas acceso a él.",
+    "payoutHistory": "Historial de pagos",
+    "payoutHistoryDescription": "Tus pagos semanales de la plataforma, del más reciente al más antiguo.",
+    "pendingReconciliation": "Pendiente de revisión manual"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "No se pudo descargar el CSV",
@@ -1006,7 +1023,35 @@
     "users": "Usuarios",
     "promoCodes": "Códigos promocionales",
     "refunds": "Reembolsos",
+    "payouts": "Pagos",
     "adminDashboard": "Panel de administración"
+  },
+  "AdminPayoutsTab": {
+    "weeklyBatch": "Lote de pagos semanal",
+    "weeklyBatchDescription": "Se ejecuta automáticamente cada lunes a medianoche UTC. Úsalo para verificar que funciona, o para reintentar después de corregir la cuenta de pago de un vendedor.",
+    "runBatchNow": "Ejecutar lote ahora",
+    "batchComplete": "Lote de pagos completado",
+    "batchSummary": "{succeeded} exitosos, {failed} fallidos (se reintentarán en la próxima ejecución), {reconciliationNeeded} requieren revisión manual, {skipped} omitidos (sin cuenta activa para ese proveedor todavía).",
+    "couldNotRunBatch": "No se pudo ejecutar el lote de pagos",
+    "filterByStatus": "Filtrar por estado",
+    "filterByVendorType": "Filtrar por tipo de vendedor",
+    "allStatuses": "Todos los estados",
+    "allVendorTypes": "Todos los tipos de vendedor",
+    "vendorType_restaurant": "Restaurante",
+    "vendorType_store": "Tienda",
+    "vendorType_rider": "Repartidor",
+    "needsReconciliationOnly": "Solo los que requieren revisión",
+    "noPayoutsFound": "No se encontraron pagos",
+    "tryDifferentFilters": "Prueba con otro filtro",
+    "vendorLine": "{vendorType} · {vendorId}",
+    "resolve": "Resolver",
+    "resolveReconciliationTitle": "Resolver la revisión del pago",
+    "resolveReconciliationDescription": "Este pago de {amount} vía {provider} tuvo un resultado incierto — la solicitud puede o no haber llegado al proveedor antes de que este sistema perdiera el rastro.",
+    "checkProviderDashboardFirst": "Revisa el panel de {provider} en busca de una transferencia que coincida con este monto y fecha antes de elegir una respuesta a continuación.",
+    "transferDidNotHappen": "NO se realizó",
+    "transferDidHappen": "SÍ se realizó",
+    "reconciliationResolved": "Revisión del pago resuelta",
+    "couldNotResolve": "No se pudo resolver este pago"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Buscar por nombre o correo electrónico",
@@ -1277,7 +1322,9 @@
     "acceptedOrdersShowUpHere": "Los pedidos aceptados aparecerán aquí.",
     "totalEarnings": "Ganancias totales",
     "completedDeliveries": "Entregas completadas",
-    "deliveryHistory": "Historial de entregas"
+    "deliveryHistory": "Historial de entregas",
+    "payoutHistory": "Historial de pagos",
+    "payoutHistoryDescription": "Tus pagos semanales de la plataforma, del más reciente al más antiguo."
   },
   "RiderApplyPage": {
     "required": "Obligatorio",

@@ -482,6 +482,12 @@
     "CANCELLED": "Storniert",
     "REFUNDED": "Erstattet"
   },
+  "PayoutStatus": {
+    "pending": "Ausstehend",
+    "processing": "In Bearbeitung",
+    "succeeded": "Ausgezahlt",
+    "failed": "Fehlgeschlagen"
+  },
   "NotificationsPage": {
     "viewOrder": "Bestellung ansehen",
     "markRead": "Als gelesen markieren",
@@ -744,9 +750,17 @@
     "manageCatalog": "Katalog verwalten",
     "orderQueue": "Bestellwarteschlange",
     "deliveryZones": "Liefergebiete",
+    "payouts": "Auszahlungen",
     "close": "Schließen",
     "alsoRunARestaurant": "Betreibst du auch ein Restaurant?",
     "addRestaurant": "Restaurant hinzufügen"
+  },
+  "StorePayoutsPage": {
+    "payouts": "Auszahlungen",
+    "storeNotFound": "Shop nicht gefunden, oder du hast keinen Zugriff darauf.",
+    "onboardingNotAvailableYet": "Das Verbinden eines Auszahlungskontos für Shops ist noch nicht verfügbar — diese Seite zeigt deinen Auszahlungsverlauf, sobald es soweit ist.",
+    "noPayoutsYet": "Noch keine Auszahlungen",
+    "payoutsAppearHere": "Auszahlungen erscheinen hier, sobald dein Shop ein verbundenes Konto und gelieferte Bestellungen hat."
   },
   "NewStorePage": {
     "addAStore": "Shop hinzufügen",
@@ -945,7 +959,10 @@
     "netEarned": "Netto verdient",
     "fromDeliveredOrders": "{count, plural, one {Aus # gelieferter Bestellung.} other {Aus # gelieferten Bestellungen.}}",
     "restaurantNotFound": "Restaurant nicht gefunden",
-    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf."
+    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
+    "payoutHistory": "Auszahlungsverlauf",
+    "payoutHistoryDescription": "Deine wöchentlichen Auszahlungen von der Plattform, neueste zuerst.",
+    "pendingReconciliation": "Wartet auf manuelle Prüfung"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "CSV konnte nicht heruntergeladen werden",
@@ -1006,7 +1023,35 @@
     "users": "Nutzer",
     "promoCodes": "Rabattcodes",
     "refunds": "Rückerstattungen",
+    "payouts": "Auszahlungen",
     "adminDashboard": "Admin-Dashboard"
+  },
+  "AdminPayoutsTab": {
+    "weeklyBatch": "Wöchentlicher Auszahlungslauf",
+    "weeklyBatchDescription": "Läuft automatisch jeden Montag um Mitternacht UTC. Damit kannst du prüfen, ob alles funktioniert, oder es erneut versuchen, nachdem du das Auszahlungskonto eines Anbieters korrigiert hast.",
+    "runBatchNow": "Lauf jetzt starten",
+    "batchComplete": "Auszahlungslauf abgeschlossen",
+    "batchSummary": "{succeeded} erfolgreich, {failed} fehlgeschlagen (werden beim nächsten Lauf erneut versucht), {reconciliationNeeded} benötigen manuelle Prüfung, {skipped} übersprungen (noch kein aktives Konto für diesen Anbieter).",
+    "couldNotRunBatch": "Der Auszahlungslauf konnte nicht gestartet werden",
+    "filterByStatus": "Nach Status filtern",
+    "filterByVendorType": "Nach Anbietertyp filtern",
+    "allStatuses": "Alle Status",
+    "allVendorTypes": "Alle Anbietertypen",
+    "vendorType_restaurant": "Restaurant",
+    "vendorType_store": "Shop",
+    "vendorType_rider": "Fahrer",
+    "needsReconciliationOnly": "Nur mit Prüfbedarf",
+    "noPayoutsFound": "Keine Auszahlungen gefunden",
+    "tryDifferentFilters": "Versuche einen anderen Filter",
+    "vendorLine": "{vendorType} · {vendorId}",
+    "resolve": "Klären",
+    "resolveReconciliationTitle": "Auszahlungsprüfung klären",
+    "resolveReconciliationDescription": "Diese Auszahlung über {amount} via {provider} hatte ein unsicheres Ergebnis — die Anfrage hat den Anbieter möglicherweise erreicht oder auch nicht, bevor dieses System die Spur verlor.",
+    "checkProviderDashboardFirst": "Prüfe im {provider}-Dashboard, ob eine Überweisung mit diesem Betrag und Zeitpunkt vorliegt, bevor du unten eine Antwort auswählst.",
+    "transferDidNotHappen": "Sie ist NICHT erfolgt",
+    "transferDidHappen": "Sie IST erfolgt",
+    "reconciliationResolved": "Auszahlungsprüfung geklärt",
+    "couldNotResolve": "Diese Auszahlung konnte nicht geklärt werden"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Nach Name oder E-Mail suchen",
@@ -1277,7 +1322,9 @@
     "acceptedOrdersShowUpHere": "Angenommene Bestellungen erscheinen hier.",
     "totalEarnings": "Gesamteinnahmen",
     "completedDeliveries": "Abgeschlossene Lieferungen",
-    "deliveryHistory": "Lieferverlauf"
+    "deliveryHistory": "Lieferverlauf",
+    "payoutHistory": "Auszahlungsverlauf",
+    "payoutHistoryDescription": "Deine wöchentlichen Auszahlungen von der Plattform, neueste zuerst."
   },
   "RiderApplyPage": {
     "required": "Erforderlich",

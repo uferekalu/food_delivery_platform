@@ -482,6 +482,12 @@
     "CANCELLED": "Annulée",
     "REFUNDED": "Remboursée"
   },
+  "PayoutStatus": {
+    "pending": "En attente",
+    "processing": "En cours",
+    "succeeded": "Payé",
+    "failed": "Échoué"
+  },
   "NotificationsPage": {
     "viewOrder": "Voir la commande",
     "markRead": "Marquer comme lu",
@@ -744,9 +750,17 @@
     "manageCatalog": "Gérer le catalogue",
     "orderQueue": "File d'attente des commandes",
     "deliveryZones": "Zones de livraison",
+    "payouts": "Paiements",
     "close": "Fermer",
     "alsoRunARestaurant": "Vous gérez aussi un restaurant ?",
     "addRestaurant": "Ajouter un restaurant"
+  },
+  "StorePayoutsPage": {
+    "payouts": "Paiements",
+    "storeNotFound": "Boutique introuvable, ou vous n'y avez pas accès.",
+    "onboardingNotAvailableYet": "La connexion d'un compte de paiement pour les boutiques n'est pas encore disponible — cette page affichera votre historique de paiements une fois que ce sera le cas.",
+    "noPayoutsYet": "Aucun paiement pour le moment",
+    "payoutsAppearHere": "Les paiements apparaissent ici une fois que votre boutique a un compte connecté et des commandes livrées."
   },
   "NewStorePage": {
     "addAStore": "Ajouter une boutique",
@@ -945,7 +959,10 @@
     "netEarned": "Net gagné",
     "fromDeliveredOrders": "{count, plural, one {D'après # commande livrée.} other {D'après # commandes livrées.}}",
     "restaurantNotFound": "Restaurant introuvable",
-    "mayNotExistOrNoAccess": "Il se peut qu'il n'existe pas, ou que vous n'y ayez pas accès."
+    "mayNotExistOrNoAccess": "Il se peut qu'il n'existe pas, ou que vous n'y ayez pas accès.",
+    "payoutHistory": "Historique des paiements",
+    "payoutHistoryDescription": "Vos paiements hebdomadaires de la plateforme, du plus récent au plus ancien.",
+    "pendingReconciliation": "En attente de vérification manuelle"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "Impossible de télécharger le CSV",
@@ -1006,7 +1023,35 @@
     "users": "Utilisateurs",
     "promoCodes": "Codes promo",
     "refunds": "Remboursements",
+    "payouts": "Paiements",
     "adminDashboard": "Tableau de bord administrateur"
+  },
+  "AdminPayoutsTab": {
+    "weeklyBatch": "Lot de paiements hebdomadaire",
+    "weeklyBatchDescription": "S'exécute automatiquement chaque lundi à minuit UTC. Utilisez ceci pour vérifier que ça fonctionne, ou pour réessayer après avoir corrigé le compte de paiement d'un vendeur.",
+    "runBatchNow": "Exécuter le lot maintenant",
+    "batchComplete": "Lot de paiements terminé",
+    "batchSummary": "{succeeded} réussis, {failed} échoués (seront réessayés au prochain passage), {reconciliationNeeded} nécessitent une vérification manuelle, {skipped} ignorés (pas de compte actif pour ce fournisseur pour l'instant).",
+    "couldNotRunBatch": "Impossible d'exécuter le lot de paiements",
+    "filterByStatus": "Filtrer par statut",
+    "filterByVendorType": "Filtrer par type de vendeur",
+    "allStatuses": "Tous les statuts",
+    "allVendorTypes": "Tous les types de vendeurs",
+    "vendorType_restaurant": "Restaurant",
+    "vendorType_store": "Boutique",
+    "vendorType_rider": "Livreur",
+    "needsReconciliationOnly": "Nécessitant une vérification uniquement",
+    "noPayoutsFound": "Aucun paiement trouvé",
+    "tryDifferentFilters": "Essayez un autre filtre",
+    "vendorLine": "{vendorType} · {vendorId}",
+    "resolve": "Résoudre",
+    "resolveReconciliationTitle": "Résoudre la vérification du paiement",
+    "resolveReconciliationDescription": "Ce paiement de {amount} via {provider} a eu un résultat incertain — la demande a peut-être ou non atteint le fournisseur avant que ce système n'en perde la trace.",
+    "checkProviderDashboardFirst": "Vérifiez le tableau de bord {provider} pour un transfert correspondant à ce montant et cette date avant de choisir une réponse ci-dessous.",
+    "transferDidNotHappen": "Il n'a PAS abouti",
+    "transferDidHappen": "Il A abouti",
+    "reconciliationResolved": "Vérification du paiement résolue",
+    "couldNotResolve": "Impossible de résoudre ce paiement"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Rechercher par nom ou e-mail",
@@ -1277,7 +1322,9 @@
     "acceptedOrdersShowUpHere": "Les commandes acceptées apparaîtront ici.",
     "totalEarnings": "Revenus totaux",
     "completedDeliveries": "Livraisons terminées",
-    "deliveryHistory": "Historique des livraisons"
+    "deliveryHistory": "Historique des livraisons",
+    "payoutHistory": "Historique des paiements",
+    "payoutHistoryDescription": "Vos paiements hebdomadaires de la plateforme, du plus récent au plus ancien."
   },
   "RiderApplyPage": {
     "required": "Requis",
