@@ -15,10 +15,7 @@ import { Product, ProductDocument } from '../stores/schemas/product.schema';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
-import {
-  DeliveryZonesService,
-  FALLBACK_DELIVERY_FEE_RATE,
-} from '../delivery-zones/delivery-zones.service';
+import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
@@ -356,6 +353,7 @@ export class OrdersService {
 
     const subtotal = cart.subtotal;
     const deliveryFee = await this.deliveryZonesService.calculateFee(
+      'restaurant',
       restaurant,
       dto.deliveryAddress,
       subtotal,
@@ -376,7 +374,7 @@ export class OrdersService {
     if (dto.promoCode) {
       const validation = await this.promoCodesService.validate(
         dto.promoCode,
-        cart.restaurantId,
+        { sellerType: 'restaurant', sellerId: cart.restaurantId },
         subtotal,
       );
       if (!validation.valid) throw new BadRequestException(validation.reason);
@@ -446,12 +444,11 @@ export class OrdersService {
   }
 
   /**
-   * Store-catalog counterpart of `createRestaurantOrder` (docs/ROADMAP.md FDP-56). Mirrors its
-   * structure closely, with the differences a store actually has: Product availability
-   * (including stock, which a cooked-to-order restaurant dish never needs) instead of
-   * MenuItem.isAvailable, no delivery-zone pricing yet (stores don't have DeliveryZone
-   * documents — falls back to the same flat rate a zone-less/ungeocoded restaurant already
-   * uses), and no promo codes yet (PromoCode is restaurant-scoped only today). `cart` is passed
+   * Store-catalog counterpart of `createRestaurantOrder` (docs/ROADMAP.md FDP-56, brought to
+   * full parity with restaurant orders in FDP-90). Mirrors its structure closely, with the one
+   * remaining difference a store actually has: Product availability (including stock, which a
+   * cooked-to-order restaurant dish never needs) instead of MenuItem.isAvailable. Delivery-zone
+   * pricing and promo codes now both work identically to a restaurant order — `cart` is passed
    * in from the `createOrder` dispatcher, which already fetched it to decide which method to
    * call — refetching here would be redundant.
    */
@@ -462,11 +459,6 @@ export class OrdersService {
   ): Promise<OrderDocument> {
     if (!cart.storeId || cart.items.length === 0) {
       throw new BadRequestException('Your cart is empty');
-    }
-    if (dto.promoCode) {
-      throw new BadRequestException(
-        'Promo codes are not yet supported for this store',
-      );
     }
 
     const store = await this.storesService.findByIdOrThrow(cart.storeId);
@@ -511,17 +503,33 @@ export class OrdersService {
     }
 
     const subtotal = cart.subtotal;
-    // No DeliveryZone support for stores yet — same fallback rate DeliveryZonesService.
-    // calculateFee itself uses whenever a restaurant has no zone covering the distance.
-    const deliveryFee = round2(subtotal * FALLBACK_DELIVERY_FEE_RATE);
+    const deliveryFee = await this.deliveryZonesService.calculateFee(
+      'store',
+      store,
+      dto.deliveryAddress,
+      subtotal,
+    );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
     const tax = 0;
-    const discount = 0;
     // Same commission model as a restaurant order — see createRestaurantOrder's comment.
     // restaurantPayoutAmount's field name is legacy (kept for the reason on Order.schema.ts);
     // it means "what the seller is owed" for either seller type.
     const platformFeeAmount = round2(subtotal * PLATFORM_COMMISSION_RATE);
     const restaurantPayoutAmount = round2(subtotal - platformFeeAmount);
+
+    let discount = 0;
+    let redeemedPromoCodeId: string | null = null;
+    if (dto.promoCode) {
+      const validation = await this.promoCodesService.validate(
+        dto.promoCode,
+        { sellerType: 'store', sellerId: cart.storeId },
+        subtotal,
+      );
+      if (!validation.valid) throw new BadRequestException(validation.reason);
+      discount = round2(validation.discountAmount);
+      redeemedPromoCodeId = validation.promoCodeId;
+    }
+
     const total = Math.max(
       0,
       round2(subtotal + deliveryFee + serviceFee + tax - discount),
@@ -569,9 +577,11 @@ export class OrdersService {
       deliveryInstructions: dto.deliveryInstructions?.trim() ?? '',
       scheduledFor: dto.scheduledFor ? new Date(dto.scheduledFor) : null,
       estimatedDeliveryAt: null,
-      promoCode: null,
+      promoCode: dto.promoCode ?? null,
     });
 
+    if (redeemedPromoCodeId)
+      await this.promoCodesService.redeem(redeemedPromoCodeId);
     await this.cartService.clearCart(userId);
     return order;
   }

@@ -41,10 +41,21 @@ export class CreatePromoCodeDto {
   @Min(0)
   maxDiscountAmount?: number;
 
-  @ApiPropertyOptional({ description: 'null/omitted = platform-wide' })
+  @ApiPropertyOptional({
+    description:
+      'Restaurant-scoped code. Omit both this and storeId for a platform-wide code — at most one may be set.',
+  })
   @IsOptional()
   @IsMongoId()
   restaurantId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Store (grocery/pharmacy)-scoped code (docs/ROADMAP.md FDP-90). At most one of restaurantId/storeId may be set.',
+  })
+  @IsOptional()
+  @IsMongoId()
+  storeId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

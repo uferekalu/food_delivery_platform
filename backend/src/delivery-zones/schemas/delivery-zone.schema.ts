@@ -5,15 +5,25 @@ import { HydratedDocument, Types } from 'mongoose';
 // DeliveryZonesService.calculateFee) — the first zone whose radius covers the computed
 // distance wins, so zones should be set up as concentric rings (e.g. 0-3km, 0-8km, 0-15km),
 // not disjoint ranges.
+// Exactly one of restaurantId/storeId is ever set — a zone belongs to one seller
+// (docs/ROADMAP.md FDP-90), enforced in DeliveryZonesService.create, not here.
 @Schema({ timestamps: true })
 export class DeliveryZone {
   @Prop({
     type: Types.ObjectId,
     ref: 'Restaurant',
-    required: true,
+    default: null,
     index: true,
   })
-  restaurantId: Types.ObjectId;
+  restaurantId: Types.ObjectId | null;
+
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'Store',
+    default: null,
+    index: true,
+  })
+  storeId: Types.ObjectId | null;
 
   @Prop({ type: String, required: true, trim: true, maxlength: 100 })
   name: string;

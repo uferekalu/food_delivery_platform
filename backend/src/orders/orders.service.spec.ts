@@ -287,7 +287,7 @@ describe('OrdersService', () => {
       expect(cartAfter.items).toHaveLength(0);
     });
 
-    it('rejects a promo code on a store order', async () => {
+    it('rejects an unknown promo code on a store order', async () => {
       const store = await createApprovedStore();
       const product = await createTestProduct(store._id.toString());
       await cartService.addStoreItem(userId, {
@@ -300,6 +300,103 @@ describe('OrdersService', () => {
           promoCode: 'SAVE10',
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('applies a valid store-scoped promo code to a store order and redeems it (docs/ROADMAP.md FDP-90)', async () => {
+      const store = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString(), {
+        price: 100,
+      });
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+        qty: 2,
+      }); // subtotal 200
+      const promo = await promoCodesService.create({
+        code: 'STORE10',
+        discountType: 'percentage',
+        discountValue: 10,
+        storeId: store._id.toString(),
+      });
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress,
+        promoCode: 'STORE10',
+      });
+
+      expect(order.discount).toBe(20); // 10% of 200
+      expect(order.promoCode).toBe('STORE10');
+      expect(order.total).toBe(210); // 200 + 20 deliveryFee + 10 serviceFee - 20 discount
+
+      const updatedPromo = await promoCodesService.findAll();
+      expect(
+        updatedPromo.find((p) => p._id.toString() === promo._id.toString())
+          ?.usedCount,
+      ).toBe(1);
+    });
+
+    it('rejects a promo code scoped to a different store', async () => {
+      const store = await createApprovedStore();
+      const otherStore = await createApprovedStore();
+      const product = await createTestProduct(store._id.toString());
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+      });
+      await promoCodesService.create({
+        code: 'OTHERSTORE',
+        discountType: 'fixed',
+        discountValue: 5,
+        storeId: otherStore._id.toString(),
+      });
+
+      await expect(
+        ordersService.createOrder(userId, {
+          deliveryAddress: validAddress,
+          promoCode: 'OTHERSTORE',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('uses real zone-based delivery pricing for a store order, the same way a restaurant order does (docs/ROADMAP.md FDP-90)', async () => {
+      const store = await createApprovedStore();
+      await storeModel
+        .updateOne(
+          { _id: store._id },
+          {
+            address: {
+              line1: '1 Main St',
+              city: 'Lagos',
+              state: 'Lagos',
+              lat: 6.5,
+              lng: 3.3792,
+            },
+          },
+        )
+        .exec();
+      await deliveryZonesService.create('store', store._id.toString(), owner, {
+        name: 'Nearby',
+        maxDistanceKm: 20,
+        baseFee: 300,
+        perKmFee: 50,
+      });
+      const product = await createTestProduct(store._id.toString(), {
+        price: 100,
+      });
+      await cartService.addStoreItem(userId, {
+        productId: product._id.toString(),
+      });
+
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: {
+          line1: '2 Second St',
+          city: 'Lagos',
+          state: 'Lagos',
+          lat: 6.545, // ~5km away
+          lng: 3.3792,
+        },
+      });
+
+      expect(order.deliveryFee).toBeGreaterThan(300);
+      expect(order.deliveryFee).not.toBe(10); // not the flat 10% fallback
     });
 
     it('rejects checkout when a tracked product no longer has enough stock', async () => {
@@ -402,12 +499,17 @@ describe('OrdersService', () => {
         lat: 6.5,
         lng: 3.3792,
       });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Nearby',
-        maxDistanceKm: 20,
-        baseFee: 300,
-        perKmFee: 50,
-      });
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Nearby',
+          maxDistanceKm: 20,
+          baseFee: 300,
+          perKmFee: 50,
+        },
+      );
       const item = await createItem(restaurant._id.toString(), 100);
       await cartService.addItem(userId, { menuItemId: item._id.toString() });
 
@@ -434,12 +536,17 @@ describe('OrdersService', () => {
         lat: 6.5,
         lng: 3.3792,
       });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Nearby only',
-        maxDistanceKm: 1,
-        baseFee: 300,
-        perKmFee: 50,
-      });
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Nearby only',
+          maxDistanceKm: 1,
+          baseFee: 300,
+          perKmFee: 50,
+        },
+      );
       const item = await createItem(restaurant._id.toString(), 100);
       await cartService.addItem(userId, { menuItemId: item._id.toString() });
 
@@ -464,12 +571,17 @@ describe('OrdersService', () => {
         lat: 6.5,
         lng: 3.3792,
       });
-      await deliveryZonesService.create(restaurant._id.toString(), owner, {
-        name: 'Nearby',
-        maxDistanceKm: 20,
-        baseFee: 300,
-        perKmFee: 50,
-      });
+      await deliveryZonesService.create(
+        'restaurant',
+        restaurant._id.toString(),
+        owner,
+        {
+          name: 'Nearby',
+          maxDistanceKm: 20,
+          baseFee: 300,
+          perKmFee: 50,
+        },
+      );
       const item = await createItem(restaurant._id.toString(), 100);
       await cartService.addItem(userId, { menuItemId: item._id.toString() });
 

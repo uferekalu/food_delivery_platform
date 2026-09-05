@@ -241,15 +241,27 @@ describe('UsersService', () => {
         'Fraud reported by a customer',
       );
 
-      const byRole = await usersService.listAll({ role: 'restaurant_owner', page: 1, limit: 20 });
+      const byRole = await usersService.listAll({
+        role: 'restaurant_owner',
+        page: 1,
+        limit: 20,
+      });
       expect(byRole.items).toHaveLength(1);
       expect(byRole.items[0].email).toBe('owner@example.com');
 
-      const byStatus = await usersService.listAll({ status: 'suspended', page: 1, limit: 20 });
+      const byStatus = await usersService.listAll({
+        status: 'suspended',
+        page: 1,
+        limit: 20,
+      });
       expect(byStatus.total).toBe(1);
       expect(byStatus.items[0].status).toBe('suspended');
 
-      const bySearch = await usersService.listAll({ search: 'jane', page: 1, limit: 20 });
+      const bySearch = await usersService.listAll({
+        search: 'jane',
+        page: 1,
+        limit: 20,
+      });
       expect(bySearch.items).toHaveLength(1);
       expect(bySearch.items[0].name).toBe('Jane Doe');
     });
@@ -284,13 +296,21 @@ describe('UsersService', () => {
     it('refuses to let an admin suspend their own account', async () => {
       const user = await createUser();
       await expect(
-        usersService.suspend(user._id.toString(), user._id.toString(), 'Testing'),
+        usersService.suspend(
+          user._id.toString(),
+          user._id.toString(),
+          'Testing',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('refuses to suspend an already-suspended account', async () => {
       const user = await createUser();
-      await usersService.suspend(user._id.toString(), 'admin-id', 'First reason');
+      await usersService.suspend(
+        user._id.toString(),
+        'admin-id',
+        'First reason',
+      );
       await expect(
         usersService.suspend(user._id.toString(), 'admin-id', 'Second reason'),
       ).rejects.toThrow(BadRequestException);
@@ -308,9 +328,9 @@ describe('UsersService', () => {
 
     it('refuses to reactivate an account that is not suspended', async () => {
       const user = await createUser();
-      await expect(usersService.reactivate(user._id.toString())).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        usersService.reactivate(user._id.toString()),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

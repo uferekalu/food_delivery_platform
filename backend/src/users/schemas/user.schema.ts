@@ -81,7 +81,12 @@ export class User {
   // away; a still-valid ~15-min access token keeps working until it naturally expires, since
   // JwtAccessStrategy deliberately doesn't hit the DB on every request (see
   // docs/ARCHITECTURE.md §16) — an accepted small window, not an oversight.
-  @Prop({ type: String, enum: USER_STATUSES, required: true, default: 'active' })
+  @Prop({
+    type: String,
+    enum: USER_STATUSES,
+    required: true,
+    default: 'active',
+  })
   status: UserStatus;
 
   @Prop({ type: Date, default: null })

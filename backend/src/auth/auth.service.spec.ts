@@ -267,7 +267,10 @@ describe('AuthService', () => {
       usersService.findById.mockResolvedValue(user);
       usersService.findByEmailWithPassword.mockResolvedValue(user);
 
-      const { tokens } = await authService.login('jane@example.com', 'CorrectPass1');
+      const { tokens } = await authService.login(
+        'jane@example.com',
+        'CorrectPass1',
+      );
 
       user.status = 'suspended';
       await user.save();

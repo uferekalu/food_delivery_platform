@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import type { Types } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
-import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
+import { StoresService } from '../stores/stores.service';
 import type { Address } from '../common/schemas/address.schema';
 import { haversineDistanceKm } from '../common/utils/geo';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -13,7 +14,16 @@ import {
 import { CreateDeliveryZoneDto } from './dto/create-delivery-zone.dto';
 import { UpdateDeliveryZoneDto } from './dto/update-delivery-zone.dto';
 
-// Fallback used whenever real distance can't be computed (restaurant or delivery address is
+export type DeliveryZoneSellerType = 'restaurant' | 'store';
+
+// A minimal structural shape both RestaurantDocument and StoreDocument already satisfy — lets
+// calculateFee accept either without a restaurant-specific type (docs/ROADMAP.md FDP-90).
+export interface DeliveryZoneSeller {
+  _id: Types.ObjectId;
+  address: Address;
+}
+
+// Fallback used whenever real distance can't be computed (the seller or delivery address is
 // missing lat/lng, or no zone covers the computed distance) — same flat rate FDP-11 shipped
 // with, kept so checkout never breaks for an unzoned/ungeocoded address.
 export const FALLBACK_DELIVERY_FEE_RATE = 0.1;
@@ -31,75 +41,96 @@ export class DeliveryZonesService {
     @InjectModel(DeliveryZone.name)
     private readonly zoneModel: Model<DeliveryZoneDocument>,
     private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
   ) {}
 
+  // `restaurantId`/`storeId` fields store as plain strings, not real ObjectId instances, under
+  // this project's Mongoose 9 setup (see backend/CLAUDE.md's "Stack specifics" note) — always
+  // filter with the string id, never a raw ObjectId.
+  private sellerFilter(
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
+  ): Record<string, string> {
+    return sellerType === 'restaurant'
+      ? { restaurantId: sellerId }
+      : { storeId: sellerId };
+  }
+
   async list(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     requester: AccessTokenPayload,
   ): Promise<DeliveryZoneDocument[]> {
-    await this.assertOwnership(restaurantId, requester);
+    await this.assertOwnership(sellerType, sellerId, requester);
     return this.zoneModel
-      .find({ restaurantId })
+      .find(this.sellerFilter(sellerType, sellerId))
       .sort({ maxDistanceKm: 1 })
       .exec();
   }
 
   async create(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     requester: AccessTokenPayload,
     dto: CreateDeliveryZoneDto,
   ): Promise<DeliveryZoneDocument> {
-    await this.assertOwnership(restaurantId, requester);
-    return this.zoneModel.create({ ...dto, restaurantId });
+    await this.assertOwnership(sellerType, sellerId, requester);
+    return this.zoneModel.create({
+      ...dto,
+      ...this.sellerFilter(sellerType, sellerId),
+    });
   }
 
   async update(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     zoneId: string,
     requester: AccessTokenPayload,
     dto: UpdateDeliveryZoneDto,
   ): Promise<DeliveryZoneDocument> {
-    await this.assertOwnership(restaurantId, requester);
-    const zone = await this.findOrThrow(restaurantId, zoneId);
+    await this.assertOwnership(sellerType, sellerId, requester);
+    const zone = await this.findOrThrow(sellerType, sellerId, zoneId);
     Object.assign(zone, dto);
     return zone.save();
   }
 
   async delete(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     zoneId: string,
     requester: AccessTokenPayload,
   ): Promise<void> {
-    await this.assertOwnership(restaurantId, requester);
-    await this.findOrThrow(restaurantId, zoneId);
-    await this.zoneModel.deleteOne({ _id: zoneId, restaurantId }).exec();
+    await this.assertOwnership(sellerType, sellerId, requester);
+    await this.findOrThrow(sellerType, sellerId, zoneId);
+    await this.zoneModel
+      .deleteOne({ _id: zoneId, ...this.sellerFilter(sellerType, sellerId) })
+      .exec();
   }
 
   /**
    * Real distance-based delivery fee: `zone.baseFee + zone.perKmFee * distanceKm` for the
    * first active zone (ordered nearest-first) whose `maxDistanceKm` covers the haversine
-   * distance between the restaurant and the delivery address. Falls back to a flat percentage
+   * distance between the seller and the delivery address. Falls back to a flat percentage
    * of the subtotal when either coordinate is missing or no zone covers the distance, so
-   * checkout never breaks for a restaurant/address without usable geo data.
+   * checkout never breaks for a seller/address without usable geo data. Works identically for
+   * a restaurant or a store (docs/ROADMAP.md FDP-90) — `seller` only needs `_id`/`address`.
    */
   async calculateFee(
-    restaurant: RestaurantDocument,
+    sellerType: DeliveryZoneSellerType,
+    seller: DeliveryZoneSeller,
     deliveryAddress: Address,
     subtotal: number,
   ): Promise<number> {
-    const restaurantCoords = this.coordsOf(restaurant.address);
+    const sellerCoords = this.coordsOf(seller.address);
     const customerCoords = this.coordsOf(deliveryAddress);
 
-    if (restaurantCoords && customerCoords) {
-      const distanceKm = haversineDistanceKm(restaurantCoords, customerCoords);
-      // `restaurant._id` is a real ObjectId instance — the rest of this codebase always
-      // queries/compares ref fields via `.toString()` (see backend/CLAUDE.md's ownership
-      // pattern), never a raw ObjectId, because `@Prop({ type: Types.ObjectId })` fields end up
-      // stored as plain strings under this Mongoose version (`Types.ObjectId !==
-      // Schema.Types.ObjectId` as of Mongoose 9) — passing the ObjectId instance directly here
-      // silently matched zero documents.
+    if (sellerCoords && customerCoords) {
+      const distanceKm = haversineDistanceKm(sellerCoords, customerCoords);
       const zones = await this.zoneModel
-        .find({ restaurantId: restaurant._id.toString(), isActive: true })
+        .find({
+          ...this.sellerFilter(sellerType, seller._id.toString()),
+          isActive: true,
+        })
         .sort({ maxDistanceKm: 1 })
         .exec();
       const zone = zones.find((z) => distanceKm <= z.maxDistanceKm);
@@ -117,22 +148,29 @@ export class DeliveryZonesService {
   }
 
   private async findOrThrow(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     zoneId: string,
   ): Promise<DeliveryZoneDocument> {
     const zone = await this.zoneModel
-      .findOne({ _id: zoneId, restaurantId })
+      .findOne({ _id: zoneId, ...this.sellerFilter(sellerType, sellerId) })
       .exec();
     if (!zone) throw new NotFoundException('Delivery zone not found');
     return zone;
   }
 
   private async assertOwnership(
-    restaurantId: string,
+    sellerType: DeliveryZoneSellerType,
+    sellerId: string,
     requester: AccessTokenPayload,
   ): Promise<void> {
-    const restaurant =
-      await this.restaurantsService.findByIdOrThrow(restaurantId);
-    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    if (sellerType === 'restaurant') {
+      const restaurant =
+        await this.restaurantsService.findByIdOrThrow(sellerId);
+      this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    } else {
+      const store = await this.storesService.findByIdOrThrow(sellerId);
+      this.storesService.assertOwnerOrAdmin(store, requester);
+    }
   }
 }

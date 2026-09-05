@@ -31,9 +31,15 @@ export class PromoCode {
   @Prop({ type: Number, default: null })
   maxDiscountAmount: number | null;
 
-  // `null` = platform-wide; scoped to one restaurant otherwise.
+  // `null` = platform-wide; scoped to one restaurant otherwise. At most one of
+  // restaurantId/storeId is ever set (docs/ROADMAP.md FDP-90) — enforced in
+  // CreatePromoCodeDto/UpdatePromoCodeDto, not here, since Mongoose validators don't see
+  // sibling fields easily.
   @Prop({ type: Types.ObjectId, ref: 'Restaurant', default: null, index: true })
   restaurantId: Types.ObjectId | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'Store', default: null, index: true })
+  storeId: Types.ObjectId | null;
 
   @Prop({ type: Date, default: null })
   expiresAt: Date | null;
