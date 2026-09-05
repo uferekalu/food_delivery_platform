@@ -6,6 +6,8 @@ import { RequireRole } from "@/components/require-role";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
@@ -25,9 +27,72 @@ import {
   useSetupFlutterwavePayoutMutation,
   useSetupStripePayoutMutation,
 } from "@/lib/redux/services/payments-api";
+import { useListRestaurantPayoutsQuery } from "@/lib/redux/services/payouts-api";
+import type { PayoutStatus } from "@/lib/redux/services/payouts-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
+
+const PAYOUT_STATUS_BADGE_VARIANT: Record<PayoutStatus, BadgeProps["variant"]> = {
+  pending: "neutral",
+  processing: "info",
+  succeeded: "success",
+  failed: "danger",
+};
+
+/** Weekly payout execution (docs/ROADMAP.md FDP-92/93) — the actual per-attempt audit trail from
+ * the `Payout` collection, distinct from the aggregate revenue/commission stats above (which
+ * come straight from `Order` data and exist regardless of whether any payout has run yet). */
+function PayoutHistory({ restaurantId }: { restaurantId: string }) {
+  const t = useTranslations("EarningsPage");
+  const tStatus = useTranslations("PayoutStatus");
+  const locale = useLocale();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useListRestaurantPayoutsQuery({ restaurantId, page, limit: 10 });
+
+  if (isLoading) return <Skeleton className="h-32 w-full" />;
+  if (!data || data.items.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("payoutHistory")}</CardTitle>
+        <CardDescription>{t("payoutHistoryDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {data.items.map((payout) => (
+          <div
+            key={payout._id}
+            className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
+          >
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-text">
+                {new Date(payout.createdAt).toLocaleDateString(locale)}
+              </span>
+              <span className="text-xs text-text-muted">{payout.provider}</span>
+              {payout.reconciliationRequired && (
+                <span className="text-xs text-warning">{t("pendingReconciliation")}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-text">
+                {formatMoney(payout.grossAmount, payout.currency, locale)}
+              </span>
+              <Badge variant={PAYOUT_STATUS_BADGE_VARIANT[payout.status]}>
+                {tStatus(payout.status)}
+              </Badge>
+            </div>
+          </div>
+        ))}
+        {data.totalPages > 1 && (
+          <div className="pt-4">
+            <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function EarningsStat({ label, value }: { label: string; value: string }) {
   return (
@@ -352,6 +417,8 @@ function Earnings({ restaurant }: { restaurant: Restaurant }) {
           {!data.payoutSetupComplete && stripeAvailable && (
             <StripePayoutSetup restaurant={restaurant} />
           )}
+
+          <PayoutHistory restaurantId={restaurant._id} />
         </>
       )}
     </Container>

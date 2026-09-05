@@ -760,3 +760,45 @@ ticket; store/rider onboarding is FDP-93.
 the identical batch the cron runs — for verifying the pipeline without waiting a week, and for
 re-running after a vendor's account issue is fixed rather than waiting for next Monday. Full
 payout listing/dashboards are FDP-93.
+
+## 20. Payout dashboards & manual reconciliation (docs/ROADMAP.md FDP-93)
+
+Read/write surface on top of §19's ledger — no changes to how a payout is executed, only to how
+it's seen and, for the one `reconciliationRequired` case, manually closed out.
+
+**Endpoints** (all on `PayoutsController`, alongside the existing manual-trigger route):
+`GET /payouts` (admin — every payout, filterable by `status`/`vendorType`/
+`reconciliationRequired`), `GET /payouts/restaurants/:restaurantId` and
+`GET /payouts/stores/:storeId` (owner or admin — that vendor's own history, same
+`assertOwnerOrAdmin` pattern every other vendor-scoped endpoint already uses), and
+`GET /payouts/riders/me` (a rider's own history — resolves the caller's own `Rider` profile via
+`RidersService.findMine` first, since `Payout.vendorId` for a rider is the **Rider document id**,
+not the User id, and there's no way to derive one from the other without the lookup).
+
+**`PayoutExecutionService.resolveReconciliation`** is the human-in-the-loop close-out for a
+`reconciliationRequired` payout (`PATCH /payouts/:id/resolve-reconciliation`, admin-only) — after
+an admin has actually checked the provider's own dashboard for a transfer matching the attempt's
+amount/timing. Two new `Payout` fields, `reconciledAt`/`reconciledBy`, record who closed it out
+and when, purely for audit purposes (the behavior change is `reconciliationRequired` flipping to
+`false`, not these). Two outcomes, matching exactly what a clean rejection vs. an ambiguous
+failure would have each done automatically had the outcome been known in the moment:
+`transferActuallySucceeded: true` leaves the claimed orders exactly as they are (they genuinely
+were paid); `false` releases them back to the unpaid pool so the next Monday run retries them.
+
+**Frontend**: restaurant owners see a "Payout history" section on their existing Earnings page
+(`dashboard/restaurants/[id]/earnings`) alongside the pre-existing revenue/onboarding UI; riders
+get the same section added to their deliveries page. Stores get a new, minimal
+`dashboard/stores/[id]/payouts` page — history only, no revenue breakdown (there's no store
+equivalent of `OrdersService.getEarningsSummary` yet, a separate pre-existing gap this ticket
+doesn't fix) and an explicit "onboarding isn't available yet" notice, since store payout-account
+onboarding doesn't exist until FDP-94. Admins get a new "Payouts" tab: the existing manual-batch
+trigger, filterable list, and a resolve-reconciliation modal that makes the admin explicitly
+choose "it did / did not go through" rather than a single ambiguous "resolve" button — the whole
+point of `reconciliationRequired` is that this determination has to come from a human who actually
+checked, not from this system guessing.
+
+**Deliberately out of scope, staged for later tickets**: store/rider payout-account onboarding
+(FDP-94 — until then, their payout history sections/pages will legitimately stay empty, which is
+expected, not a bug) and the actual cutover of §14's instant charge-time split (a later ticket,
+once onboarding exists for every vendor type and the dashboards built here have had a chance to
+prove the batch out in practice).

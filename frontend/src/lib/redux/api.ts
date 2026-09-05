@@ -124,6 +124,7 @@ export const api = createApi({
     "PromoCode",
     "AdminAnalytics",
     "User",
+    "Payout",
   ],
   endpoints: () => ({}),
 });

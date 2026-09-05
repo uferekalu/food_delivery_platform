@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import type { PaginatedResult } from '../restaurants/restaurants.service';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
 import { Payout, PayoutDocument } from './schemas/payout.schema';
 import type { PayoutVendorType } from './schemas/payout.schema';
@@ -473,5 +479,105 @@ export class PayoutExecutionService {
     } catch (error) {
       this.logger.error('Failed to notify admins about a payout issue', error);
     }
+  }
+
+  // --- Payout dashboards (docs/ROADMAP.md FDP-93) ---
+
+  /** A vendor/rider's own payout history, oldest-attempt-last — the same audit trail an admin
+   * sees for them, scoped down to just their own records. Caller is responsible for the
+   * ownership check (route-level, same pattern as every other vendor-scoped endpoint). */
+  async listForVendor(
+    vendorType: PayoutVendorType,
+    vendorId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<PayoutDocument>> {
+    const filter = { vendorType, vendorId };
+    const [items, total] = await Promise.all([
+      this.payoutModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      this.payoutModel.countDocuments(filter).exec(),
+    ]);
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /** Every payout, across every vendor/rider — the admin view, optionally filtered. */
+  async listAll(query: {
+    page: number;
+    limit: number;
+    status?: PayoutDocument['status'];
+    vendorType?: PayoutVendorType;
+    reconciliationRequired?: boolean;
+  }): Promise<PaginatedResult<PayoutDocument>> {
+    const filter: Record<string, unknown> = {};
+    if (query.status) filter.status = query.status;
+    if (query.vendorType) filter.vendorType = query.vendorType;
+    if (query.reconciliationRequired !== undefined) {
+      filter.reconciliationRequired = query.reconciliationRequired;
+    }
+    const [items, total] = await Promise.all([
+      this.payoutModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .exec(),
+      this.payoutModel.countDocuments(filter).exec(),
+    ]);
+    return {
+      items,
+      total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.ceil(total / query.limit),
+    };
+  }
+
+  /**
+   * The human-in-the-loop close-out for a `reconciliationRequired` payout — an admin has
+   * actually checked the provider's own dashboard for a transfer matching this attempt's
+   * reference/amount/timing and is telling this system what they found.
+   *
+   * `transferActuallySucceeded: true` means the admin confirmed the money DID move (the request
+   * reached the provider and completed, this system just never got the response) — the claimed
+   * orders stay claimed exactly as they are, since they genuinely were paid. `false` means the
+   * admin confirmed it did NOT move — the claimed orders are released back to the unpaid pool so
+   * they're picked up by the next weekly run, same as a confirmed clean rejection would have been
+   * at the time, had the outcome been known then.
+   */
+  async resolveReconciliation(
+    payoutId: string,
+    adminUserId: string,
+    transferActuallySucceeded: boolean,
+  ): Promise<PayoutDocument> {
+    const payout = await this.payoutModel.findById(payoutId).exec();
+    if (!payout) throw new NotFoundException('Payout not found');
+    if (!payout.reconciliationRequired) {
+      throw new BadRequestException(
+        'This payout is not flagged for reconciliation',
+      );
+    }
+
+    payout.reconciliationRequired = false;
+    payout.reconciledAt = new Date();
+    payout.reconciledBy = adminUserId;
+    if (transferActuallySucceeded) {
+      payout.status = 'succeeded';
+    } else {
+      payout.status = 'failed';
+      const claimField: ClaimField =
+        payout.vendorType === 'rider' ? 'riderPayoutId' : 'vendorPayoutId';
+      await this.orderModel
+        .updateMany(
+          { [claimField]: payout._id.toString() },
+          { $set: { [claimField]: null } },
+        )
+        .exec();
+    }
+    return payout.save();
   }
 }

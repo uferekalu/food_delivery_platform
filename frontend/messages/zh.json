@@ -482,6 +482,12 @@
     "CANCELLED": "已取消",
     "REFUNDED": "已退款"
   },
+  "PayoutStatus": {
+    "pending": "待处理",
+    "processing": "处理中",
+    "succeeded": "已支付",
+    "failed": "失败"
+  },
   "NotificationsPage": {
     "viewOrder": "查看订单",
     "markRead": "标记为已读",
@@ -744,9 +750,17 @@
     "manageCatalog": "管理商品目录",
     "orderQueue": "订单队列",
     "deliveryZones": "配送区域",
+    "payouts": "打款",
     "close": "打烊",
     "alsoRunARestaurant": "还经营着一家餐厅吗？",
     "addRestaurant": "添加餐厅"
+  },
+  "StorePayoutsPage": {
+    "payouts": "打款",
+    "storeNotFound": "未找到该店铺，或你无权访问。",
+    "onboardingNotAvailableYet": "店铺打款账户的连接功能暂未开放——一旦开放，此页面将显示你的打款记录。",
+    "noPayoutsYet": "暂无打款记录",
+    "payoutsAppearHere": "一旦你的店铺绑定了账户并有订单送达，打款记录将显示在这里。"
   },
   "NewStorePage": {
     "addAStore": "添加店铺",
@@ -945,7 +959,10 @@
     "netEarned": "净收益",
     "fromDeliveredOrders": "来自 {count} 笔已完成订单。",
     "restaurantNotFound": "未找到该餐厅",
-    "mayNotExistOrNoAccess": "该餐厅可能不存在，或你无权访问。"
+    "mayNotExistOrNoAccess": "该餐厅可能不存在，或你无权访问。",
+    "payoutHistory": "打款记录",
+    "payoutHistoryDescription": "平台向你发放的每周打款，按最近到最早排序。",
+    "pendingReconciliation": "待人工核实"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "无法下载 CSV 文件",
@@ -1006,7 +1023,35 @@
     "users": "用户",
     "promoCodes": "优惠码",
     "refunds": "退款",
+    "payouts": "打款",
     "adminDashboard": "管理员仪表盘"
+  },
+  "AdminPayoutsTab": {
+    "weeklyBatch": "每周打款批次",
+    "weeklyBatchDescription": "每周一 UTC 时间午夜自动运行。可用它来验证是否正常工作，或在修复商家的打款账户后重新运行。",
+    "runBatchNow": "立即运行批次",
+    "batchComplete": "打款批次已完成",
+    "batchSummary": "成功 {succeeded} 笔，失败 {failed} 笔（下次运行会重试），{reconciliationNeeded} 笔需要人工核实，跳过 {skipped} 笔（该渠道尚无有效账户）。",
+    "couldNotRunBatch": "无法运行打款批次",
+    "filterByStatus": "按状态筛选",
+    "filterByVendorType": "按商家类型筛选",
+    "allStatuses": "全部状态",
+    "allVendorTypes": "全部商家类型",
+    "vendorType_restaurant": "餐厅",
+    "vendorType_store": "店铺",
+    "vendorType_rider": "骑手",
+    "needsReconciliationOnly": "仅显示需核实的",
+    "noPayoutsFound": "未找到打款记录",
+    "tryDifferentFilters": "请尝试其他筛选条件",
+    "vendorLine": "{vendorType} · {vendorId}",
+    "resolve": "处理",
+    "resolveReconciliationTitle": "处理打款核实",
+    "resolveReconciliationDescription": "这笔通过 {provider} 发起的 {amount} 打款结果不明——请求可能已到达渠道方，也可能没有，系统随后丢失了追踪。",
+    "checkProviderDashboardFirst": "请先在 {provider} 后台查看是否有与此金额和时间匹配的转账记录，再在下方选择答案。",
+    "transferDidNotHappen": "转账未成功",
+    "transferDidHappen": "转账已成功",
+    "reconciliationResolved": "打款核实已处理",
+    "couldNotResolve": "无法处理该笔打款"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "按姓名或邮箱搜索",
@@ -1277,7 +1322,9 @@
     "acceptedOrdersShowUpHere": "已接受的订单将显示在这里。",
     "totalEarnings": "总收入",
     "completedDeliveries": "已完成配送",
-    "deliveryHistory": "配送历史"
+    "deliveryHistory": "配送历史",
+    "payoutHistory": "打款记录",
+    "payoutHistoryDescription": "平台向你发放的每周打款，按最近到最早排序。"
   },
   "RiderApplyPage": {
     "required": "必填",

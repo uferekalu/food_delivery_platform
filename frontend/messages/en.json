@@ -482,6 +482,12 @@
     "CANCELLED": "Cancelled",
     "REFUNDED": "Refunded"
   },
+  "PayoutStatus": {
+    "pending": "Pending",
+    "processing": "Processing",
+    "succeeded": "Paid",
+    "failed": "Failed"
+  },
   "NotificationsPage": {
     "viewOrder": "View order",
     "markRead": "Mark read",
@@ -744,9 +750,17 @@
     "manageCatalog": "Manage catalog",
     "orderQueue": "Order queue",
     "deliveryZones": "Delivery zones",
+    "payouts": "Payouts",
     "close": "Close",
     "alsoRunARestaurant": "Also run a restaurant?",
     "addRestaurant": "Add a restaurant"
+  },
+  "StorePayoutsPage": {
+    "payouts": "Payouts",
+    "storeNotFound": "Store not found, or you don't have access to it.",
+    "onboardingNotAvailableYet": "Connecting a payout account for stores isn't available yet — this page will show your payout history once it is.",
+    "noPayoutsYet": "No payouts yet",
+    "payoutsAppearHere": "Payouts appear here once your store has a connected account and delivered orders."
   },
   "NewStorePage": {
     "addAStore": "Add a store",
@@ -945,7 +959,10 @@
     "netEarned": "Net earned",
     "fromDeliveredOrders": "{count, plural, one {From # delivered order.} other {From # delivered orders.}}",
     "restaurantNotFound": "Restaurant not found",
-    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it."
+    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
+    "payoutHistory": "Payout history",
+    "payoutHistoryDescription": "Your weekly payouts from the platform, most recent first.",
+    "pendingReconciliation": "Pending manual review"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "Couldn't download CSV",
@@ -1006,7 +1023,35 @@
     "users": "Users",
     "promoCodes": "Promo codes",
     "refunds": "Refunds",
+    "payouts": "Payouts",
     "adminDashboard": "Admin dashboard"
+  },
+  "AdminPayoutsTab": {
+    "weeklyBatch": "Weekly payout batch",
+    "weeklyBatchDescription": "Runs automatically every Monday at midnight UTC. Use this to verify it's working, or to retry after fixing a vendor's payout account.",
+    "runBatchNow": "Run batch now",
+    "batchComplete": "Payout batch complete",
+    "batchSummary": "{succeeded} succeeded, {failed} failed (will retry next run), {reconciliationNeeded} need manual review, {skipped} skipped (no active account for that provider yet).",
+    "couldNotRunBatch": "Couldn't run the payout batch",
+    "filterByStatus": "Filter by status",
+    "filterByVendorType": "Filter by vendor type",
+    "allStatuses": "All statuses",
+    "allVendorTypes": "All vendor types",
+    "vendorType_restaurant": "Restaurant",
+    "vendorType_store": "Store",
+    "vendorType_rider": "Rider",
+    "needsReconciliationOnly": "Needs review only",
+    "noPayoutsFound": "No payouts found",
+    "tryDifferentFilters": "Try a different filter",
+    "vendorLine": "{vendorType} · {vendorId}",
+    "resolve": "Resolve",
+    "resolveReconciliationTitle": "Resolve payout reconciliation",
+    "resolveReconciliationDescription": "This {amount} payout via {provider} had an uncertain outcome — the request may or may not have reached the provider before this system lost track of it.",
+    "checkProviderDashboardFirst": "Check the {provider} dashboard for a transfer matching this amount and time before choosing an answer below.",
+    "transferDidNotHappen": "It did NOT go through",
+    "transferDidHappen": "It DID go through",
+    "reconciliationResolved": "Payout reconciliation resolved",
+    "couldNotResolve": "Couldn't resolve this payout"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Search by name or email",
@@ -1277,7 +1322,9 @@
     "acceptedOrdersShowUpHere": "Accepted orders will show up here.",
     "totalEarnings": "Total earnings",
     "completedDeliveries": "Completed deliveries",
-    "deliveryHistory": "Delivery history"
+    "deliveryHistory": "Delivery history",
+    "payoutHistory": "Payout history",
+    "payoutHistoryDescription": "Your weekly payouts from the platform, most recent first."
   },
   "RiderApplyPage": {
     "required": "Required",
