@@ -408,4 +408,131 @@ describe('PaystackAdapter', () => {
       );
     });
   });
+
+  describe('transfer (docs/ROADMAP.md FDP-92)', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    const params = {
+      subaccountReference: 'ACCT_test123',
+      amount: 85,
+      currency: 'NGN',
+      reference: 'payout-1',
+      reason: 'Weekly payout',
+    };
+
+    it('creates a subaccount recipient then transfers to it, returning the transfer_code', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: true,
+              data: { recipient_code: 'RCP_abc' },
+            }),
+        })
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: true,
+              data: { transfer_code: 'TRF_xyz', reference: 'payout-1' },
+            }),
+        });
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      const result = await adapter.transfer(params);
+
+      expect(result).toEqual({ transferReference: 'TRF_xyz' });
+      const [, recipientInit] = fetchMock.mock.calls[0] as [
+        string,
+        RequestInit,
+      ];
+      const recipientBody = JSON.parse(recipientInit.body as string) as Record<
+        string,
+        unknown
+      >;
+      expect(recipientBody).toEqual({
+        type: 'subaccount',
+        subaccount: 'ACCT_test123',
+        currency: 'NGN',
+      });
+      const [, transferInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+      const transferBody = JSON.parse(transferInit.body as string) as {
+        amount: number;
+        recipient: string;
+      };
+      expect(transferBody.amount).toBe(8500); // 85 NGN -> kobo
+      expect(transferBody.recipient).toBe('RCP_abc');
+    });
+
+    it('throws a plain Error on a confirmed recipient-creation rejection (safe to retry)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({ status: false, message: 'Invalid subaccount' }),
+      }) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.transfer(params)).rejects.toThrow(
+        'Invalid subaccount',
+      );
+    });
+
+    it('throws a plain Error on a confirmed transfer rejection (safe to retry)', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: true,
+              data: { recipient_code: 'RCP_abc' },
+            }),
+        })
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: false,
+              message: 'Insufficient balance',
+            }),
+        });
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.transfer(params)).rejects.toThrow(
+        'Insufficient balance',
+      );
+    });
+
+    it('throws TransferOutcomeUnknownError (not a plain Error) when recipient creation hits a network error — outcome genuinely unknown', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('fetch failed')) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.transfer(params)).rejects.toMatchObject({
+        name: 'TransferOutcomeUnknownError',
+      });
+    });
+
+    it('throws TransferOutcomeUnknownError when the transfer call itself hits a network error, even though the recipient was confirmed created', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: true,
+              data: { recipient_code: 'RCP_abc' },
+            }),
+        })
+        .mockRejectedValueOnce(new Error('socket hang up'));
+      global.fetch = fetchMock as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.transfer(params)).rejects.toMatchObject({
+        name: 'TransferOutcomeUnknownError',
+      });
+    });
+  });
 });

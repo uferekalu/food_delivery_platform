@@ -10,6 +10,9 @@ export const NOTIFICATION_TYPES = [
   'new_order',
   'payment_failed',
   'payout_account_changed',
+  'payout_succeeded',
+  'payout_failed',
+  'payout_reconciliation_needed',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

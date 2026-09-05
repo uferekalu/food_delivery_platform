@@ -1178,6 +1178,31 @@ describe('OrdersService', () => {
       expect(updated.paymentProvider).toBe('stripe');
       expect(updated.paymentRef).toBe('cs_test_abc123');
       expect(updated.status).toBe('PENDING_PAYMENT');
+      expect(updated.settledViaInstantSplit).toBe(false); // default when omitted
+    });
+
+    it("setPaymentRef records settledViaInstantSplit when passed, and overwrites it on a later attempt rather than accumulating (docs/ROADMAP.md FDP-92) — mirrors paymentProvider's own 'latest attempt wins' semantics", async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PENDING_PAYMENT',
+      );
+
+      const first = await ordersService.setPaymentRef(
+        order,
+        'stripe',
+        'cs_test_split',
+        true,
+      );
+      expect(first.settledViaInstantSplit).toBe(true);
+
+      const second = await ordersService.setPaymentRef(
+        order,
+        'stripe',
+        'cs_test_no_split',
+        false,
+      );
+      expect(second.settledViaInstantSplit).toBe(false);
     });
 
     it('findByPaymentRef finds the order that ref was set on', async () => {

@@ -20,6 +20,15 @@ export type PayoutAccountStatus = (typeof PAYOUT_ACCOUNT_STATUSES)[number];
  * `null` with `status: 'pending'` until a real onboarding flow (FDP-52/53/54 for restaurants)
  * actually creates one. Until a provider has an `active` entry here, that provider's orders for
  * this vendor settle to the platform's own account, not the vendor's.
+ *
+ * `bankCode`/`accountNumber` (FDP-92) are populated for Paystack/Flutterwave alongside
+ * `reference` at onboarding time — already resolved once via each adapter's `resolveAccount`
+ * before the subaccount was created, just not previously persisted. Needed for real payout
+ * execution: Flutterwave's Transfers API has no "pay this subaccount" call, only a standalone
+ * bank transfer (`account_bank`/`account_number`), so the raw bank details have to be on hand.
+ * Paystack *can* transfer straight to a subaccount reference (no bank details needed), and
+ * Stripe's `reference` (a connected account id) is everything a Stripe transfer needs — both
+ * leave these two fields `null`.
  */
 @Schema({ _id: false })
 export class PayoutAccount {
@@ -36,6 +45,12 @@ export class PayoutAccount {
 
   @Prop({ type: String, default: null })
   reference: string | null;
+
+  @Prop({ type: String, default: null })
+  bankCode: string | null;
+
+  @Prop({ type: String, default: null })
+  accountNumber: string | null;
 }
 
 export const PayoutAccountSchema = SchemaFactory.createForClass(PayoutAccount);

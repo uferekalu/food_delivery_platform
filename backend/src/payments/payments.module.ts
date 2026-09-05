@@ -41,5 +41,10 @@ import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
     PaystackAdapter,
     FlutterwaveAdapter,
   ],
+  // The three adapters are exported (docs/ROADMAP.md FDP-92) so PayoutsModule can reuse them for
+  // real transfer execution rather than instantiating a second, redundant set of provider clients
+  // — safe to import PaymentsModule from PayoutsModule since nothing PaymentsModule imports
+  // (OrdersModule, RestaurantsModule, NotificationsModule, UsersModule) depends on PayoutsModule.
+  exports: [StripeAdapter, PaystackAdapter, FlutterwaveAdapter],
 })
 export class PaymentsModule {}

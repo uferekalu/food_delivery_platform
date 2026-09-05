@@ -136,6 +136,7 @@ export class PaystackPayoutsController {
       'paystack',
       'active',
       subaccountCode,
+      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
     );
 
     this.notifyPayoutAccountChanged(updated, hadActiveAccount);

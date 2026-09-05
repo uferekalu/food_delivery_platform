@@ -8,6 +8,7 @@ import type {
   VerifyPaymentResult,
   WebhookEvent,
 } from './payment-adapter.interface';
+import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
 
 const BASE_URL = 'https://api.paystack.co';
 
@@ -52,6 +53,18 @@ interface PaystackResolveAccountResponse {
 interface PaystackCreateSubaccountResponse {
   status: boolean;
   data?: { subaccount_code: string };
+  message?: string;
+}
+
+interface PaystackCreateRecipientResponse {
+  status: boolean;
+  data?: { recipient_code: string };
+  message?: string;
+}
+
+interface PaystackTransferResponse {
+  status: boolean;
+  data?: { transfer_code: string; reference: string };
   message?: string;
 }
 
@@ -269,5 +282,88 @@ export class PaystackAdapter implements PaymentAdapter {
       );
     }
     return { subaccountCode: result.data.subaccount_code };
+  }
+
+  // --- Weekly payout execution (docs/ROADMAP.md FDP-92) ---
+
+  /**
+   * Pays a restaurant/store's own subaccount directly (`type: 'subaccount'` recipient) — unlike
+   * Flutterwave, Paystack's Transfers API can target a subaccount without re-supplying bank
+   * details, so `PayoutAccount.bankCode`/`accountNumber` aren't needed here. A fresh recipient is
+   * created on every call rather than cached: Paystack accepts repeat recipient creation for the
+   * same subaccount without complaint (confirmed against its docs), and this only runs weekly, so
+   * there's no hot-path cost to avoid.
+   *
+   * Operational prerequisite, not something this code can satisfy: Paystack transfers require
+   * either OTP finalization (`POST /transfer/finalize_transfer`, needs a human with a one-time
+   * code) or "Disable OTP" turned on for the account in the Paystack dashboard. This platform's
+   * live Paystack account must have OTP disabled for transfers, or every weekly batch's Paystack
+   * leg will come back rejected (see docs/ARCHITECTURE.md §14).
+   *
+   * A thrown network-layer error (the request never got a response) is reported as
+   * `TransferOutcomeUnknownError` — the money may or may not have moved — never as a plain
+   * `Error`, which the caller would treat as a confirmed, safe-to-retry rejection.
+   */
+  async transfer(params: {
+    subaccountReference: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    reason: string;
+  }): Promise<{ transferReference: string }> {
+    let recipient: PaystackCreateRecipientResponse;
+    try {
+      recipient = await this.request<PaystackCreateRecipientResponse>(
+        '/transferrecipient',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'subaccount',
+            subaccount: params.subaccountReference,
+            currency: params.currency.toUpperCase(),
+          }),
+        },
+      );
+    } catch (error) {
+      throw new TransferOutcomeUnknownError(
+        `Paystack transfer-recipient creation outcome unknown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
+    if (!recipient.status || !recipient.data) {
+      // A clean, confirmed rejection — the transfer itself was never even attempted, so no money
+      // could possibly have moved.
+      throw new Error(
+        recipient.message ?? 'Could not create the Paystack transfer recipient',
+      );
+    }
+
+    let transfer: PaystackTransferResponse;
+    try {
+      transfer = await this.request<PaystackTransferResponse>('/transfer', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'balance',
+          amount: Math.round(params.amount * 100),
+          recipient: recipient.data.recipient_code,
+          reason: params.reason,
+          reference: params.reference,
+          currency: params.currency.toUpperCase(),
+        }),
+      });
+    } catch (error) {
+      throw new TransferOutcomeUnknownError(
+        `Paystack transfer outcome unknown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
+    if (!transfer.status || !transfer.data) {
+      throw new Error(transfer.message ?? 'Paystack transfer failed');
+    }
+    return { transferReference: transfer.data.transfer_code };
   }
 }

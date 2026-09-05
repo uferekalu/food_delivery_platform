@@ -103,9 +103,25 @@ describe('PayoutsService', () => {
         'restaurant-1',
       );
       expect(result).toHaveLength(1);
+      expect(result[0].provider).toBe('stripe');
       expect(result[0].currency).toBe('NGN');
       expect(result[0].grossAmount).toBe(135);
       expect(result[0].orderIds).toHaveLength(2);
+    });
+
+    it('excludes an order already settled via the instant charge-time split (docs/ROADMAP.md FDP-92) — paying it out again would double-pay the vendor', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        settledViaInstantSplit: true,
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+      expect(result).toEqual([]);
     });
 
     it('excludes orders already included in a payout', async () => {
@@ -199,6 +215,35 @@ describe('PayoutsService', () => {
       expect(result[0].currency).toBe('NGN');
       expect(result[0].grossAmount).toBe(85);
     });
+
+    it('keeps orders from the same currency but different providers in separate groups', async () => {
+      // Real transfer execution (docs/ROADMAP.md FDP-92) has to send a group's payout out
+      // through the same provider that actually collected the money — merging them here would
+      // make that impossible to do correctly downstream.
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+      });
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'paystack',
+        restaurantPayoutAmount: 50,
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+      expect(result).toHaveLength(2);
+      expect(result.find((r) => r.provider === 'stripe')?.grossAmount).toBe(85);
+      expect(result.find((r) => r.provider === 'paystack')?.grossAmount).toBe(
+        50,
+      );
+    });
   });
 
   describe('getUnpaidRiderEarnings', () => {
@@ -220,6 +265,7 @@ describe('PayoutsService', () => {
 
       const result = await payoutsService.getUnpaidRiderEarnings('rider-1');
       expect(result).toHaveLength(1);
+      expect(result[0].provider).toBe('stripe');
       expect(result[0].currency).toBe('NGN');
       expect(result[0].grossAmount).toBe(40);
     });

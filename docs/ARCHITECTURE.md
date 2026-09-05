@@ -492,14 +492,26 @@ account, confirmed live that a destination account missing the `transfers` capab
 `pending`) is rejected outright by Stripe, which is exactly the gate this codebase relies on
 rather than re-checking capability status itself before charging.
 
-*(This section describes the instant charge-time split model, still what's actually live today.
-docs/ROADMAP.md FDP-91 onward is building a platform-controlled weekly batch payout as a
-deliberate staged rollout, not a single big-bang cutover — FDP-91 lays down the ledger schema
-foundation (§18) without touching this instant-split path at all, so a vendor's payouts never
-have a gap where neither mechanism is live. The actual cutover (removing this section's
-provider-split calls from `PaymentsService.initiatePayment`, once the batch job and its Transfer-
-API execution are built and tested) happens in a later ticket in this same sequence, and that's
-when this section gets rewritten — until then it's still accurate.)*
+*(This section describes the instant charge-time split model, still what's actually live today —
+it settles every order's split automatically at charge time, so it keeps working unmodified
+throughout the staged rollout described below. docs/ROADMAP.md FDP-91 onward is building a
+platform-controlled weekly batch payout as a deliberate staged rollout, not a single big-bang
+cutover — FDP-91 laid down the ledger schema foundation (§18); FDP-92 (§19) built real transfer
+execution and the Monday scheduler on top of it, but still only *reads* `Order` data this section
+already writes, and this section's own split calls are untouched. The actual cutover (removing
+this section's provider-split calls from `PaymentsService.initiatePayment`, so the platform's own
+account collects the full order amount and every payout goes out through the weekly batch
+instead) happens in a later ticket in this same sequence, alongside dashboards — and that's when
+this section gets rewritten. Until then it's still accurate, and running in parallel with §19
+safely: `PaymentsService.initiatePayment` stamps `Order.settledViaInstantSplit` on every order
+(true only when this section's split was actually applied to that order's charge), and
+`PayoutsService.getUnpaidVendorEarnings` excludes any order with that flag set — so a vendor whose
+account is active here never gets paid a second time by the weekly batch for the same order. The
+weekly batch only ever pays out orders this section's split did NOT reach: a store order (stores
+have no payout-account concept yet), or a restaurant/store with no active account for the specific
+provider that particular order happened to charge through. This is *why* FDP-92's transfer
+execution is safe to actually run in production before the cutover ticket lands, instead of the
+cutover and the batch job needing to ship together.)*
 
 ## 15. Database migrations, backups & disaster recovery
 
@@ -676,3 +688,75 @@ vendor could in principle have delivered orders in more than one). Built as its 
 independently-testable service now specifically so the weekly-batch job (the next ticket in this
 sequence) can call it directly rather than duplicating this aggregation inline in a cron
 handler.
+
+## 19. Weekly payout execution (docs/ROADMAP.md FDP-92)
+
+Real money movement on top of §18's ledger — a Monday-at-midnight-UTC cron
+(`PayoutSchedulerService`) drives `PayoutExecutionService.runWeeklyBatch()`, which finds every
+restaurant/store/rider with at least one `active` payout account, computes their unpaid earnings
+via `PayoutsService`, and actually calls each provider's Transfer API.
+
+**The double-pay guard is the load-bearing piece of this ticket.** §14's instant charge-time split
+is still live and unmodified — a restaurant with an active payout account for a given provider
+already gets paid automatically, at charge time, by that mechanism. Before this ticket, nothing
+distinguished "this order's vendor cut is still owed" from "this order's vendor cut was already
+sent by the instant split" — `PayoutsService`'s ledger just tracked `vendorPayoutId: null` either
+way. Turning on real transfers against that data as-is would have double-paid every vendor with
+an active account for every one of their delivered orders. Fixed with one new field,
+`Order.settledViaInstantSplit` (stamped by `PaymentsService.initiatePayment`/
+`OrdersService.setPaymentRef` on every order, mirroring `paymentProvider`'s "reflects the latest
+payment attempt" semantics), which `PayoutsService.getUnpaidVendorEarnings` now excludes. A
+one-time migration (`migrations/20260909000000-backfill-settled-via-instant-split.js`) backfills
+this flag onto pre-existing delivered orders using the best available proxy (does this order's
+seller currently have an active account for the exact provider that order charged through) —
+deliberately biased toward over-marking `true` (a vendor manually reconciled once, the safe
+failure mode) rather than under-marking it (a vendor paid twice, the dangerous one). Riders have
+no equivalent guard because they have no pre-existing instant-split mechanism to collide with —
+the weekly batch is the *first* payout mechanism they've ever had.
+
+**Grouping had to become (provider, currency), not just currency** (§18's `PayoutsService` was
+revised in this same ticket) — the platform's own settled balance for a given order sits with
+whichever specific provider processed that charge (a customer can override the currency's default
+provider per order), so a transfer has to go out through that same provider. Merging two orders
+charged via different providers into one payout group would have made a correct transfer
+impossible to construct.
+
+**Money-movement safety, per attempt (`PayoutExecutionService.executePayout`):**
+1. A `Payout` document is created (`pending`) and its `orderIds` are atomically claimed on
+   `Order` (`vendorPayoutId`/`riderPayoutId`: `null` → this payout's id) *before* any provider is
+   called. Claiming fewer orders than expected (a race — not expected with a single scheduler
+   instance, but checked anyway) aborts safely: nothing was claimed for long, no transfer is
+   attempted, and every admin is notified.
+2. `payout.status = 'processing'`, persisted, then the provider's real Transfer API is called
+   (`StripeAdapter.transfer` — a standalone `stripe.transfers.create` to the connected account,
+   not a destination charge; `PaystackAdapter.transfer` — creates a `type: 'subaccount'` transfer
+   recipient from the stored subaccount reference, then transfers to it (requires the platform's
+   live Paystack account to have transfer OTP disabled — an operational prerequisite this code
+   cannot itself satisfy); `FlutterwaveAdapter.transfer` — a standalone bank transfer using
+   `PayoutAccount.bankCode`/`accountNumber` (added this ticket — Flutterwave's Transfers API has
+   no "pay this subaccount" call the way Paystack's does), populated at onboarding time going
+   forward; an account onboarded before this ticket needs re-onboarding before it can receive a
+   real Flutterwave payout).
+3. **A confirmed, clean provider rejection** (bad/disabled destination, insufficient balance,
+   etc. — the provider clearly says nothing was transferred) marks the payout `failed` and
+   releases the claimed orders back to `null`, so the next Monday run retries them automatically.
+4. **An ambiguous failure** — a network-layer error where the request may or may not have
+   reached the provider, thrown by every adapter's `transfer()` as
+   `TransferOutcomeUnknownError` rather than a plain `Error` — does the opposite on purpose: the
+   claimed orders stay claimed (never auto-released, never auto-retried, since either could
+   double-pay), the payout is flagged `reconciliationRequired: true`, and every admin gets an
+   urgent notification to check the provider's own dashboard and resolve it by hand. This is the
+   platform's "no loopholes" payout requirement made concrete: an uncertain outcome always
+   surfaces to a human immediately, in neither direction, rather than resolving itself silently.
+5. One vendor/rider's failure (of any kind) is caught at the per-vendor level and never aborts
+   the rest of the batch.
+
+A vendor/rider whose unpaid earnings are in a (provider, currency) they have no *active* account
+for yet is skipped for that group (counted, logged) rather than forced through the wrong account
+— expected today for stores and riders, since only restaurant onboarding exists as of this
+ticket; store/rider onboarding is FDP-93.
+
+**Admin manual trigger**: `POST /payouts/run-weekly-batch` (admin-only, tightly throttled) runs
+the identical batch the cron runs — for verifying the pipeline without waiting a week, and for
+re-running after a vendor's account issue is fixed rather than waiting for next Monday. Full
+payout listing/dashboards are FDP-93.

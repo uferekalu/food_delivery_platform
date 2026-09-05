@@ -8,6 +8,7 @@ import type {
   VerifyPaymentResult,
   WebhookEvent,
 } from './payment-adapter.interface';
+import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
 
 const BASE_URL = 'https://api.flutterwave.com/v3';
 
@@ -54,6 +55,12 @@ interface FlutterwaveCreateSubaccountResponse {
 
 interface FlutterwaveRefundResponse {
   status: string;
+  message?: string;
+}
+
+interface FlutterwaveTransferResponse {
+  status: string;
+  data?: { id: number; reference: string };
   message?: string;
 }
 
@@ -291,5 +298,53 @@ export class FlutterwaveAdapter implements PaymentAdapter {
       );
     }
     return { subaccountId: result.data.subaccount_id };
+  }
+
+  // --- Weekly payout execution (docs/ROADMAP.md FDP-92) ---
+
+  /**
+   * A standalone bank transfer, not a subaccount payout — Flutterwave's Transfers API has no
+   * "pay this subaccount" call the way Paystack's does, only `account_bank`/`account_number`
+   * (`PayoutAccount.bankCode`/`accountNumber`, persisted at onboarding time since FDP-92; a
+   * payout account onboarded before this field existed has to be re-onboarded before it can
+   * receive a real transfer — same one-time gap `docs/ARCHITECTURE.md` §14 calls out).
+   * Flutterwave's initial response only confirms the transfer was *queued*, not that it settled
+   * (final status arrives async, via `GET /transfers/:id` or a transfer webhook this codebase
+   * doesn't yet consume) — same best-effort synchronous-response posture as `initiate()`/`verify()`
+   * elsewhere in this adapter, not a gap unique to payouts.
+   */
+  async transfer(params: {
+    bankCode: string;
+    accountNumber: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    narration: string;
+  }): Promise<{ transferReference: string }> {
+    let result: FlutterwaveTransferResponse;
+    try {
+      result = await this.request<FlutterwaveTransferResponse>('/transfers', {
+        method: 'POST',
+        body: JSON.stringify({
+          account_bank: params.bankCode,
+          account_number: params.accountNumber,
+          amount: params.amount,
+          currency: params.currency.toUpperCase(),
+          narration: params.narration,
+          reference: params.reference,
+        }),
+      });
+    } catch (error) {
+      throw new TransferOutcomeUnknownError(
+        `Flutterwave transfer outcome unknown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
+    if (result.status !== 'success' || !result.data) {
+      throw new Error(result.message ?? 'Flutterwave transfer failed');
+    }
+    return { transferReference: String(result.data.id) };
   }
 }
