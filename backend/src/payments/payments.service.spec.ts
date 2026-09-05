@@ -31,9 +31,7 @@ describe('PaymentsService', () => {
   let restaurantsService: jest.Mocked<
     Pick<
       RestaurantsService,
-      | 'findByIdOrThrow'
-      | 'findByPayoutAccountReference'
-      | 'setPayoutAccountFromWebhook'
+      'findByPayoutAccountReference' | 'setPayoutAccountFromWebhook'
     >
   >;
   let storesService: jest.Mocked<
@@ -83,16 +81,9 @@ describe('PaymentsService', () => {
       revertFailedRefundClaim: jest.fn(),
     };
     restaurantsService = {
-      findByIdOrThrow: jest.fn(),
       findByPayoutAccountReference: jest.fn(),
       setPayoutAccountFromWebhook: jest.fn(),
     };
-    // Default: no active payout account for any provider — the pre-FDP-52 behavior every
-    // existing initiatePayment test below exercises. Tests that need an active account
-    // override this per-case.
-    restaurantsService.findByIdOrThrow.mockResolvedValue({
-      payoutAccounts: [],
-    } as never);
     storesService = {
       findByPayoutAccountReference: jest.fn().mockResolvedValue(null),
       setPayoutAccountFromWebhook: jest.fn(),
@@ -192,7 +183,6 @@ describe('PaymentsService', () => {
         order,
         'stripe',
         'cs_test_abc',
-        false, // no active payout account -> no instant split applied (docs/ROADMAP.md FDP-92)
       );
     });
 
@@ -235,11 +225,10 @@ describe('PaymentsService', () => {
         order,
         'paystack',
         'ORD-1-abcd',
-        false,
       );
     });
 
-    it("passes the restaurant's active payout account reference and payout amount through to the adapter (FDP-52)", async () => {
+    it('never sends a vendor-split field to the adapter (docs/ROADMAP.md FDP-95 — the instant charge-time split was cut over; every charge now settles in full to the platform account)', async () => {
       const order = {
         _id: { toString: () => 'order-1' },
         restaurantId: { toString: () => 'restaurant-1' },
@@ -251,12 +240,6 @@ describe('PaymentsService', () => {
         currency: 'NGN',
       };
       ordersService.findOne.mockResolvedValue(order as never);
-      restaurantsService.findByIdOrThrow.mockResolvedValue({
-        payoutAccounts: [
-          { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
-          { provider: 'stripe', status: 'pending', reference: null },
-        ],
-      } as never);
       paystackAdapter.initiate.mockResolvedValue({
         redirectUrl: 'https://checkout.paystack.com/abc',
         reference: 'ORD-1-abcd',
@@ -264,81 +247,16 @@ describe('PaymentsService', () => {
 
       await service.initiatePayment(user, 'order-1');
 
-      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          restaurantPayoutAccountReference: 'ACCT_test123',
-          restaurantPayoutAmount: 85,
-        }),
-      );
-      // docs/ROADMAP.md FDP-92 — the split was actually applied, so the weekly batch must never
-      // pay this order's vendor cut out again.
+      const callArgs = paystackAdapter.initiate.mock.calls[0][0] as Record<
+        string,
+        unknown
+      >;
+      expect(callArgs).not.toHaveProperty('restaurantPayoutAccountReference');
+      expect(callArgs).not.toHaveProperty('restaurantPayoutAmount');
       expect(ordersService.setPaymentRef).toHaveBeenCalledWith(
         order,
         'paystack',
         'ORD-1-abcd',
-        true,
-      );
-    });
-
-    it("clamps the split amount sent to the adapter to the order's total (docs/ROADMAP.md FDP-65) — a big enough promo discount can otherwise push total below restaurantPayoutAmount, asking a live provider for an invalid split", async () => {
-      const order = {
-        _id: { toString: () => 'order-1' },
-        restaurantId: { toString: () => 'restaurant-1' },
-        status: 'PENDING_PAYMENT',
-        paymentProvider: 'paystack',
-        orderNumber: 'ORD-1',
-        total: 58, // subtotal 100, deliveryFee 3, serviceFee 5, a 50-off promo
-        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
-        currency: 'NGN',
-      };
-      ordersService.findOne.mockResolvedValue(order as never);
-      restaurantsService.findByIdOrThrow.mockResolvedValue({
-        payoutAccounts: [
-          { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
-        ],
-      } as never);
-      paystackAdapter.initiate.mockResolvedValue({
-        redirectUrl: 'https://checkout.paystack.com/abc',
-        reference: 'ORD-1-abcd',
-      });
-
-      await service.initiatePayment(user, 'order-1');
-
-      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          restaurantPayoutAmount: 58, // clamped to total, never exceeds what's actually charged
-        }),
-      );
-    });
-
-    it('omits the payout account reference when the restaurant has none active for the charging provider', async () => {
-      const order = {
-        _id: { toString: () => 'order-1' },
-        restaurantId: { toString: () => 'restaurant-1' },
-        status: 'PENDING_PAYMENT',
-        paymentProvider: 'paystack',
-        orderNumber: 'ORD-1',
-        total: 115,
-        restaurantPayoutAmount: 85,
-        currency: 'NGN',
-      };
-      ordersService.findOne.mockResolvedValue(order as never);
-      restaurantsService.findByIdOrThrow.mockResolvedValue({
-        payoutAccounts: [
-          { provider: 'stripe', status: 'active', reference: 'acct_stripe' },
-        ],
-      } as never);
-      paystackAdapter.initiate.mockResolvedValue({
-        redirectUrl: 'https://checkout.paystack.com/abc',
-        reference: 'ORD-1-abcd',
-      });
-
-      await service.initiatePayment(user, 'order-1');
-
-      expect(paystackAdapter.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          restaurantPayoutAccountReference: undefined,
-        }),
       );
     });
 

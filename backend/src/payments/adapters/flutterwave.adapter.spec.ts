@@ -148,47 +148,7 @@ describe('FlutterwaveAdapter', () => {
       ).rejects.toThrow('Invalid key');
     });
 
-    it("splits the transaction via a subaccounts entry when the restaurant has an active payout account — transaction_charge is the flat amount the SUBACCOUNT receives, not the platform (flat_subaccount is the inverse of Paystack's transaction_charge direction)", async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        json: () =>
-          Promise.resolve({
-            status: 'success',
-            data: { link: 'https://checkout.flutterwave.com/abc' },
-          }),
-      });
-      global.fetch = fetchMock as never;
-
-      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
-      await adapter.initiate({
-        orderId: 'order-1',
-        orderNumber: 'ORD-1',
-        amount: 115, // order.total: subtotal 100 + deliveryFee 10 + serviceFee 5
-        currency: 'NGN',
-        customerEmail: 'jane@example.com',
-        successUrl: 'http://localhost:3000',
-        cancelUrl: 'http://localhost:3000',
-        restaurantPayoutAccountReference: 'RS_test123',
-        restaurantPayoutAmount: 85, // 100 subtotal - 15 platform commission
-      });
-
-      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(init.body as string) as {
-        subaccounts: {
-          id: string;
-          transaction_charge_type: string;
-          transaction_charge: number;
-        }[];
-      };
-      expect(body.subaccounts).toEqual([
-        {
-          id: 'RS_test123',
-          transaction_charge_type: 'flat_subaccount',
-          transaction_charge: 85,
-        },
-      ]);
-    });
-
-    it('omits the subaccounts field entirely when the restaurant has no active payout account', async () => {
+    it('never sends a subaccounts split (docs/ROADMAP.md FDP-95 removed the instant charge-time split — every charge settles in full to the platform account)', async () => {
       const fetchMock = jest.fn().mockResolvedValue({
         json: () =>
           Promise.resolve({

@@ -106,28 +106,9 @@ export class FlutterwaveAdapter implements PaymentAdapter {
           redirect_url: params.successUrl,
           customer: { email: params.customerEmail },
           meta: { orderId: params.orderId },
-          // Vendor payouts epic (docs/ROADMAP.md FDP-53) — mirrors PaystackAdapter.initiate's
-          // split, but Flutterwave's shape is a `subaccounts` array rather than a single
-          // `subaccount` field, and its "flat_subaccount" charge type is the inverse of
-          // Paystack's `transaction_charge`: here `transaction_charge` is the flat amount the
-          // *subaccount* (restaurant) receives, with the platform automatically keeping
-          // whatever's left — confirmed against Flutterwave's split-payments docs, since this
-          // codebase had no prior reference for the field's direction and getting it backwards
-          // would misroute real money. No ×100 — unlike Paystack (kobo), Flutterwave's `amount`
-          // (and therefore `transaction_charge`) is already in the currency's major unit, same
-          // as everywhere else in this adapter.
-          ...(params.restaurantPayoutAccountReference &&
-          params.restaurantPayoutAmount != null
-            ? {
-                subaccounts: [
-                  {
-                    id: params.restaurantPayoutAccountReference,
-                    transaction_charge_type: 'flat_subaccount',
-                    transaction_charge: params.restaurantPayoutAmount,
-                  },
-                ],
-              }
-            : {}),
+          // No subaccounts split here (removed docs/ROADMAP.md FDP-95) — the full amount
+          // settles to the platform's own account; see `transfer()` below for how a vendor's cut
+          // actually reaches them now (a separate, later transfer driven by the weekly batch).
         }),
       },
     );

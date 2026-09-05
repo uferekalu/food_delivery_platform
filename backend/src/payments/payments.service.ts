@@ -72,47 +72,6 @@ export class PaymentsService {
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     const adapter = this.getAdapter(provider);
 
-    // Vendor payouts epic (docs/ROADMAP.md FDP-52 onward) — only passed through if this
-    // restaurant has actually onboarded an *active* payout account for the provider this
-    // specific order is charging through; an adapter with no automated-split support yet (or a
-    // restaurant with no active account) just ignores these, per the interface's doc comment.
-    // A store order (docs/ROADMAP.md FDP-56) has no payout-account concept yet — same as a
-    // restaurant that hasn't onboarded one, the full charge settles to the platform's own
-    // account for now, which every adapter already handles correctly (undefined reference).
-    const payoutAccount =
-      order.sellerType === 'store'
-        ? undefined
-        : (
-            await this.restaurantsService.findByIdOrThrow(
-              (
-                order.restaurantId as NonNullable<typeof order.restaurantId>
-              ).toString(),
-            )
-          ).payoutAccounts.find(
-            (account) =>
-              account.provider === provider && account.status === 'active',
-          );
-
-    // The split sent to a payment provider can never exceed what's actually being charged this
-    // transaction (docs/ROADMAP.md FDP-65). order.restaurantPayoutAmount is computed on the
-    // pre-discount subtotal by design (the platform, not the restaurant, absorbs a promo's
-    // cost — see OrdersService.createOrder) — but a big enough discount can push `order.total`
-    // below it, which would otherwise ask Paystack for a negative `transaction_charge` or ask a
-    // Flutterwave subaccount to receive more than the whole charge, both invalid requests to a
-    // live payment API. Clamping only protects the transaction split; it does not change what
-    // the restaurant is contractually owed (order.restaurantPayoutAmount, shown as-is in
-    // earnings/sales-report) — a clamped order means the platform must settle the shortfall to
-    // the restaurant outside this transaction.
-    const splitAmount = Math.min(
-      Math.max(order.restaurantPayoutAmount, 0),
-      order.total,
-    );
-    if (splitAmount !== order.restaurantPayoutAmount) {
-      this.logger.warn(
-        `Order ${order._id.toString()}: discount pushed the payable total (${order.total}) below its restaurant payout (${order.restaurantPayoutAmount}) — clamped the ${provider} split to ${splitAmount}; the platform still owes the restaurant the full amount`,
-      );
-    }
-
     let result: InitiatePaymentResult;
     try {
       result = await adapter.initiate({
@@ -123,8 +82,6 @@ export class PaymentsService {
         customerEmail: user.email,
         successUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}`,
         cancelUrl: `${frontendUrl}/checkout/callback?orderId=${order._id.toString()}&cancelled=true`,
-        restaurantPayoutAccountReference: payoutAccount?.reference ?? undefined,
-        restaurantPayoutAmount: splitAmount,
       });
     } catch (error) {
       // A raw adapter error (a provider's own API error — e.g. Stripe rejecting a charge below
@@ -143,17 +100,14 @@ export class PaymentsService {
       );
     }
 
-    // Whether the provider-side split was actually requested for THIS attempt — same condition
-    // each adapter's own `initiate()` checks (docs/ROADMAP.md FDP-92): a store order or a
-    // restaurant with no active account for this provider means the full amount settled to the
-    // platform's own account instead, so it's still fully owed via the weekly batch.
-    const settledViaInstantSplit = !!payoutAccount?.reference;
-    await this.ordersService.setPaymentRef(
-      order,
-      provider,
-      result.reference,
-      settledViaInstantSplit,
-    );
+    // `settledViaInstantSplit` defaults to `false` (docs/ROADMAP.md FDP-95 cut over the
+    // charge-time provider split entirely — see docs/ARCHITECTURE.md §14) — every new order's
+    // full amount now settles to the platform's own account, and the vendor's cut is paid out
+    // separately by the weekly batch (§19). The flag itself stays on the schema and
+    // `PayoutsService` still excludes any order where it's `true`, since historical orders from
+    // before this cutover genuinely were already paid via the old mechanism and must never be
+    // paid a second time.
+    await this.ordersService.setPaymentRef(order, provider, result.reference);
     return { redirectUrl: result.redirectUrl };
   }
 

@@ -106,25 +106,9 @@ export class PaystackAdapter implements PaymentAdapter {
           reference,
           callback_url: params.successUrl,
           metadata: { orderId: params.orderId },
-          // Vendor payouts epic (docs/ROADMAP.md FDP-52) — `subaccount` tells Paystack to split
-          // this transaction's settlement with the restaurant's account. `transaction_charge`
-          // (a flat amount in the same minor unit as `amount`, going to the *platform's* main
-          // account — mirrors percentage_charge's "what the platform keeps" framing) overrides
-          // the subaccount's own stored percentage for this specific transaction, since the
-          // right split isn't a fixed percentage of the whole order total — see
-          // InitiatePaymentParams.restaurantPayoutAmount's doc comment for why. `bearer:
-          // 'account'` keeps Paystack's own processing fee on the platform, never deducted from
-          // what the restaurant receives.
-          ...(params.restaurantPayoutAccountReference &&
-          params.restaurantPayoutAmount != null
-            ? {
-                subaccount: params.restaurantPayoutAccountReference,
-                transaction_charge: Math.round(
-                  (params.amount - params.restaurantPayoutAmount) * 100,
-                ),
-                bearer: 'account',
-              }
-            : {}),
+          // No subaccount split here (removed docs/ROADMAP.md FDP-95) — the full amount settles
+          // to the platform's own account; see `transfer()` below for how a vendor's cut
+          // actually reaches them now (a separate, later transfer driven by the weekly batch).
         }),
       },
     );

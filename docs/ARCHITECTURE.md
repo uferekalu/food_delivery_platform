@@ -133,7 +133,7 @@ Webhook signatures are verified for all three providers before any order/payment
 mutated. Payment state transitions only happen server-side, driven by verified webhook events
 or a verified `verify()` poll — never trusted from client-reported "payment succeeded" calls.
 
-Restaurant payouts (a provider-side split at charge time, not a separate transfer) are §14.
+Vendor payouts (a weekly platform-driven transfer, not a charge-time split) are §14/§18–21.
 
 ## 5. Design tokens (frontend source of truth)
 
@@ -422,96 +422,74 @@ and in the Vercel/Render dashboards.
 
 ## 14. Payouts & platform fee
 
-Decision (docs/ROADMAP.md FDP-51 onward, reversing an earlier "read-only ledger" scope): the
-platform takes a commission on every order, and the restaurant's remaining share settles
-automatically via the payment provider's own split/connected-account mechanism. The platform
-never holds customer funds and manually disburses them — no in-house wallet or transfer queue.
+Every order's full amount settles to the platform's own account at charge time — no split, no
+destination charge, no subaccount routing. A vendor's cut is paid out separately, weekly, by
+§19's transfer execution engine, straight into whichever payout account they've onboarded below.
+The platform never holds customer funds and manually disburses them outside that scheduled batch
+— no in-house wallet or ad-hoc transfer queue.
+
+This wasn't the original design. docs/ROADMAP.md FDP-51 through FDP-54 built an **instant
+charge-time provider split** — the restaurant's share settled automatically via the payment
+provider's own split/connected-account mechanism, in the same transaction as the charge. FDP-91
+through FDP-95 replaced it with the weekly-batch model this section now describes, as a
+deliberate staged rollout rather than a single cutover: FDP-91 laid the ledger foundation (§18),
+FDP-92 built real transfer execution (§19), FDP-93 added dashboards (§20), FDP-94 extended
+onboarding to stores and riders (§21), and FDP-95 was the actual cutover — removing the
+charge-time split calls this section used to document. `Order.settledViaInstantSplit` (§19) is
+the seam between the two eras: `true` on historical orders the old mechanism genuinely already
+paid (excluded from the weekly batch forever, so they're never paid twice), always `false` on
+every order created after the cutover (since the mechanism it names no longer runs).
 
 **Commission model.** `PLATFORM_COMMISSION_RATE` (`backend/src/common/constants/platform-fee.ts`,
 currently 15%) is a single shared constant applied to the order's food `subtotal` only — never
-`deliveryFee` (the rider's own earnings, see `OrdersService.findForRider`) or `serviceFee`
-(already the platform's direct revenue line). `OrdersService.createOrder` snapshots the result
-onto every order as `platformFeeAmount`/`restaurantPayoutAmount` at creation time, so a later
-rate change never rewrites historical orders. `OrdersService.getEarningsSummary` sums these over
-a restaurant's `DELIVERED` orders for its dashboard.
+`deliveryFee` (the rider's own earnings, paid at 100%, see §18/§19) or `serviceFee` (already the
+platform's direct revenue line). `OrdersService.createOrder` snapshots the result onto every
+order as `platformFeeAmount`/`restaurantPayoutAmount` at creation time, so a later rate change
+never rewrites historical orders. `OrdersService.getEarningsSummary` sums these over a
+restaurant's `DELIVERED` orders for its dashboard; `PayoutsService`/`PayoutExecutionService` (§18–
+19) are what actually turn that owed amount into a real transfer.
 
-**Per-provider onboarding.** `Restaurant.payoutAccounts` holds one entry per payment provider a
-restaurant has connected — `{ provider, status: 'pending' | 'active', reference }`, mirroring the
-multi-provider reality `PaymentProviderResolver` already models (a customer can override the
-currency's default provider per order, so a restaurant's payout coverage has to cover more than
-just its default). Until a provider has an `active` entry, that provider's orders for this
-restaurant settle in full to the platform's own account — never blocked, just not yet split.
+**Per-provider onboarding** is the only piece of the original design that's unchanged in shape,
+because it's what the weekly batch now depends on entirely — `Restaurant.payoutAccounts` (and,
+since FDP-91/94, `Store.payoutAccounts`/`Rider.payoutAccounts`) holds one entry per payment
+provider a vendor has connected — `{ provider, status: 'pending' | 'active', reference, bankCode,
+accountNumber }`, mirroring the multi-provider reality `PaymentProviderResolver` already models
+(a customer can override the currency's default provider per order, so a vendor's payout coverage
+has to cover more than just its default). Until a provider has an `active` entry, the weekly batch
+simply has nowhere to send that provider's earnings yet — they accrue, unpaid, until it does.
 
-**Paystack (FDP-52, live).** A restaurant supplies a bank + account number
+**Paystack (FDP-52, extended FDP-94).** A vendor supplies a bank + account number
 (`PaystackPayoutsController`); the backend resolves it via Paystack's `/bank/resolve` (confirms
 the account name before anything is created — the cheapest fraud/typo guard available) and
 creates a subaccount via `/subaccount`, storing the resulting `subaccount_code` as the payout
-account's `reference`. At charge time, `PaymentsService.initiatePayment` looks up the order's
-restaurant's *active* Paystack account and passes it to `PaystackAdapter.initiate()`, which adds
-`subaccount` (routes the split) and an explicit `transaction_charge` — **not** the subaccount's
-own stored `percentage_charge`, and this distinction matters: a flat percentage of the whole
-order `total` would hand the restaurant a cut of the delivery fee and service fee too, since
-neither belongs to it. `transaction_charge` is computed per-transaction as
-`total - restaurantPayoutAmount` (in the provider's minor unit), so Paystack pays the restaurant
-subaccount *exactly* `restaurantPayoutAmount` and settles everything else — the platform's
-commission, the delivery fee, and the service fee — to the platform's own account. The delivery
-fee's eventual trip to the rider is a separate, not-yet-automated concern (riders currently just
-see it reflected in their own earnings view, docs/ROADMAP.md FDP-16); this split only concerns
-restaurant payouts.
+account's `reference`. That subaccount is never used for a charge-time split anymore — its only
+remaining job is being the target of a real weekly `PaystackAdapter.transfer()` call (§19), which
+creates a `type: 'subaccount'` transfer recipient from that same reference and pays it directly,
+no bank details required at transfer time.
 
-**Flutterwave (FDP-53)** follows the same subaccount-and-split shape as Paystack, with two
-provider-specific differences confirmed live against the Flutterwave sandbox (nothing in this
-codebase referenced Flutterwave's actual field names before this ticket): the split lives in a
-`subaccounts` array on the payment payload rather than a single `subaccount` field, and its
-`flat_subaccount` charge type is the *inverse* of Paystack's `transaction_charge` direction —
-`transaction_charge` is the flat amount the **subaccount** (restaurant) receives, with the
-platform automatically keeping whatever's left, rather than Paystack's "what the platform keeps"
-framing. `transaction_charge` is therefore set directly to `restaurantPayoutAmount`, in the
-currency's major unit (Flutterwave, unlike Paystack, never multiplies by 100). Flutterwave's
-subaccount-creation `split_value` is also a fraction (0–1), not Paystack's 0–100 percentage.
-Flutterwave's subaccount API requires a `business_email`; since there's no restaurant-level email
-field, the onboarding endpoint looks up the restaurant owner's own account email for it.
+**Flutterwave (FDP-53, extended FDP-94)** follows the same subaccount-onboarding shape as
+Paystack (confirmed live against the Flutterwave sandbox), but — unlike Paystack — its Transfers
+API has no "pay this subaccount" call, only a standalone bank transfer. So `bankCode`/
+`accountNumber` (resolved during onboarding, same as Paystack) are persisted on the
+`PayoutAccount` entry itself and used directly by `FlutterwaveAdapter.transfer()` (§19); the
+`subaccount_id` from onboarding is kept for reference but plays no role in the weekly transfer.
 
-**Stripe Connect (FDP-54)** — Express accounts, structurally different from the other two: no
-single API call produces a usable account. `StripePayoutsController`'s one endpoint creates a
-connected Express account (once — reused on every later call, keyed off the restaurant's
-existing `payoutAccounts` entry) and always returns a fresh Account Link (these expire within
-minutes, confirmed live against the sandbox) to redirect the owner to Stripe's own hosted
-onboarding; bank details never touch this backend. The account starts `pending` and stays that
-way — even after the owner's browser lands back on `return_url` — until Stripe's `account.updated`
-webhook confirms `charges_enabled && details_submitted`, the only reliable completion signal
-(the redirect back does not guarantee the account holder actually finished). That webhook shares
-`/payments/webhooks/stripe` with the existing `checkout.session.completed` handler — a Stripe
-account has one webhook URL for every subscribed event type — and each handler's adapter-level
-parse safely no-ops on the other's event type. At charge time, a destination charge
-(`payment_intent_data.transfer_data.destination` + `application_fee_amount`) is added only once
-`payoutAccounts` shows `active` for Stripe; `application_fee_amount` is what the platform keeps
-(same "what the platform keeps" framing as Paystack's `transaction_charge`), computed from
-`restaurantPayoutAmount` in cents — Stripe automatically transfers the rest to the connected
-account, confirmed live that a destination account missing the `transfers` capability (i.e.
-`pending`) is rejected outright by Stripe, which is exactly the gate this codebase relies on
-rather than re-checking capability status itself before charging.
-
-*(This section describes the instant charge-time split model, still what's actually live today —
-it settles every order's split automatically at charge time, so it keeps working unmodified
-throughout the staged rollout described below. docs/ROADMAP.md FDP-91 onward is building a
-platform-controlled weekly batch payout as a deliberate staged rollout, not a single big-bang
-cutover — FDP-91 laid down the ledger schema foundation (§18); FDP-92 (§19) built real transfer
-execution and the Monday scheduler on top of it, but still only *reads* `Order` data this section
-already writes, and this section's own split calls are untouched. The actual cutover (removing
-this section's provider-split calls from `PaymentsService.initiatePayment`, so the platform's own
-account collects the full order amount and every payout goes out through the weekly batch
-instead) happens in a later ticket in this same sequence, alongside dashboards — and that's when
-this section gets rewritten. Until then it's still accurate, and running in parallel with §19
-safely: `PaymentsService.initiatePayment` stamps `Order.settledViaInstantSplit` on every order
-(true only when this section's split was actually applied to that order's charge), and
-`PayoutsService.getUnpaidVendorEarnings` excludes any order with that flag set — so a vendor whose
-account is active here never gets paid a second time by the weekly batch for the same order. The
-weekly batch only ever pays out orders this section's split did NOT reach: a store order (stores
-have no payout-account concept yet), or a restaurant/store with no active account for the specific
-provider that particular order happened to charge through. This is *why* FDP-92's transfer
-execution is safe to actually run in production before the cutover ticket lands, instead of the
-cutover and the batch job needing to ship together.)*
+**Stripe Connect (FDP-54, extended FDP-94)** — Express accounts, structurally different from the
+other two: no single API call produces a usable account. Each `StripePayoutsController` endpoint
+(one per vendor type) creates a connected Express account (once — reused on every later call,
+keyed off the vendor's existing `payoutAccounts` entry) and always returns a fresh Account Link
+(these expire within minutes, confirmed live against the sandbox) to redirect the vendor to
+Stripe's own hosted onboarding; bank details never touch this backend. The account starts
+`pending` and stays that way — even after the browser lands back on `return_url` — until Stripe's
+`account.updated` webhook confirms `charges_enabled && details_submitted`, the only reliable
+completion signal. That webhook shares `/payments/webhooks/stripe` with the existing
+`checkout.session.completed` handler — a Stripe account has one webhook URL for every subscribed
+event type — and, since FDP-94, checks Restaurant, then Store, then Rider in turn for a matching
+account reference (a rare lookup, not a hot path). Once `active`, `StripeAdapter.transfer()` (§19)
+moves money to that connected account directly — a standalone `stripe.transfers.create`, not a
+destination charge — confirmed live that Stripe rejects a transfer to an account still missing
+the `transfers` capability, the same gate this codebase already relied on for the old
+destination-charge model and continues to rely on now.
 
 ## 15. Database migrations, backups & disaster recovery
 
@@ -696,9 +674,10 @@ Real money movement on top of §18's ledger — a Monday-at-midnight-UTC cron
 restaurant/store/rider with at least one `active` payout account, computes their unpaid earnings
 via `PayoutsService`, and actually calls each provider's Transfer API.
 
-**The double-pay guard is the load-bearing piece of this ticket.** §14's instant charge-time split
-is still live and unmodified — a restaurant with an active payout account for a given provider
-already gets paid automatically, at charge time, by that mechanism. Before this ticket, nothing
+**The double-pay guard is the load-bearing piece of this ticket.** At the time this ticket shipped,
+§14's original instant charge-time split was still live and unmodified (the cutover was FDP-95,
+three tickets later) — a restaurant with an active payout account for a given provider already
+got paid automatically, at charge time, by that mechanism. Before this ticket, nothing
 distinguished "this order's vendor cut is still owed" from "this order's vendor cut was already
 sent by the instant split" — `PayoutsService`'s ledger just tracked `vendorPayoutId: null` either
 way. Turning on real transfers against that data as-is would have double-paid every vendor with
@@ -790,8 +769,9 @@ were paid); `false` releases them back to the unpaid pool so the next Monday run
 get the same section added to their deliveries page. Stores get a new, minimal
 `dashboard/stores/[id]/payouts` page — history only, no revenue breakdown (there's no store
 equivalent of `OrdersService.getEarningsSummary` yet, a separate pre-existing gap this ticket
-doesn't fix) and an explicit "onboarding isn't available yet" notice, since store payout-account
-onboarding doesn't exist until FDP-94. Admins get a new "Payouts" tab: the existing manual-batch
+doesn't fix) and, as of this ticket, an explicit "onboarding isn't available yet" notice, since
+store payout-account onboarding doesn't exist until FDP-94 (that notice — and the onboarding
+forms replacing it — is what FDP-94, §21, actually added). Admins get a new "Payouts" tab: the existing manual-batch
 trigger, filterable list, and a resolve-reconciliation modal that makes the admin explicitly
 choose "it did / did not go through" rather than a single ambiguous "resolve" button — the whole
 point of `reconciliationRequired` is that this determination has to come from a human who actually
