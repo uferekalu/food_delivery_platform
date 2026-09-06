@@ -8,6 +8,7 @@ import {
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
 import { Store, StoreSchema } from '../stores/schemas/store.schema';
+import { Rider, RiderSchema } from '../riders/schemas/rider.schema';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Module({
@@ -26,6 +27,7 @@ import { RealtimeGateway } from './realtime.gateway';
       { name: Order.name, schema: OrderSchema },
       { name: Restaurant.name, schema: RestaurantSchema },
       { name: Store.name, schema: StoreSchema },
+      { name: Rider.name, schema: RiderSchema },
     ]),
   ],
   providers: [RealtimeGateway],

@@ -5,6 +5,7 @@ import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { StoresModule } from '../stores/stores.module';
 import { MenuItem, MenuItemSchema } from '../menu/schemas/menu-item.schema';
 import { Product, ProductSchema } from '../stores/schemas/product.schema';
+import { Rider, RiderSchema } from '../riders/schemas/rider.schema';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { DeliveryZonesModule } from '../delivery-zones/delivery-zones.module';
@@ -20,6 +21,10 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
       { name: Order.name, schema: OrderSchema },
       { name: MenuItem.name, schema: MenuItemSchema },
       { name: Product.name, schema: ProductSchema },
+      // Nearest-rider dispatch (docs/ROADMAP.md FDP-98) queries riders directly via this model,
+      // not `RidersService` — `RidersModule` already depends on this module (self-assign calls
+      // `OrdersService.assignToRider`), so importing `RidersModule` here would be circular.
+      { name: Rider.name, schema: RiderSchema },
     ]),
     CartModule,
     RestaurantsModule,

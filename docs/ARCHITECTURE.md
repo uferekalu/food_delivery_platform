@@ -928,3 +928,64 @@ same footer buttons) — deliberately duplicated rather than extracted into a sh
 since the two are one small, self-contained dialog each, not a signal to abstract yet. On success
 it navigates to `/checkout` (with a toast if some items were skipped) — "buy again" is meant to
 get the customer moving again quickly, and checkout already reads whatever the cart resolves to.
+
+## 24. Algorithmic nearest-rider dispatch (docs/ROADMAP.md FDP-98)
+
+Before this ticket, a `READY_FOR_PICKUP` order just sat in `findUnassignedForRiders`'s
+platform-wide queue until *any* online rider happened to open the app and tap "Accept" — no
+notion of distance at all, despite the name "FIFO" some earlier docs used for it. This ticket adds
+a real first attempt at the closest eligible rider, on top of (not instead of) that manual queue:
+the queue is now purely the fallback for whenever automatic dispatch finds nobody.
+
+**New `Rider.currentLocation`/`locationUpdatedAt` fields**, reusing FDP-96's `GeoPoint`/
+`GeoPointSchema` pattern verbatim, plus a `2dsphere` index on `currentLocation`. Unlike a
+restaurant/store's `address.location` (geocoded once from a fixed business address), a rider's
+location has to be kept live — it's written by the realtime gateway's existing
+`rider:locationUpdate` handler (docs/ROADMAP.md FDP-17), which previously only ever relayed a
+rider's GPS ping to the customer's tracking map during an active delivery and threw it away
+otherwise ("deliberately not persisted anywhere" per its old doc comment). It now persists onto
+`Rider.currentLocation` unconditionally — an idle-but-online rider's location matters just as much
+to dispatch as an in-delivery one's matters to the tracking map — while the order-room broadcast
+still only fires when the rider actually has something in flight to relay it to. Frontend: the
+rider dashboard's `LocationSharingToggle` (a manual opt-in `Switch`, never auto-requesting
+`watchPosition` per this codebase's standing "no silent geolocation prompts" rule) is now shown
+any time the rider is online, not only once they have an active delivery — a rider who leaves it
+off simply stays invisible to dispatch and falls back to the manual queue, the same graceful
+degrade FDP-96 established for a seller with no coordinates at all.
+
+**Dispatch lives in `OrdersService`, not `RidersService`**, despite being entirely about riders —
+`RidersModule` already imports `OrdersModule` (self-assign calls `OrdersService.assignToRider`),
+so `OrdersModule` importing `RidersModule` back would be circular. `OrdersService` instead injects
+the `Rider` Mongoose model directly (registered a second time in `OrdersModule`'s own
+`MongooseModule.forFeature`, the same "inject the model, not the module" workaround
+`RealtimeGateway` already established for its own circular-dependency corner) rather than calling
+through `RidersService` at all.
+
+`OrdersService.applyOwnerTransition` — the shared tail every owner-triggered status change already
+runs through — calls a new, awaited `dispatchToNearestRider(order)` specifically on the
+`READY_FOR_PICKUP` transition. `dispatchToNearestRider` never throws: it swallows its own errors
+(missing seller coordinates, nobody nearby, a transient DB error) and resolves `null`, so a
+dispatch failure can never fail the transition that already committed above it — but unlike
+`notifyOrderStatus`'s fire-and-forget posture, it *is* awaited, so if it succeeds the owner's own
+`PATCH .../status` response already reflects the assigned rider instead of momentarily looking
+unassigned until the next refetch.
+
+The actual query, `findNearestAvailableRiderId`, is `$geoNear` over `Rider.currentLocation`
+(`query: { isOnline: true, isVerified: true }`, `maxDistance` capped at 15km) — the same
+database-level radius filtering FDP-96 established for restaurant/store "near me" search, reused
+here for the identical reason (an in-memory haversine sort over every online rider doesn't scale,
+and a rider who's never shared a location is silently excluded rather than erroring, since
+`$geoNear` can't match a document with no valid geo field for its 2dsphere index). The nearest 15
+candidates are pulled before filtering: a single follow-up `Order.distinct('riderId', {riderId:
+{$in: candidateIds}, status: {$in: ACTIVE_DELIVERY_STATUSES}})` computes which of them are already
+mid-delivery, and the first candidate not in that busy set — still nearest-first, since `$geoNear`
+already sorts by distance — is the one dispatched. `ACTIVE_DELIVERY_STATUSES` moved to a single
+exported constant in `orders/schemas/order-status.ts`, replacing what used to be two independently
+maintained copies (one in `RealtimeGateway`, needed again here) that could have silently drifted
+apart.
+
+**Distance is measured from the seller's address, not the customer's delivery address** — the
+rider has to reach the restaurant/store first — reusing whichever `address.location` FDP-96
+already geocoded and kept in sync, rather than recomputing it. A restaurant/store that's never
+had its address geocoded simply can't be dispatched to (falls back to the manual queue), the same
+graceful precedent FDP-96 already established for "near me" search on the customer side.
