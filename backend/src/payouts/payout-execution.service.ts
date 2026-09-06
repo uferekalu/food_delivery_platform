@@ -11,6 +11,10 @@ import { Order, OrderDocument } from '../orders/schemas/order.schema';
 import { Payout, PayoutDocument } from './schemas/payout.schema';
 import type { PayoutVendorType } from './schemas/payout.schema';
 import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+} from './schemas/payout-clawback.schema';
+import {
   Restaurant,
   RestaurantDocument,
 } from '../restaurants/schemas/restaurant.schema';
@@ -63,6 +67,8 @@ export class PayoutExecutionService {
     private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Payout.name)
     private readonly payoutModel: Model<PayoutDocument>,
+    @InjectModel(PayoutClawback.name)
+    private readonly payoutClawbackModel: Model<PayoutClawbackDocument>,
     @InjectModel(Restaurant.name)
     private readonly restaurantModel: Model<RestaurantDocument>,
     @InjectModel(Store.name)
@@ -202,7 +208,11 @@ export class PayoutExecutionService {
     claimField: ClaimField,
     summary: PayoutBatchSummary,
   ): Promise<void> {
-    if (group.grossAmount <= 0 || group.orderIds.length === 0) return;
+    // Only skip when there's literally nothing to process — a group whose net grossAmount is 0
+    // because a clawback fully absorbed it (docs/ROADMAP.md FDP-104) still needs its orders
+    // claimed and its clawback decremented, just with no actual provider transfer. See
+    // executePayout's zero-transfer branch.
+    if (group.orderIds.length === 0) return;
 
     const account = payoutAccounts.find(
       (a) => a.provider === group.provider && a.status === 'active',
@@ -252,6 +262,7 @@ export class PayoutExecutionService {
       vendorId,
       orderIds: orderObjectIds,
       grossAmount: group.grossAmount,
+      clawbackDeducted: group.clawbackDeducted ?? 0,
       currency: group.currency,
       provider: group.provider,
       payoutAccountReference: account.reference ?? '',
@@ -292,6 +303,26 @@ export class PayoutExecutionService {
       return;
     }
 
+    // Refund-hardening pass (docs/ROADMAP.md FDP-104): a clawback can fully absorb this group's
+    // raw earnings (grossAmount nets to 0 while rawGrossAmount was > 0) — there's nothing to
+    // actually send, but the orders still need claiming (done above) and the clawback still needs
+    // decrementing, so this is handled as an immediate success with no provider call at all.
+    if (group.grossAmount === 0 && (group.rawGrossAmount ?? 0) > 0) {
+      payout.status = 'succeeded';
+      payout.providerTransferReference = null;
+      await payout.save();
+      summary.succeeded += 1;
+      await this.applyClawbackConsumption(group.clawbackConsumption);
+      await this.notifyOne(
+        notifyUserId,
+        'payout_succeeded',
+        "This week's earnings applied to a prior refund",
+        `Your ${payout.currency} ${group.rawGrossAmount!.toFixed(2)} in earnings this week were fully applied to a previous refund deduction — no payout was sent, and your balance on this is now settled.`,
+        payout,
+      );
+      return;
+    }
+
     payout.status = 'processing';
     await payout.save();
 
@@ -301,15 +332,19 @@ export class PayoutExecutionService {
       payout.providerTransferReference = result.transferReference;
       await payout.save();
       summary.succeeded += 1;
+      await this.applyClawbackConsumption(group.clawbackConsumption);
+      const clawbackNote = payout.clawbackDeducted
+        ? ` (${payout.currency} ${payout.clawbackDeducted.toFixed(2)} was withheld to recover a previous refund)`
+        : '';
       await this.notifyOne(
         notifyUserId,
         'payout_succeeded',
         'Payout sent',
-        `Your weekly payout of ${payout.currency} ${payout.grossAmount.toFixed(2)} has been sent to your ${payout.provider} account.`,
+        `Your weekly payout of ${payout.currency} ${payout.grossAmount.toFixed(2)} has been sent to your ${payout.provider} account.${clawbackNote}`,
         payout,
         {
           subject: 'Your weekly payout was sent',
-          html: `<p>Your weekly payout of ${payout.currency} ${payout.grossAmount.toFixed(2)} has been sent to your ${payout.provider} account.</p>`,
+          html: `<p>Your weekly payout of ${payout.currency} ${payout.grossAmount.toFixed(2)} has been sent to your ${payout.provider} account.${clawbackNote}</p>`,
         },
       );
     } catch (error) {
@@ -412,6 +447,33 @@ export class PayoutExecutionService {
       reference,
       narration: label,
     });
+  }
+
+  /**
+   * Decrements each consumed `PayoutClawback` by exactly the amount `PayoutsService.applyClawbacks`
+   * computed it would settle (docs/ROADMAP.md FDP-104) — called ONLY after a payout attempt has
+   * confirmedly succeeded (a real transfer, or the zero-transfer "fully absorbed" case above).
+   * Never called on a rejected/ambiguous attempt: nothing was actually recovered in that case, so
+   * the clawback stays exactly as it was and gets recomputed fresh (from live `remainingAmount`,
+   * never a stale snapshot) next run.
+   */
+  private async applyClawbackConsumption(
+    consumption?: { clawbackId: string; amountConsumed: number }[],
+  ): Promise<void> {
+    if (!consumption || consumption.length === 0) return;
+    for (const { clawbackId, amountConsumed } of consumption) {
+      const clawback = await this.payoutClawbackModel
+        .findById(clawbackId)
+        .exec();
+      if (!clawback) continue;
+      const remainingAmount = Math.max(
+        0,
+        Math.round((clawback.remainingAmount - amountConsumed) * 100) / 100,
+      );
+      clawback.remainingAmount = remainingAmount;
+      if (remainingAmount <= 0) clawback.status = 'fully_applied';
+      await clawback.save();
+    }
   }
 
   private async notifyOne(

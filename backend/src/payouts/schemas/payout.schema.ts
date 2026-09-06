@@ -55,6 +55,13 @@ export class Payout {
   @Prop({ type: Number, required: true, min: 0 })
   grossAmount: number;
 
+  /** How much of this attempt's raw earnings were withheld to recover a prior `PayoutClawback`
+   * (docs/ROADMAP.md FDP-104) — `0` for the common case where no clawback applied. `grossAmount`
+   * above is already net of this; kept separately purely so a vendor's payout history can show
+   * *why* a payout was smaller than their gross earnings that week, instead of a silent gap. */
+  @Prop({ type: Number, default: 0, min: 0 })
+  clawbackDeducted: number;
+
   @Prop({ type: String, required: true, uppercase: true })
   currency: string;
 

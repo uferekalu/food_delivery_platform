@@ -1186,7 +1186,21 @@
     "refundOrderTitle": "¿Reembolsar el pedido {orderNumber}?",
     "refundThisOrder": "¿Reembolsar este pedido?",
     "refundOrderDescription": "Esto reembolsará {total} al cliente y no se puede deshacer.",
-    "refund": "Reembolsar"
+    "refund": "Reembolsar",
+    "needsAttention": "Necesita atención",
+    "needsAttentionDescription": "Pedidos que necesitan una decisión humana sobre su estado de reembolso: un pedido cancelado que nunca fue reembolsado, o un reembolso cuyo resultado se desconoce.",
+    "nothingNeedsAttention": "Nada necesita atención",
+    "nothingNeedsAttentionDescription": "Todos los pedidos cancelados han sido reembolsados y ningún intento de reembolso está pendiente de conciliación.",
+    "resolve": "Resolver",
+    "reconciliationResolved": "Conciliación resuelta",
+    "couldNotResolve": "No se pudo resolver",
+    "resolveReconciliationTitle": "Resolver la conciliación del reembolso",
+    "resolveReconciliationDescription": "El pedido {orderNumber} tuvo un intento de reembolso de {amount} vía {provider} cuyo resultado nunca se confirmó. Revisa el panel de {provider} y luego indícanos qué sucedió realmente.",
+    "checkProviderDashboardFirst": "Revisa el panel de {provider} en busca de un reembolso alrededor de esta hora antes de elegir; esto no se puede deshacer.",
+    "refundDidNotHappen": "No se realizó",
+    "refundDidHappen": "Se realizó",
+    "onlyDeliveredOrCancelledCanBeRefunded": "Solo se puede reembolsar un pedido entregado o cancelado con un pago exitoso.",
+    "pendingReconciliationAlert": "Este pedido tiene un intento de reembolso pendiente de conciliación manual; resuélvelo primero en la lista de arriba."
   },
   "AdminRestaurantReviewPage": {
     "sunday": "Domingo",

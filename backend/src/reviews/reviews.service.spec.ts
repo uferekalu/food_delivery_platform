@@ -45,6 +45,10 @@ import {
   RiderDocument,
   RiderSchema,
 } from '../riders/schemas/rider.schema';
+import {
+  PayoutClawback,
+  PayoutClawbackSchema,
+} from '../payouts/schemas/payout-clawback.schema';
 import { User, UserDocument, UserSchema } from '../users/schemas/user.schema';
 import {
   RefreshToken,
@@ -88,6 +92,7 @@ describe('ReviewsService', () => {
           { name: Rider.name, schema: RiderSchema },
           { name: User.name, schema: UserSchema },
           { name: RefreshToken.name, schema: RefreshTokenSchema },
+          { name: PayoutClawback.name, schema: PayoutClawbackSchema },
         ]),
       ],
       providers: [

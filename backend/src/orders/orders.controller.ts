@@ -232,6 +232,17 @@ export class OrdersController {
     return [header, ...rows].join('\r\n');
   }
 
+  // Declared before `admin/:id` for the same "literal before param" reason as every other
+  // fixed-segment route in this controller — refund-hardening pass (docs/ROADMAP.md FDP-104):
+  // every order that needs a human to look at its refund status, since nothing else in this
+  // codebase prompts an admin to notice a cancelled-but-unrefunded order or an ambiguous refund
+  // outcome on its own.
+  @Roles('admin')
+  @Get('admin/needs-refund-attention')
+  findNeedingRefundAttention() {
+    return this.ordersService.findNeedingRefundAttention();
+  }
+
   // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — admin-only
   // unrestricted lookup for dispute/refund handling (docs/ROADMAP.md FDP-20), unlike the
   // ownership-checked `:id` route below.

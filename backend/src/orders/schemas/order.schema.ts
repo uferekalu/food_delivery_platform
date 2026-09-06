@@ -57,18 +57,18 @@ export class Order {
   @Prop({ type: Number, required: true, min: 0 })
   subtotal: number;
 
-  // Flat placeholder fees (see docs/ROADMAP.md FDP-15 — real DeliveryZone-based calculation
-  // replaces this once geo/zone data exists) — 10%/5% of subtotal respectively, computed in
-  // OrdersService, not hardcoded per-currency amounts (which would be meaningless across
-  // currencies with very different unit values).
+  // Real distance-based DeliveryZone pricing (docs/ROADMAP.md FDP-15/90) — computed in
+  // OrdersService via DeliveryZonesService.calculateFee, not a flat rate. serviceFee stays a flat
+  // 5% of subtotal (SERVICE_FEE_RATE in orders.service.ts) — a platform fee unrelated to distance.
   @Prop({ type: Number, required: true, min: 0 })
   deliveryFee: number;
 
   @Prop({ type: Number, required: true, min: 0 })
   serviceFee: number;
 
-  // Real tax calculation is out of scope — jurisdiction-specific rules vary too much to fake
-  // meaningfully at this stage. Always 0 for now.
+  // Real per-currency VAT/sales-tax calculation as of docs/ROADMAP.md FDP-101 (see
+  // orders/tax-resolver.ts) — 0 only for a currency with no configured rate (e.g. USD/EUR, which
+  // don't identify one jurisdiction with a single accurate flat rate).
   @Prop({ type: Number, required: true, min: 0, default: 0 })
   tax: number;
 
@@ -79,11 +79,10 @@ export class Order {
   total: number;
 
   // Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — snapshotted at order creation
-  // from the platform commission rate in effect at the time (OrdersService.PLATFORM_COMMISSION_RATE),
-  // so a later rate change never rewrites historical orders. restaurantPayoutAmount is what the
-  // restaurant is owed for this order (subtotal minus the platform's commission) — settled
-  // automatically by the payment provider once FDP-52/53/54 wire up real subaccount/Connect
-  // splits; until then it's informational only (see Restaurant.payoutAccounts).
+  // from PLATFORM_COMMISSION_RATE (backend/src/common/constants/platform-fee.ts, currently 15%)
+  // in effect at the time, so a later rate change never rewrites historical orders. Settled for
+  // real via the weekly batch payout (docs/ROADMAP.md FDP-92, docs/ARCHITECTURE.md §19) — see
+  // vendorPayoutId below for whether this specific order's cut has actually gone out yet.
   @Prop({ type: Number, required: true, min: 0 })
   platformFeeAmount: number;
 
@@ -184,6 +183,26 @@ export class Order {
 
   @Prop({ type: String, default: null })
   promoCode: string | null;
+
+  // Refund-hardening pass (docs/ROADMAP.md FDP-104, docs/ARCHITECTURE.md §28) — set only when a
+  // refund attempt threw a provider-side RefundOutcomeUnknownError (a network-layer failure where
+  // the reversal may or may not have actually happened). `status` is reverted to its pre-attempt
+  // value in this case (never left falsely showing REFUNDED), and PaymentsService.refundOrder
+  // refuses to retry while this is true — an admin must resolve it first via
+  // OrdersService.resolveRefundReconciliation, the same human-in-the-loop pattern
+  // Payout.reconciliationRequired already uses on the payout side.
+  @Prop({ type: Boolean, default: false, index: true })
+  refundReconciliationRequired: boolean;
+
+  @Prop({ type: String, default: null })
+  refundFailureReason: string | null;
+
+  // Set when a provider reports a chargeback/dispute (docs/ROADMAP.md FDP-104) via
+  // PaymentsService.handleRefundWebhook — informational only. This codebase never submits dispute
+  // evidence; an admin resolves the actual dispute directly in the provider's own dashboard, this
+  // flag just makes sure it doesn't go unnoticed.
+  @Prop({ type: Boolean, default: false, index: true })
+  disputeFlagged: boolean;
 }
 
 export type OrderDocument = HydratedDocument<Order>;

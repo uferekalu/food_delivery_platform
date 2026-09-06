@@ -18,11 +18,16 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { generateOrderNumber } from '../common/utils/order-number';
 import { formatMoney } from '../common/utils/currency';
 import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { Order, OrderDocument } from './schemas/order.schema';
+import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+} from '../payouts/schemas/payout-clawback.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { TaxResolver } from './tax-resolver';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
@@ -193,6 +198,8 @@ export class OrdersService {
     @InjectModel(Product.name)
     private readonly productModel: Model<ProductDocument>,
     @InjectModel(Rider.name) private readonly riderModel: Model<RiderDocument>,
+    @InjectModel(PayoutClawback.name)
+    private readonly payoutClawbackModel: Model<PayoutClawbackDocument>,
     private readonly cartService: CartService,
     private readonly restaurantsService: RestaurantsService,
     private readonly storesService: StoresService,
@@ -202,6 +209,7 @@ export class OrdersService {
     private readonly realtimeGateway: RealtimeGateway,
     private readonly deliveryZonesService: DeliveryZonesService,
     private readonly notificationsService: NotificationsService,
+    private readonly usersService: UsersService,
   ) {}
 
   /** Fire-and-forget: notification delivery (in-app write + best-effort email/SMS) never blocks
@@ -1053,14 +1061,23 @@ export class OrdersService {
           _id: orderId,
           status: { $in: REFUNDABLE_STATUSES },
           paymentStatus: 'succeeded',
+          // Refund-hardening pass (docs/ROADMAP.md FDP-104) — an order whose last refund attempt
+          // came back with a genuinely unknown outcome must never be blindly retried; an admin
+          // has to resolve it via resolveRefundReconciliation first. Without this, an order this
+          // flag reverted back to a REFUNDABLE_STATUSES value would otherwise still pass this
+          // filter and could be refunded a second time for real at the provider.
+          refundReconciliationRequired: { $ne: true },
         },
         { $set: { status: 'REFUNDED' } },
       )
       .exec(); // default {new: false} — the caller needs the PRE-update doc's status to revert to
   }
 
-  /** Refund flow, part 2/3 (success path) — the provider has actually reversed the charge,
-   * finalize the claim from `claimForRefund` into a real refunded order. */
+  /** Refund flow, part 2/3 (success path) — the provider has actually reversed the charge (or, as
+   * of docs/ROADMAP.md FDP-104, a webhook confirmed one already happened outside this app),
+   * finalize the claim from `claimForRefund` into a real refunded order. Also the single choke
+   * point for the refund-clawback check (§28) — every caller of `finalizeRefund` gets it for
+   * free, never something an individual call site has to remember. */
   async finalizeRefund(orderId: string): Promise<OrderDocument> {
     const order = await this.orderModel.findById(orderId).exec();
     if (!order) throw new NotFoundException('Order not found');
@@ -1075,6 +1092,7 @@ export class OrdersService {
 
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
+    await this.recordVendorClawbackIfNeeded(order);
     return order;
   }
 
@@ -1093,6 +1111,219 @@ export class OrdersService {
         { $set: { status: previousStatus } },
       )
       .exec();
+  }
+
+  /**
+   * Refund flow, ambiguous-outcome path (docs/ROADMAP.md FDP-104) — mirrors
+   * `revertFailedRefundClaim` (puts `status` back to its pre-claim value, so the order never
+   * falsely shows REFUNDED) but additionally flags it so `claimForRefund` refuses a blind retry.
+   * Called when an adapter's `refund()` throws `RefundOutcomeUnknownError` — the reversal may or
+   * may not have actually happened, so an admin must check the provider's own dashboard and
+   * resolve it via `resolveRefundReconciliation`, the same human-in-the-loop pattern
+   * `Payout.reconciliationRequired` already established on the payout side.
+   */
+  async flagAmbiguousRefund(
+    orderId: string,
+    previousStatus: OrderStatus,
+    reason: string,
+  ): Promise<void> {
+    const updated = await this.orderModel
+      .findOneAndUpdate(
+        { _id: orderId, status: 'REFUNDED', paymentStatus: 'succeeded' },
+        {
+          $set: {
+            status: previousStatus,
+            refundReconciliationRequired: true,
+            refundFailureReason: reason,
+          },
+        },
+      )
+      .exec();
+    if (!updated) return;
+    await this.notifyAdminsOfRefundIssue(
+      'refund_reconciliation_needed',
+      'Refund needs manual reconciliation',
+      `A refund attempt for order ${updated.orderNumber} had an unknown outcome and needs manual review before it's retried. Check the ${updated.paymentProvider} dashboard for a refund around this time. Reason: ${reason}`,
+    );
+  }
+
+  /**
+   * Admin's manual close-out for a `refundReconciliationRequired` order (docs/ROADMAP.md
+   * FDP-104) — the same shape as `PayoutExecutionService.resolveReconciliation`. `true` means the
+   * admin checked the provider's own dashboard and confirmed the refund DID actually go through
+   * (this system just never got the response) — finalize it for real, clawback included. `false`
+   * means it confirmed the refund did NOT happen — just clear the flag so a fresh `refundOrder`
+   * attempt is possible again.
+   */
+  async resolveRefundReconciliation(
+    orderId: string,
+    refundActuallySucceeded: boolean,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+    if (!order.refundReconciliationRequired) {
+      throw new BadRequestException(
+        'This order is not flagged for refund reconciliation',
+      );
+    }
+
+    if (!refundActuallySucceeded) {
+      order.refundReconciliationRequired = false;
+      order.refundFailureReason = null;
+      await order.save();
+      return order;
+    }
+
+    const claimed = await this.orderModel
+      .findOneAndUpdate(
+        { _id: orderId, refundReconciliationRequired: true },
+        {
+          $set: {
+            status: 'REFUNDED',
+            refundReconciliationRequired: false,
+            refundFailureReason: null,
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+    if (!claimed) throw new NotFoundException('Order not found');
+    return this.finalizeRefund(orderId);
+  }
+
+  /**
+   * Out-of-band dispute detection (docs/ROADMAP.md FDP-104) — a chargeback filed with the
+   * customer's bank, surfaced via a provider webhook. Informational only: this codebase never
+   * submits dispute evidence, an admin resolves the actual dispute directly in the provider's own
+   * dashboard. Doesn't touch `status`/`paymentStatus` — a dispute's outcome isn't decided yet, so
+   * nothing about the order's own state should change just because one was opened.
+   */
+  async flagDispute(orderId: string): Promise<void> {
+    const order = await this.orderModel
+      .findOneAndUpdate({ _id: orderId }, { $set: { disputeFlagged: true } })
+      .exec();
+    if (!order) return;
+    await this.notifyAdminsOfRefundIssue(
+      'order_dispute_flagged',
+      'Order disputed by customer',
+      `A chargeback/dispute was opened against order ${order.orderNumber} via ${order.paymentProvider}. Respond to it directly in the ${order.paymentProvider} dashboard — this platform does not submit dispute evidence automatically.`,
+    );
+  }
+
+  /**
+   * Admin visibility (docs/ROADMAP.md FDP-104) — every order that needs a human to look at its
+   * refund status: a cancelled order whose payment was never reversed (nothing else in this
+   * codebase prompts an admin to do this — cancellation and refunding are two independent manual
+   * actions), plus any order stuck on an ambiguous refund outcome awaiting
+   * `resolveRefundReconciliation`.
+   */
+  async findNeedingRefundAttention(): Promise<OrderDocument[]> {
+    return this.orderModel
+      .find({
+        $or: [
+          { status: 'CANCELLED', paymentStatus: 'succeeded' },
+          { refundReconciliationRequired: true },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  /**
+   * Refund-vs-payout reconciliation (docs/ROADMAP.md FDP-104, docs/ARCHITECTURE.md §28) — if this
+   * order's vendor cut was already sent out by a previous weekly `Payout` (`vendorPayoutId` set),
+   * there's no way to pull that money back out of the vendor's bank account automatically, so a
+   * `PayoutClawback` is recorded for the exact amount overpaid; `PayoutsService`/
+   * `PayoutExecutionService` net it against that vendor's future earnings. If the order was never
+   * paid out (the common case — most refunds happen well before the next Monday batch), its
+   * REFUNDED status already excludes it from `getUnpaidVendorEarnings` on its own; nothing else
+   * to do. Never claws back from a rider — they keep 100% of `deliveryFee` regardless, they
+   * already performed the delivery.
+   */
+  private async recordVendorClawbackIfNeeded(
+    order: OrderDocument,
+  ): Promise<void> {
+    if (!order.vendorPayoutId) return;
+
+    const vendorId =
+      order.sellerType === 'store'
+        ? order.storeId?.toString()
+        : order.restaurantId?.toString();
+    if (!vendorId) return;
+
+    await this.payoutClawbackModel.create({
+      vendorType: order.sellerType,
+      vendorId,
+      orderId: order._id.toString(),
+      originalPayoutId: order.vendorPayoutId,
+      provider: order.paymentProvider,
+      currency: order.currency,
+      amount: order.restaurantPayoutAmount,
+      remainingAmount: order.restaurantPayoutAmount,
+      status: 'pending',
+    });
+
+    try {
+      const seller =
+        order.sellerType === 'store'
+          ? await this.storesService.findByIdOrThrow(vendorId)
+          : await this.restaurantsService.findByIdOrThrow(vendorId);
+      const amountLabel = formatMoney(
+        order.restaurantPayoutAmount,
+        order.currency,
+      );
+      await this.notificationsService.notify({
+        userId: seller.ownerId.toString(),
+        type: 'refund_clawback_created',
+        title: 'Refund deducted from your next payout',
+        body: `Order ${order.orderNumber} was refunded after you'd already been paid for it. ${amountLabel} will be deducted from your upcoming payout(s).`,
+        metadata: { orderId: order._id.toString() },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to notify vendor about refund clawback for order ${order._id.toString()}`,
+        error,
+      );
+    }
+
+    await this.notifyAdminsOfRefundIssue(
+      'refund_clawback_created',
+      'Refund deducted from a vendor payout',
+      `Order ${order.orderNumber} was refunded after its vendor cut had already been paid out. A clawback of ${formatMoney(order.restaurantPayoutAmount, order.currency)} will be deducted from that vendor's upcoming payout(s).`,
+    );
+  }
+
+  /** Shared admin fan-out for the refund-hardening pass (docs/ROADMAP.md FDP-104) — same pattern
+   * as `PayoutExecutionService.notifyAdmins`, kept local since this module doesn't depend on
+   * that one (see orders.module.ts for why). Non-fatal: never lets a notification failure affect
+   * the refund flow that triggered it. */
+  private async notifyAdminsOfRefundIssue(
+    type:
+      | 'refund_clawback_created'
+      | 'refund_reconciliation_needed'
+      | 'order_dispute_flagged',
+    title: string,
+    body: string,
+  ): Promise<void> {
+    try {
+      const admins = await this.usersService.listAll({
+        role: 'admin',
+        page: 1,
+        limit: 50,
+      });
+      await Promise.all(
+        admins.items.map((admin) =>
+          this.notificationsService.notify({
+            userId: admin._id.toString(),
+            type,
+            title,
+            body,
+          }),
+        ),
+      );
+    } catch (error) {
+      this.logger.error('Failed to notify admins about a refund issue', error);
+    }
   }
 
   /**

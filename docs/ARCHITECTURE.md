@@ -1130,3 +1130,128 @@ clickable "view details" region is now its own `Link` around just the summary ro
 `ReorderButton` sitting below as a sibling `<div>`, outside the anchor entirely. Its `onClick`
 calls `preventDefault`/`stopPropagation` defensively even though it's no longer nested inside the
 `Link`, since a future layout change could put it back inside one.
+
+## 28. Payment system hardening: refund clawback, ambiguous-outcome handling, out-of-band detection (docs/ROADMAP.md FDP-104)
+
+A full audit of the payment system (commission model, weekly payouts, refunds), requested after
+the platform's earlier tickets — see docs/ROADMAP.md FDP-14/49/50/59/65 for payments,
+FDP-91-95 for the weekly payout batch. Two things were confirmed already correct with no changes
+needed; the real gaps were all in refunds.
+
+**Commission — already correct, confirmed not rebuilt.** `PLATFORM_COMMISSION_RATE = 0.15`
+(`common/constants/platform-fee.ts`) is applied identically to every restaurant and store order's
+food subtotal (`platformFeeAmount = subtotal * 0.15`, `restaurantPayoutAmount = subtotal -
+platformFeeAmount`, both snapshotted on the `Order`). Riders keep 100% of `deliveryFee`. This
+already matches a standard marketplace commission model (customer pays subtotal + delivery +
+service fee; platform keeps its commission plus the service fee; vendor gets the rest) at exactly
+15%. Three stale doc-comments on `Order` (referencing pre-FDP-15/90/92/101 placeholder behavior —
+flat delivery fee, "tax always 0", "commission... informational only") were corrected as part of
+this pass, no logic changes.
+
+**Weekly Monday payout batch — already robust, one coverage gap closed.** `PayoutExecutionService`
+(FDP-92) already had atomic order-claiming, confirmed-rejection-vs-ambiguous-outcome handling, and
+per-vendor error isolation. Added an explicit test that runs `runWeeklyBatch()` twice in sequence
+and asserts the second run pays nothing new — the guarantee already existed structurally (the
+atomic claim), it just hadn't been asserted directly.
+
+**The refund clawback ledger — the actual new mechanism.** Refunding an order whose vendor cut had
+already been paid out by a previous weekly batch previously caused no clawback, no flag, and no
+record — the platform silently absorbed the loss. New `PayoutClawback` schema
+(`payouts/schemas/payout-clawback.schema.ts`) records exactly this: `{ vendorType, vendorId,
+orderId, originalPayoutId, provider, currency, amount, remainingAmount, status }`. Deliberately
+`restaurant`/`store` only, never `rider` — a rider keeps their delivery fee regardless of a later
+food-related refund, since they already performed the delivery.
+
+Created by `OrdersService.finalizeRefund` (via a private `recordVendorClawbackIfNeeded` step) the
+moment a refund actually completes, if `order.vendorPayoutId` was already set — putting the check
+inside `finalizeRefund` itself (rather than in `PaymentsService.refundOrder`) means every caller of
+`finalizeRefund` gets clawback protection automatically, including the out-of-band webhook path
+below, with nothing to remember per call site. If the order was never paid out (the common case —
+most refunds happen well before the next Monday), its `REFUNDED` status already excludes it from
+`PayoutsService.getUnpaidVendorEarnings` on its own; no clawback needed.
+
+**Module-boundary note**: `PayoutsModule` already imports `PaymentsModule` (to reuse the provider
+adapters for transfers), so `PaymentsModule` cannot import `PayoutsModule` back. The clawback write
+path therefore lives in `OrdersService` (which `PaymentsModule` already depends on via
+`OrdersModule`), with `OrdersModule` registering its own `MongooseModule.forFeature` entry for the
+`PayoutClawback` schema — the same "reuse the schema, not the owning module" pattern `PayoutsModule`
+already used for `Order`. `PayoutsService`/`PayoutExecutionService` register the same schema again
+on the read/consume side; nothing about a shared Mongoose schema registered in two modules is new
+here.
+
+**Consuming a clawback** happens in `PayoutsService.getUnpaidVendorEarnings`: after building each
+`(provider, currency)` earnings group as before, `applyClawbacks` nets that vendor's `pending`
+clawbacks for the same `(provider, currency)` against it — oldest first, greedily consumed, capped
+so the net amount can never go negative. `UnpaidEarningsGroup` gained `rawGrossAmount`,
+`clawbackDeducted`, and `clawbackConsumption` (which clawback ids were consumed, by how much) —
+all computed live from each clawback's current `remainingAmount`, never snapshotted, so an
+unconsumed remainder simply carries forward and keeps being deducted from subsequent weeks with no
+extra state. `PayoutExecutionService.executePayout` decrements each consumed clawback's
+`remainingAmount` (flipping it to `fully_applied` at zero) **only** on a confirmed successful
+payout — never on a rejected or ambiguous attempt, since nothing was actually recovered in that
+case. A clawback that fully absorbs a week's raw earnings (net `grossAmount` of 0) still needs its
+orders claimed and the clawback decremented, just with no actual provider transfer — handled as an
+immediate-success, zero-transfer branch rather than being skipped the way a genuinely-empty group
+is (`attemptGroup`'s skip condition changed from `grossAmount <= 0` to `orderIds.length === 0`).
+`Payout.clawbackDeducted` (new field) records how much was withheld, so a vendor's payout history
+shows *why* a payout was smaller than their gross earnings that week.
+
+**Ambiguous refund outcome — mirrors the payout side's `TransferOutcomeUnknownError` design.** New
+`RefundOutcomeUnknownError` (`payments/adapters/refund-outcome-unknown.error.ts`), thrown by each
+adapter's `refund()` on a network-layer failure (never on a confirmed provider rejection, which
+stays a plain `Error` exactly as before). `PaymentsService.refundOrder` catches it distinctly:
+instead of `revertFailedRefundClaim` (which would falsely imply nothing happened), it calls
+`OrdersService.flagAmbiguousRefund`, which reverts `status` to its pre-claim value (the order never
+falsely shows REFUNDED) but sets new `Order.refundReconciliationRequired`/`refundFailureReason`
+fields. `claimForRefund`'s own filter now excludes `refundReconciliationRequired: true`, so a
+blind retry is structurally blocked, not just discouraged — an admin must resolve it first via
+`OrdersService.resolveRefundReconciliation(orderId, refundActuallySucceeded)` (`true` finalizes the
+refund for real, clawback check included via the same `finalizeRefund` choke point; `false` just
+clears the flag), exposed as `PATCH /payments/:orderId/resolve-refund-reconciliation` — the same
+shape as `PayoutExecutionService.resolveReconciliation`. Stripe's `refund()` also gained an
+idempotency key (`refund:${paymentRef}`, mirroring `transfer()`'s existing one) and no longer
+silently no-ops when a checkout session has no payment intent (it now throws — `refundOrder` only
+ever calls this on an already-succeeded payment, so a missing payment intent means something
+upstream is wrong, not a safe-to-ignore case).
+
+**Out-of-band refund/dispute detection** — a refund issued directly in a provider's dashboard, or a
+customer's bank filing a chargeback, previously never touched `Order.paymentStatus` at all, since
+that only ever changed via `refundOrder`'s own code path. New `PaymentsService.handleRefundWebhook`
+(called unconditionally alongside the existing webhook handlers, same "one URL, multiple event
+types, each parse safely no-ops on the others" pattern the Stripe Connect account webhook already
+uses) resolves the order and, for a refund, reuses the exact `claimForRefund`/`finalizeRefund` pair
+the manual admin flow uses — idempotency and concurrency safety (including against a *simultaneous*
+admin-triggered refund) come for free. For a dispute, it only sets a new informational
+`Order.disputeFlagged` and notifies admins — this codebase never submits dispute evidence, an admin
+handles the actual dispute directly in the provider's dashboard.
+
+Provider coverage is asymmetric, honestly documented rather than guessed: **Stripe** (`charge.
+refunded`/`charge.dispute.created`) is fully confirmed against Stripe's own docs — the event's
+Charge object only carries `payment_intent`, not the checkout session id, resolved via
+`checkout.sessions.list({ payment_intent })`. **Flutterwave** (`refund.completed`) is also
+confirmed against its official docs, including the `charge_id` → `tx_ref` resolution via `GET
+/transactions/{id}/verify` — but Flutterwave does not send refund webhooks by default; enabling
+them requires contacting Flutterwave support, an operational prerequisite this code can't satisfy
+itself (same class of gap as Paystack's transfer-OTP requirement, backend/CLAUDE.md). No confirmed
+Flutterwave dispute event was found. **Paystack** (`refund.processed`, `dispute.create`/`dispute.
+remind`) is implemented from third-party documentation only — Paystack's own webhook docs returned
+HTTP 403 while building this and could not be directly verified; the parser is defensive (checks
+two possible reference-field locations, never throws on an unexpected shape) but is flagged in code
+comments as needing verification against a real Paystack sandbox delivery before being fully relied
+on in production.
+
+**Admin visibility**: new `OrdersService.findNeedingRefundAttention()` — the union of `{status:
+CANCELLED, paymentStatus: succeeded}` (a cancelled order whose charge was never reversed; nothing
+else in this codebase prompts an admin to notice this, since cancelling and refunding are two
+independent manual actions) and `{refundReconciliationRequired: true}` — exposed as `GET
+/orders/admin/needs-refund-attention` and surfaced as a new "Needs attention" section at the top of
+the admin Refunds tab (`admin/refunds-tab.tsx`), listing each with a one-click refund or
+resolve-reconciliation action depending on which case it is. The same pass also fixed a real,
+unrelated bug in that tab found while touching it: its "refundable" check only allowed `DELIVERED`
+orders, even though the backend has allowed refunding a `CANCELLED`-with-succeeded-payment order
+since FDP-65 — an admin had no way to refund that case through the UI at all despite the API
+supporting it.
+
+**Explicitly out of scope**: partial refunds (the whole adapter interface and clawback design
+assume a full reversal — a real, larger change, not attempted here) and full chargeback/dispute
+lifecycle management (evidence submission stays a manual, out-of-app process).

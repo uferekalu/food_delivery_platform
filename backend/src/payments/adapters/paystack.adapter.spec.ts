@@ -369,6 +369,115 @@ describe('PaystackAdapter', () => {
         'Insufficient balance in main account',
       );
     });
+
+    it('throws RefundOutcomeUnknownError (docs/ROADMAP.md FDP-104), not a plain Error, on a network-layer failure — outcome genuinely unknown', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('fetch failed')) as never;
+
+      const adapter = new PaystackAdapter(configWith(TEST_SECRET));
+      await expect(adapter.refund('ref_123')).rejects.toMatchObject({
+        name: 'RefundOutcomeUnknownError',
+      });
+    });
+  });
+
+  describe('parseRefundOrDisputeWebhookEvent (docs/ROADMAP.md FDP-104)', () => {
+    let adapter: PaystackAdapter;
+
+    beforeEach(() => {
+      adapter = new PaystackAdapter(configWith(TEST_SECRET));
+    });
+
+    it('returns null when no signature header is present', async () => {
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from('{}'),
+        undefined,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null for an incorrect signature', async () => {
+      const body = JSON.stringify({
+        event: 'refund.processed',
+        data: { transaction_reference: 'ref_123' },
+      });
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        '0'.repeat(128),
+      );
+      expect(result).toBeNull();
+    });
+
+    it('accepts a genuinely signed refund.processed event with the reference at data.transaction_reference', async () => {
+      const body = JSON.stringify({
+        event: 'refund.processed',
+        data: { transaction_reference: 'ref_123' },
+      });
+      const signature = sign(TEST_SECRET, body);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        signature,
+      );
+
+      expect(result).toEqual({ reference: 'ref_123', kind: 'refunded' });
+    });
+
+    it('also accepts the reference nested at data.transaction.reference', async () => {
+      const body = JSON.stringify({
+        event: 'refund.processed',
+        data: { transaction: { reference: 'ref_456' } },
+      });
+      const signature = sign(TEST_SECRET, body);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        signature,
+      );
+
+      expect(result).toEqual({ reference: 'ref_456', kind: 'refunded' });
+    });
+
+    it('accepts dispute.create/dispute.remind with kind dispute_created', async () => {
+      const body = JSON.stringify({
+        event: 'dispute.create',
+        data: { transaction_reference: 'ref_789' },
+      });
+      const signature = sign(TEST_SECRET, body);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        signature,
+      );
+
+      expect(result).toEqual({ reference: 'ref_789', kind: 'dispute_created' });
+    });
+
+    it('ignores an event type it does not act on', async () => {
+      const body = JSON.stringify({
+        event: 'charge.success',
+        data: { reference: 'ref_123', status: 'success' },
+      });
+      const signature = sign(TEST_SECRET, body);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        signature,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null (does not throw) when no reference field is found in the expected shape', async () => {
+      const body = JSON.stringify({ event: 'refund.processed', data: {} });
+      const signature = sign(TEST_SECRET, body);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(body),
+        signature,
+      );
+      expect(result).toBeNull();
+    });
   });
 
   describe('transfer (docs/ROADMAP.md FDP-92)', () => {

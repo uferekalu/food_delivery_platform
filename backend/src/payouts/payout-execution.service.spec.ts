@@ -6,6 +6,11 @@ import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutsService } from './payouts.service';
 import { Payout, PayoutDocument, PayoutSchema } from './schemas/payout.schema';
 import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+  PayoutClawbackSchema,
+} from './schemas/payout-clawback.schema';
+import {
   Order,
   OrderDocument,
   OrderSchema,
@@ -41,6 +46,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
   let executionService: PayoutExecutionService;
   let orderModel: Model<OrderDocument>;
   let payoutModel: Model<PayoutDocument>;
+  let payoutClawbackModel: Model<PayoutClawbackDocument>;
   let restaurantModel: Model<RestaurantDocument>;
   let storeModel: Model<StoreDocument>;
   let riderModel: Model<RiderDocument>;
@@ -72,6 +78,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
         MongooseModule.forFeature([
           { name: Order.name, schema: OrderSchema },
           { name: Payout.name, schema: PayoutSchema },
+          { name: PayoutClawback.name, schema: PayoutClawbackSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
           { name: Store.name, schema: StoreSchema },
           { name: Rider.name, schema: RiderSchema },
@@ -91,6 +98,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
     executionService = moduleRef.get(PayoutExecutionService);
     orderModel = moduleRef.get(getModelToken(Order.name));
     payoutModel = moduleRef.get(getModelToken(Payout.name));
+    payoutClawbackModel = moduleRef.get(getModelToken(PayoutClawback.name));
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
     storeModel = moduleRef.get(getModelToken(Store.name));
     riderModel = moduleRef.get(getModelToken(Rider.name));
@@ -100,6 +108,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
     await Promise.all([
       orderModel.deleteMany({}).exec(),
       payoutModel.deleteMany({}).exec(),
+      payoutClawbackModel.deleteMany({}).exec(),
       restaurantModel.deleteMany({}).exec(),
       storeModel.deleteMany({}).exec(),
       riderModel.deleteMany({}).exec(),
@@ -540,6 +549,152 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
           true,
         ),
       ).rejects.toThrow('This payout is not flagged for reconciliation');
+    });
+  });
+
+  describe('refund clawback (docs/ROADMAP.md FDP-104)', () => {
+    it('deducts a pending clawback from a vendor payout and marks it fully_applied once fully consumed', async () => {
+      const restaurant = await createRestaurant([
+        { provider: 'stripe', status: 'active', reference: 'acct_123' },
+      ]);
+      await createDeliveredOrder({
+        restaurantId: restaurant._id.toString(),
+        paymentProvider: 'stripe',
+      });
+      const clawback = await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: restaurant._id.toString(),
+        orderId: 'refunded-order-id',
+        originalPayoutId: 'previous-payout-id',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 30,
+        remainingAmount: 30,
+        status: 'pending',
+      });
+      stripeTransfer.mockResolvedValue({ transferReference: 'tr_net' });
+
+      const summary = await executionService.runWeeklyBatch();
+
+      expect(summary).toEqual({
+        succeeded: 1,
+        failed: 0,
+        reconciliationNeeded: 0,
+        skipped: 0,
+      });
+      const payouts = await payoutModel.find({}).exec();
+      expect(payouts[0].grossAmount).toBe(55); // 85 raw - 30 clawback
+      expect(payouts[0].clawbackDeducted).toBe(30);
+      expect(stripeTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 55 }),
+      );
+
+      const reloadedClawback = await payoutClawbackModel
+        .findById(clawback._id)
+        .exec();
+      expect(reloadedClawback?.remainingAmount).toBe(0);
+      expect(reloadedClawback?.status).toBe('fully_applied');
+    });
+
+    it('carries an unconsumed clawback remainder forward when it exceeds this run’s raw earnings', async () => {
+      const restaurant = await createRestaurant([
+        { provider: 'stripe', status: 'active', reference: 'acct_123' },
+      ]);
+      await createDeliveredOrder({
+        restaurantId: restaurant._id.toString(),
+        paymentProvider: 'stripe',
+      });
+      const clawback = await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: restaurant._id.toString(),
+        orderId: 'refunded-order-id',
+        originalPayoutId: 'previous-payout-id',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 200,
+        remainingAmount: 200,
+        status: 'pending',
+      });
+      stripeTransfer.mockResolvedValue({ transferReference: 'tr_zero' });
+
+      const summary = await executionService.runWeeklyBatch();
+
+      expect(summary.succeeded).toBe(1);
+      const payouts = await payoutModel.find({}).exec();
+      expect(payouts[0].grossAmount).toBe(0);
+      expect(payouts[0].clawbackDeducted).toBe(85);
+      expect(payouts[0].providerTransferReference).toBeNull();
+      // No actual money-moving call for a $0 payout — everything this week went to the clawback.
+      expect(stripeTransfer).not.toHaveBeenCalled();
+
+      const reloadedClawback = await payoutClawbackModel
+        .findById(clawback._id)
+        .exec();
+      expect(reloadedClawback?.remainingAmount).toBe(115); // 200 - 85
+      expect(reloadedClawback?.status).toBe('pending');
+    });
+
+    it('does NOT decrement a clawback when the payout attempt fails (nothing was actually recovered)', async () => {
+      const restaurant = await createRestaurant([
+        { provider: 'stripe', status: 'active', reference: 'acct_123' },
+      ]);
+      await createDeliveredOrder({
+        restaurantId: restaurant._id.toString(),
+        paymentProvider: 'stripe',
+      });
+      const clawback = await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: restaurant._id.toString(),
+        orderId: 'refunded-order-id',
+        originalPayoutId: 'previous-payout-id',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 30,
+        remainingAmount: 30,
+        status: 'pending',
+      });
+      stripeTransfer.mockRejectedValue(
+        new Error('Destination account rejected'),
+      );
+
+      await executionService.runWeeklyBatch();
+
+      const reloadedClawback = await payoutClawbackModel
+        .findById(clawback._id)
+        .exec();
+      expect(reloadedClawback?.remainingAmount).toBe(30);
+      expect(reloadedClawback?.status).toBe('pending');
+    });
+  });
+
+  describe('idempotency (docs/ROADMAP.md FDP-104)', () => {
+    it('is safe to run twice in a row — the second run pays nothing new', async () => {
+      const restaurant = await createRestaurant([
+        { provider: 'stripe', status: 'active', reference: 'acct_123' },
+      ]);
+      await createDeliveredOrder({
+        restaurantId: restaurant._id.toString(),
+        paymentProvider: 'stripe',
+      });
+      stripeTransfer.mockResolvedValue({ transferReference: 'tr_once' });
+
+      const first = await executionService.runWeeklyBatch();
+      expect(first).toEqual({
+        succeeded: 1,
+        failed: 0,
+        reconciliationNeeded: 0,
+        skipped: 0,
+      });
+
+      const second = await executionService.runWeeklyBatch();
+      expect(second).toEqual({
+        succeeded: 0,
+        failed: 0,
+        reconciliationNeeded: 0,
+        skipped: 0,
+      });
+      expect(await payoutModel.countDocuments().exec()).toBe(1);
+      expect(stripeTransfer).toHaveBeenCalledTimes(1);
     });
   });
 });

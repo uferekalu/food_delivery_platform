@@ -3,6 +3,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Order, OrderSchema } from '../orders/schemas/order.schema';
 import { Payout, PayoutSchema } from './schemas/payout.schema';
 import {
+  PayoutClawback,
+  PayoutClawbackSchema,
+} from './schemas/payout-clawback.schema';
+import {
   Restaurant,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
@@ -24,6 +28,12 @@ import { PayoutsController } from './payouts.controller';
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Payout.name, schema: PayoutSchema },
+      // Refund-hardening pass (docs/ROADMAP.md FDP-104) — the read/consume side of the clawback
+      // ledger (PayoutsService nets pending clawbacks against a vendor's earnings;
+      // PayoutExecutionService decrements one on a confirmed successful payout). OrdersModule
+      // registers the same schema independently for the write side (a refund creates one) — see
+      // that module for why this isn't just imported via OrdersModule instead.
+      { name: PayoutClawback.name, schema: PayoutClawbackSchema },
       // Restaurant/Store/Rider are registered directly here (read-only access to their
       // `payoutAccounts`), not via their own feature modules — same "inject the model, not the
       // whole domain service" pattern PayoutsService already uses for Order, and it keeps this

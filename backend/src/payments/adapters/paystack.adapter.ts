@@ -9,6 +9,7 @@ import type {
   WebhookEvent,
 } from './payment-adapter.interface';
 import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
+import { RefundOutcomeUnknownError } from './refund-outcome-unknown.error';
 
 const BASE_URL = 'https://api.paystack.co';
 
@@ -31,6 +32,18 @@ interface PaystackRefundResponse {
 interface PaystackWebhookPayload {
   event: string;
   data: { reference: string; status: string };
+}
+
+interface PaystackRefundWebhookPayload {
+  event: string;
+  // Confirmed only via third-party documentation, NOT Paystack's own docs (blocked fetching
+  // those live while building this) — Paystack's `refund.processed`/`refund.failed` webhook is
+  // reported to carry the original transaction reference at one of these two locations. Both are
+  // checked defensively; see parseRefundWebhookEvent's doc comment.
+  data?: {
+    transaction_reference?: string;
+    transaction?: { reference?: string };
+  };
 }
 
 export interface PaystackBank {
@@ -169,13 +182,86 @@ export class PaystackAdapter implements PaymentAdapter {
     // balance in main account' }) was silently treated as success, letting
     // PaymentsService.refundOrder mark the order REFUNDED (terminal) with no money actually
     // returned (docs/ROADMAP.md FDP-65).
-    const result = await this.request<PaystackRefundResponse>('/refund', {
-      method: 'POST',
-      body: JSON.stringify({ transaction: paymentRef }),
-    });
+    let result: PaystackRefundResponse;
+    try {
+      result = await this.request<PaystackRefundResponse>('/refund', {
+        method: 'POST',
+        body: JSON.stringify({ transaction: paymentRef }),
+      });
+    } catch (error) {
+      // A network-layer throw (fetch itself failed) — `this.request` never throws on a confirmed
+      // HTTP/JSON response, even a rejected one (docs/ROADMAP.md FDP-104), so the outcome here is
+      // genuinely unknown, not a clean rejection.
+      throw new RefundOutcomeUnknownError(
+        `Paystack refund outcome unknown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
     if (!result.status) {
       throw new Error(result.message ?? 'Paystack refund failed');
     }
+  }
+
+  /**
+   * Detects a refund issued OUTSIDE this app, or a chargeback dispute (docs/ROADMAP.md FDP-104).
+   * **The exact event names/payload shape below (`refund.processed`/`refund.failed`,
+   * `dispute.create`/`dispute.remind`, and the reference living at
+   * `data.transaction_reference`/`data.transaction.reference`) were confirmed only via
+   * third-party documentation — Paystack's own webhook docs returned HTTP 403 while building
+   * this and could not be directly verified.** Never throws on an unexpected shape (returns
+   * `null`, same posture as `handleWebhook`) — this must be validated against a real Paystack
+   * sandbox webhook delivery before being fully relied on in production; treat as the same class
+   * of "verify before trusting" caveat `docs/ROADMAP.md` FDP-101's tax rate table already carries.
+   */
+  parseRefundOrDisputeWebhookEvent(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): Promise<{
+    reference: string;
+    kind: 'refunded' | 'dispute_created';
+  } | null> {
+    if (!signature) return Promise.resolve(null);
+
+    const expected = createHmac('sha512', this.secretKey)
+      .update(rawBody)
+      .digest('hex');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const signatureBuf = Buffer.from(signature, 'utf8');
+    if (
+      expectedBuf.length !== signatureBuf.length ||
+      !timingSafeEqual(expectedBuf, signatureBuf)
+    ) {
+      return Promise.resolve(null);
+    }
+
+    let payload: PaystackRefundWebhookPayload;
+    try {
+      payload = JSON.parse(
+        rawBody.toString('utf8'),
+      ) as PaystackRefundWebhookPayload;
+    } catch {
+      return Promise.resolve(null);
+    }
+
+    let kind: 'refunded' | 'dispute_created';
+    if (payload.event === 'refund.processed') {
+      kind = 'refunded';
+    } else if (
+      payload.event === 'dispute.create' ||
+      payload.event === 'dispute.remind'
+    ) {
+      kind = 'dispute_created';
+    } else {
+      return Promise.resolve(null);
+    }
+
+    const reference =
+      payload.data?.transaction_reference ??
+      payload.data?.transaction?.reference;
+    if (!reference) return Promise.resolve(null);
+    return Promise.resolve({ reference, kind });
   }
 
   // --- Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) ---

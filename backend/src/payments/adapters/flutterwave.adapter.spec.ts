@@ -380,6 +380,122 @@ describe('FlutterwaveAdapter', () => {
         'Transaction already refunded',
       );
     });
+
+    it('throws RefundOutcomeUnknownError (docs/ROADMAP.md FDP-104), not a plain Error, when the refund call itself hits a network error (the read-only verify step already succeeded)', async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              status: 'success',
+              data: { id: 42, status: 'successful', tx_ref: 'ORD-1-abcd' },
+            }),
+        })
+        .mockRejectedValueOnce(new Error('socket hang up'));
+      global.fetch = fetchMock as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.refund('ORD-1-abcd')).rejects.toMatchObject({
+        name: 'RefundOutcomeUnknownError',
+      });
+    });
+
+    it('throws a plain Error (not ambiguous) when the read-only verify step itself fails — nothing was attempted yet', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('socket hang up')) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      await expect(adapter.refund('ORD-1-abcd')).rejects.toThrow(
+        'socket hang up',
+      );
+    });
+  });
+
+  describe('parseRefundWebhookEvent (docs/ROADMAP.md FDP-104)', () => {
+    const originalFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('returns null when no signature header is present', async () => {
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const result = await adapter.parseRefundWebhookEvent(
+        Buffer.from('{}'),
+        undefined,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the header does not match the configured hash', async () => {
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const body = JSON.stringify({
+        event: 'refund.completed',
+        data: { charge_id: 99 },
+      });
+      const result = await adapter.parseRefundWebhookEvent(
+        Buffer.from(body),
+        'wrong-hash',
+      );
+      expect(result).toBeNull();
+    });
+
+    it('resolves refund.completed to the original tx_ref via GET /transactions/{charge_id}/verify', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: 'success',
+            data: { tx_ref: 'ORD-1-abcd' },
+          }),
+      }) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const body = JSON.stringify({
+        event: 'refund.completed',
+        data: { charge_id: 99 },
+      });
+
+      const result = await adapter.parseRefundWebhookEvent(
+        Buffer.from(body),
+        TEST_WEBHOOK_HASH,
+      );
+
+      expect(result).toEqual({ sessionReference: 'ORD-1-abcd' });
+      const [url] = (global.fetch as jest.Mock).mock.calls[0] as [string];
+      expect(url).toContain('/transactions/99/verify');
+    });
+
+    it('ignores an event type it does not act on', async () => {
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const body = JSON.stringify({
+        event: 'charge.completed',
+        data: { id: 1, tx_ref: 'ORD-1-abcd', status: 'successful' },
+      });
+
+      const result = await adapter.parseRefundWebhookEvent(
+        Buffer.from(body),
+        TEST_WEBHOOK_HASH,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null (never throws) when the verify lookup does not resolve to a tx_ref', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: () => Promise.resolve({ status: 'error' }),
+      }) as never;
+
+      const adapter = new FlutterwaveAdapter(configWith(TEST_WEBHOOK_HASH));
+      const body = JSON.stringify({
+        event: 'refund.completed',
+        data: { charge_id: 99 },
+      });
+
+      const result = await adapter.parseRefundWebhookEvent(
+        Buffer.from(body),
+        TEST_WEBHOOK_HASH,
+      );
+      expect(result).toBeNull();
+    });
   });
 
   describe('transfer (docs/ROADMAP.md FDP-92)', () => {

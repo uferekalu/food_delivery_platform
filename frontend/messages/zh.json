@@ -1186,7 +1186,21 @@
     "refundOrderTitle": "退款订单 {orderNumber}？",
     "refundThisOrder": "退款此订单？",
     "refundOrderDescription": "这将向顾客退款 {total}，且无法撤销。",
-    "refund": "退款"
+    "refund": "退款",
+    "needsAttention": "需要关注",
+    "needsAttentionDescription": "需要人工判断退款状态的订单——从未退款的已取消订单，或结果未知的退款尝试。",
+    "nothingNeedsAttention": "没有需要关注的事项",
+    "nothingNeedsAttentionDescription": "所有已取消的订单均已退款，也没有退款尝试卡在对账环节。",
+    "resolve": "处理",
+    "reconciliationResolved": "对账已处理",
+    "couldNotResolve": "无法处理",
+    "resolveReconciliationTitle": "处理退款对账",
+    "resolveReconciliationDescription": "订单 {orderNumber} 曾通过 {provider} 尝试退款 {amount}，但结果一直未被确认。请先查看 {provider} 后台，然后告诉我们实际发生了什么。",
+    "checkProviderDashboardFirst": "请先在 {provider} 后台查看此时间前后是否有退款记录，再做选择——此操作无法撤销。",
+    "refundDidNotHappen": "未成功退款",
+    "refundDidHappen": "已成功退款",
+    "onlyDeliveredOrCancelledCanBeRefunded": "只有已送达或已取消且支付成功的订单才能退款。",
+    "pendingReconciliationAlert": "该订单有一个退款尝试正等待人工对账——请先在上方列表中处理。"
   },
   "AdminRestaurantReviewPage": {
     "sunday": "周日",

@@ -13,6 +13,12 @@ import { TaxResolver } from './tax-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
+import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+  PayoutClawbackSchema,
+} from '../payouts/schemas/payout-clawback.schema';
 import {
   DeliveryZone,
   DeliveryZoneDocument,
@@ -71,6 +77,9 @@ describe('OrdersService', () => {
   let orderModel: Model<OrderDocument>;
   let zoneModel: Model<DeliveryZoneDocument>;
   let riderModel: Model<RiderDocument>;
+  let payoutClawbackModel: Model<PayoutClawbackDocument>;
+  let notify: jest.Mock;
+  let listAll: jest.Mock;
 
   const userId = 'customer-id';
   const validAddress = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' };
@@ -94,6 +103,7 @@ describe('OrdersService', () => {
           { name: PromoCode.name, schema: PromoCodeSchema },
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
           { name: Rider.name, schema: RiderSchema },
+          { name: PayoutClawback.name, schema: PayoutClawbackSchema },
         ]),
       ],
       providers: [
@@ -115,6 +125,20 @@ describe('OrdersService', () => {
           provide: NotificationsService,
           useValue: { notify: jest.fn().mockResolvedValue(undefined) },
         },
+        {
+          // Admin fan-out for the refund-hardening pass (docs/ROADMAP.md FDP-104) — no admins by
+          // default, individual tests override this where they need to assert on it.
+          provide: UsersService,
+          useValue: {
+            listAll: jest.fn().mockResolvedValue({
+              items: [],
+              total: 0,
+              page: 1,
+              limit: 50,
+              totalPages: 0,
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -133,6 +157,9 @@ describe('OrdersService', () => {
     orderModel = moduleRef.get(getModelToken(Order.name));
     zoneModel = moduleRef.get(getModelToken(DeliveryZone.name));
     riderModel = moduleRef.get(getModelToken(Rider.name));
+    payoutClawbackModel = moduleRef.get(getModelToken(PayoutClawback.name));
+    notify = moduleRef.get(NotificationsService).notify as jest.Mock;
+    listAll = moduleRef.get(UsersService).listAll as jest.Mock;
     // $geoNear (nearest-rider dispatch, docs/ROADMAP.md FDP-98) needs the 2dsphere index built
     // before the first geo query — see backend/CLAUDE.md/docs/ARCHITECTURE.md §22 for why this
     // can't be assumed ready right after `MongooseModule.forFeature` resolves.
@@ -145,6 +172,8 @@ describe('OrdersService', () => {
     // up once in `beforeAll`) — a test asserting an exact `toHaveBeenCalledTimes` count would
     // otherwise silently depend on how many other tests ran before it in file order.
     realtimeGateway.emitOrderStatusChanged.mockClear();
+    notify.mockClear();
+    listAll.mockClear();
     await Promise.all([
       restaurantModel.deleteMany({}).exec(),
       itemModel.deleteMany({}).exec(),
@@ -154,6 +183,7 @@ describe('OrdersService', () => {
       orderModel.deleteMany({}).exec(),
       zoneModel.deleteMany({}).exec(),
       riderModel.deleteMany({}).exec(),
+      payoutClawbackModel.deleteMany({}).exec(),
     ]);
   });
 
@@ -1639,7 +1669,282 @@ describe('OrdersService', () => {
       expect(current?.status).toBe('REFUNDED'); // untouched — paymentStatus was already 'refunded'
       expect(current?.paymentStatus).toBe('refunded');
     });
+  });
 
+  describe('refund clawback (docs/ROADMAP.md FDP-104)', () => {
+    it('finalizeRefund creates a PayoutClawback when the order had already been paid out to the vendor', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await orderModel
+        .updateOne({ _id: order._id }, { vendorPayoutId: 'old-payout-id' })
+        .exec();
+
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.finalizeRefund(order._id.toString());
+
+      const clawbacks = await payoutClawbackModel
+        .find({ orderId: order._id.toString() })
+        .exec();
+      expect(clawbacks).toHaveLength(1);
+      expect(clawbacks[0]).toMatchObject({
+        vendorType: 'restaurant',
+        vendorId: restaurant._id.toString(),
+        originalPayoutId: 'old-payout-id',
+        provider: 'paystack',
+        currency: 'NGN',
+        amount: 8.5,
+        remainingAmount: 8.5,
+        status: 'pending',
+      });
+
+      const vendorNotified = notify.mock.calls.some(
+        ([input]: [{ userId: string; type: string }]) =>
+          input.userId === 'owner-id' &&
+          input.type === 'refund_clawback_created',
+      );
+      expect(vendorNotified).toBe(true);
+    });
+
+    it('finalizeRefund creates NO clawback when the order was never paid out (the common case)', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      // vendorPayoutId stays null — never paid out.
+
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.finalizeRefund(order._id.toString());
+
+      const clawbacks = await payoutClawbackModel
+        .find({ orderId: order._id.toString() })
+        .exec();
+      expect(clawbacks).toHaveLength(0);
+    });
+
+    it('notifies every admin about the clawback', async () => {
+      listAll.mockResolvedValueOnce({
+        items: [{ _id: { toString: () => 'admin-1' } }],
+        total: 1,
+        page: 1,
+        limit: 50,
+        totalPages: 1,
+      });
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await orderModel
+        .updateOne({ _id: order._id }, { vendorPayoutId: 'old-payout-id' })
+        .exec();
+
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.finalizeRefund(order._id.toString());
+
+      const adminNotified = notify.mock.calls.some(
+        ([input]: [{ userId: string; type: string }]) =>
+          input.userId === 'admin-1' &&
+          input.type === 'refund_clawback_created',
+      );
+      expect(adminNotified).toBe(true);
+    });
+  });
+
+  describe('ambiguous refund reconciliation (docs/ROADMAP.md FDP-104)', () => {
+    it('flagAmbiguousRefund reverts status but keeps the order flagged, blocking a further claimForRefund', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await ordersService.claimForRefund(order._id.toString());
+
+      await ordersService.flagAmbiguousRefund(
+        order._id.toString(),
+        'DELIVERED',
+        'connection reset mid-request',
+      );
+
+      const reloaded = await orderModel.findById(order._id).exec();
+      expect(reloaded?.status).toBe('DELIVERED'); // reverted — never falsely shows REFUNDED
+      expect(reloaded?.paymentStatus).toBe('succeeded');
+      expect(reloaded?.refundReconciliationRequired).toBe(true);
+      expect(reloaded?.refundFailureReason).toBe(
+        'connection reset mid-request',
+      );
+
+      const secondClaim = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(secondClaim).toBeNull(); // blocked until resolved
+    });
+
+    it('resolveRefundReconciliation(true) finalizes the refund for real, clawback included', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await orderModel
+        .updateOne({ _id: order._id }, { vendorPayoutId: 'old-payout-id' })
+        .exec();
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.flagAmbiguousRefund(
+        order._id.toString(),
+        'DELIVERED',
+        'connection reset',
+      );
+
+      const resolved = await ordersService.resolveRefundReconciliation(
+        order._id.toString(),
+        true,
+      );
+
+      expect(resolved.status).toBe('REFUNDED');
+      expect(resolved.paymentStatus).toBe('refunded');
+      expect(resolved.refundReconciliationRequired).toBe(false);
+      const clawbacks = await payoutClawbackModel
+        .find({ orderId: order._id.toString() })
+        .exec();
+      expect(clawbacks).toHaveLength(1); // the reconciliation success path still runs it
+    });
+
+    it('resolveRefundReconciliation(false) just clears the flag, leaving the order refundable again', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.flagAmbiguousRefund(
+        order._id.toString(),
+        'DELIVERED',
+        'connection reset',
+      );
+
+      const resolved = await ordersService.resolveRefundReconciliation(
+        order._id.toString(),
+        false,
+      );
+
+      expect(resolved.status).toBe('DELIVERED');
+      expect(resolved.refundReconciliationRequired).toBe(false);
+      const secondClaim = await ordersService.claimForRefund(
+        order._id.toString(),
+      );
+      expect(secondClaim).not.toBeNull(); // refundable again
+    });
+
+    it('rejects resolving an order that was never flagged', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+
+      await expect(
+        ordersService.resolveRefundReconciliation(order._id.toString(), true),
+      ).rejects.toThrow('This order is not flagged for refund reconciliation');
+    });
+  });
+
+  describe('dispute flagging (docs/ROADMAP.md FDP-104)', () => {
+    it('flagDispute sets disputeFlagged without touching status/paymentStatus, and notifies admins', async () => {
+      listAll.mockResolvedValueOnce({
+        items: [{ _id: { toString: () => 'admin-1' } }],
+        total: 1,
+        page: 1,
+        limit: 50,
+        totalPages: 1,
+      });
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+
+      await ordersService.flagDispute(order._id.toString());
+
+      const reloaded = await orderModel.findById(order._id).exec();
+      expect(reloaded?.disputeFlagged).toBe(true);
+      expect(reloaded?.status).toBe('DELIVERED');
+      expect(reloaded?.paymentStatus).toBe('succeeded');
+      const adminNotified = notify.mock.calls.some(
+        ([input]: [{ userId: string; type: string }]) =>
+          input.userId === 'admin-1' && input.type === 'order_dispute_flagged',
+      );
+      expect(adminNotified).toBe(true);
+    });
+  });
+
+  describe('findNeedingRefundAttention (docs/ROADMAP.md FDP-104)', () => {
+    it('includes a CANCELLED order whose payment was never refunded', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'CANCELLED',
+        { paymentStatus: 'succeeded' },
+      );
+
+      const result = await ordersService.findNeedingRefundAttention();
+      expect(result.map((o) => o._id.toString())).toContain(
+        order._id.toString(),
+      );
+    });
+
+    it('includes an order flagged refundReconciliationRequired', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      await ordersService.claimForRefund(order._id.toString());
+      await ordersService.flagAmbiguousRefund(
+        order._id.toString(),
+        'DELIVERED',
+        'connection reset',
+      );
+
+      const result = await ordersService.findNeedingRefundAttention();
+      expect(result.map((o) => o._id.toString())).toContain(
+        order._id.toString(),
+      );
+    });
+
+    it('excludes a normal DELIVERED order and a CANCELLED order that was never paid', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const delivered = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'DELIVERED',
+        { paymentStatus: 'succeeded' },
+      );
+      const cancelledUnpaid = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'CANCELLED',
+        { paymentStatus: 'pending' },
+      );
+
+      const result = await ordersService.findNeedingRefundAttention();
+      const ids = result.map((o) => o._id.toString());
+      expect(ids).not.toContain(delivered._id.toString());
+      expect(ids).not.toContain(cancelledUnpaid._id.toString());
+    });
+  });
+
+  describe('getAnalyticsSummary', () => {
     it('getAnalyticsSummary counts orders by status and sums revenue by currency', async () => {
       const restaurantNgn = await createApprovedRestaurant('NGN');
       const restaurantUsd = await createApprovedRestaurant('USD');
