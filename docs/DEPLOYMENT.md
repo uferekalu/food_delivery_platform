@@ -100,15 +100,18 @@ for the one above):
 
 `.github/workflows/ci.yml` runs on every push/PR to `main`: backend (lint, build, unit tests,
 e2e tests) and frontend (lint, test, build) as two independent jobs. This is a **build/test
-gate only** — it does not deploy anything. The backend host (Railway/Render) has its own GitHub
-integration that redeploys automatically on a push to `main`.
+gate only** — it does not deploy anything. Both hosts have their own GitHub integration that
+redeploys automatically on a push to `main`: the backend (Railway/Render) always has, and the
+frontend (Vercel) was reconnected on 2026-09-06 (`npx vercel git connect` — see docs/ROADMAP.md
+FDP-67 for why it was disconnected in the first place, and the incident that surfaced it: a
+merged, tested PR wasn't visible on the live site because nobody had run a manual deploy since
+the integration broke).
 
-**The frontend does not currently auto-deploy** (docs/ROADMAP.md FDP-67) — there is no working
-Vercel↔GitHub integration connected to this repo, so merging to `main` updates the code but not
-the live site. Every frontend-affecting merge needs a manual deploy from the **repo root** (not
-`frontend/` — see the CLI gotcha below): `npx vercel --prod --yes`. Reconnecting the GitHub
-integration in the Vercel dashboard (Project Settings → Git) removes the need for this; update
-this paragraph once that's done.
+If the Vercel↔GitHub integration ever breaks again (check via `npx vercel ls frontend` from the
+repo root — compare the newest deployment's age against the latest merge commit's date), the
+manual fallback is `npx vercel --prod --yes` from the **repo root** (not `frontend/` — see the
+CLI gotcha below) after every frontend-affecting merge, and `npx vercel git connect --yes` (also
+from the repo root) to reconnect it properly.
 
 ## Database backups & disaster recovery
 
