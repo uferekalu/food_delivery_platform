@@ -1096,16 +1096,44 @@ export class OrdersService {
   }
 
   /**
-   * A restaurant owner's earnings — vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51).
-   * Only counts DELIVERED orders (money the restaurant has actually, finally earned — a later
-   * refund moves an order to REFUNDED, a separate terminal state, so it naturally drops out
-   * here). `payoutSetupComplete` reflects whether *any* provider has an active payout account
-   * yet — until FDP-52/53/54 wire up real onboarding, this is always false and every
-   * restaurant's dashboard shows "payout setup required" instead of a withdraw action.
+   * Shared ownership-checked seller lookup for earnings/sales-report below (docs/ROADMAP.md
+   * FDP-102) — generalizes what was restaurant-only since FDP-51/64 to also cover stores, the
+   * same `sellerType`-first-argument generalization FDP-90 already applied to
+   * `DeliveryZonesService`/`PromoCodesService`. Returns only the fields those methods actually
+   * need (both `RestaurantDocument`/`StoreDocument` satisfy this structurally), so this doesn't
+   * need to import either concrete document type.
+   */
+  private async findSellerOrThrow(
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
+    requester: AccessTokenPayload,
+  ): Promise<{
+    _id: { toString(): string };
+    currency: string;
+    payoutAccounts: { status: string }[];
+  }> {
+    if (sellerType === 'store') {
+      const store = await this.storesService.findByIdOrThrow(sellerId);
+      this.storesService.assertOwnerOrAdmin(store, requester);
+      return store;
+    }
+    const restaurant = await this.restaurantsService.findByIdOrThrow(sellerId);
+    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    return restaurant;
+  }
+
+  /**
+   * A seller's earnings — vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51), generalized
+   * to stores in FDP-102 (previously restaurant-only, a real gap left over from FDP-90's own
+   * seller-parity pass, which generalized delivery-zones/promo-codes but not this). Only counts
+   * DELIVERED orders (money the seller has actually, finally earned — a later refund moves an
+   * order to REFUNDED, a separate terminal state, so it naturally drops out here).
+   * `payoutSetupComplete` reflects whether *any* provider has an active payout account yet.
    */
   async getEarningsSummary(
     requester: AccessTokenPayload,
-    restaurantId: string,
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
   ): Promise<{
     currency: string;
     deliveredOrders: number;
@@ -1114,9 +1142,12 @@ export class OrdersService {
     netEarned: number;
     payoutSetupComplete: boolean;
   }> {
-    const restaurant =
-      await this.restaurantsService.findByIdOrThrow(restaurantId);
-    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    const seller = await this.findSellerOrThrow(
+      sellerType,
+      sellerId,
+      requester,
+    );
+    const sellerIdField = sellerType === 'store' ? 'storeId' : 'restaurantId';
 
     const [summary] = await this.orderModel
       .aggregate<{
@@ -1130,7 +1161,7 @@ export class OrdersService {
         // doesn't auto-cast the way .find()/.findOne() do.
         {
           $match: {
-            restaurantId: restaurant._id.toString(),
+            [sellerIdField]: seller._id.toString(),
             status: 'DELIVERED',
           },
         },
@@ -1147,37 +1178,41 @@ export class OrdersService {
       .exec();
 
     return {
-      currency: restaurant.currency,
+      currency: seller.currency,
       deliveredOrders: summary?.deliveredOrders ?? 0,
       grossRevenue: summary?.grossRevenue ?? 0,
       platformFeeTotal: summary?.platformFeeTotal ?? 0,
       netEarned: summary?.netEarned ?? 0,
-      payoutSetupComplete: restaurant.payoutAccounts.some(
+      payoutSetupComplete: seller.payoutAccounts.some(
         (account) => account.status === 'active',
       ),
     };
   }
 
   /**
-   * A restaurant owner's detailed sales report (docs/ROADMAP.md FDP-64) — date-range filterable
-   * revenue/COGS/profit, broken down by item and by day. Same "only DELIVERED orders count"
-   * convention as getEarningsSummary above, filtered on `deliveredAt` rather than `createdAt`
-   * (a scheduled order placed in one period but delivered in another belongs to the period it
-   * was actually fulfilled in). COGS is computed from each OrderItem's snapshotted `costPrice`,
-   * which is null for any item that had no cost price set at order time — those contribute 0 to
-   * COGS (never silently treated as free), and are surfaced separately via
+   * A seller's detailed sales report (docs/ROADMAP.md FDP-64), generalized to stores in FDP-102
+   * (same gap/reasoning as `getEarningsSummary` above) — date-range filterable revenue/COGS/
+   * profit, broken down by item and by day. Same "only DELIVERED orders count" convention as
+   * getEarningsSummary above, filtered on `deliveredAt` rather than `createdAt` (a scheduled
+   * order placed in one period but delivered in another belongs to the period it was actually
+   * fulfilled in). COGS is computed from each OrderItem's snapshotted `costPrice`, which is null
+   * for any item that had no cost price set at order time — those contribute 0 to COGS (never
+   * silently treated as free), and are surfaced separately via
    * `itemsMissingCostPrice`/`hasIncompleteCostData` so the owner knows the profit figures are
    * incomplete rather than trusting a number that understates true cost.
    */
   async getSalesReport(
     requester: AccessTokenPayload,
-    restaurantId: string,
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
     from?: Date,
     to?: Date,
   ): Promise<SalesReport> {
-    const restaurant =
-      await this.restaurantsService.findByIdOrThrow(restaurantId);
-    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    const seller = await this.findSellerOrThrow(
+      sellerType,
+      sellerId,
+      requester,
+    );
 
     const [result] = await this.orderModel
       .aggregate<{
@@ -1204,7 +1239,8 @@ export class OrdersService {
       }>([
         {
           $match: this.deliveredOrdersMatch(
-            restaurant._id.toString(),
+            sellerType,
+            seller._id.toString(),
             from,
             to,
           ),
@@ -1335,7 +1371,7 @@ export class OrdersService {
     );
 
     return {
-      currency: restaurant.currency,
+      currency: seller.currency,
       range: { from: from ?? null, to: to ?? null },
       totals: {
         orders,
@@ -1368,16 +1404,21 @@ export class OrdersService {
    * anyway rather than pre-aggregated summaries. */
   async getSalesReportOrders(
     requester: AccessTokenPayload,
-    restaurantId: string,
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
     from?: Date,
     to?: Date,
   ): Promise<OrderDocument[]> {
-    const restaurant =
-      await this.restaurantsService.findByIdOrThrow(restaurantId);
-    this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    const seller = await this.findSellerOrThrow(
+      sellerType,
+      sellerId,
+      requester,
+    );
 
     return this.orderModel
-      .find(this.deliveredOrdersMatch(restaurant._id.toString(), from, to))
+      .find(
+        this.deliveredOrdersMatch(sellerType, seller._id.toString(), from, to),
+      )
       .sort({ deliveredAt: 1 })
       .exec();
   }
@@ -1385,12 +1426,13 @@ export class OrdersService {
   /** Shared `$match` stage for both sales-report queries above — .toString(), never the raw
    * ObjectId (Mongoose 9 quirk, ref fields in this schema store as strings). */
   private deliveredOrdersMatch(
-    restaurantId: string,
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
     from?: Date,
     to?: Date,
   ): Record<string, unknown> {
     const match: Record<string, unknown> = {
-      restaurantId,
+      [sellerType === 'store' ? 'storeId' : 'restaurantId']: sellerId,
       status: 'DELIVERED',
     };
     if (from || to) {

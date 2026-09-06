@@ -851,6 +851,7 @@ describe('OrdersService', () => {
 
       const summary = await ordersService.getEarningsSummary(
         owner,
+        'restaurant',
         restaurant._id.toString(),
       );
 
@@ -868,6 +869,7 @@ describe('OrdersService', () => {
 
       const summary = await ordersService.getEarningsSummary(
         owner,
+        'restaurant',
         restaurant._id.toString(),
       );
 
@@ -890,7 +892,11 @@ describe('OrdersService', () => {
       } as const;
 
       await expect(
-        ordersService.getEarningsSummary(intruder, restaurant._id.toString()),
+        ordersService.getEarningsSummary(
+          intruder,
+          'restaurant',
+          restaurant._id.toString(),
+        ),
       ).rejects.toThrow();
     });
   });
@@ -962,6 +968,7 @@ describe('OrdersService', () => {
 
       const report = await ordersService.getSalesReport(
         owner,
+        'restaurant',
         restaurant._id.toString(),
       );
 
@@ -1004,6 +1011,7 @@ describe('OrdersService', () => {
 
       const report = await ordersService.getSalesReport(
         owner,
+        'restaurant',
         restaurant._id.toString(),
         new Date('2026-01-02T00:00:00.000Z'),
         new Date('2026-01-02T23:59:59.999Z'),
@@ -1021,6 +1029,7 @@ describe('OrdersService', () => {
 
       const report = await ordersService.getSalesReport(
         owner,
+        'restaurant',
         restaurant._id.toString(),
       );
 
@@ -1052,7 +1061,11 @@ describe('OrdersService', () => {
       } as const;
 
       await expect(
-        ordersService.getSalesReport(intruder, restaurant._id.toString()),
+        ordersService.getSalesReport(
+          intruder,
+          'restaurant',
+          restaurant._id.toString(),
+        ),
       ).rejects.toThrow();
     });
 
@@ -1062,6 +1075,7 @@ describe('OrdersService', () => {
 
       const orders = await ordersService.getSalesReportOrders(
         owner,
+        'restaurant',
         restaurant._id.toString(),
       );
 
@@ -1073,6 +1087,142 @@ describe('OrdersService', () => {
       expect(orders[1].deliveredAt!.getTime()).toBeLessThan(
         orders[2].deliveredAt!.getTime(),
       );
+    });
+  });
+
+  describe('store earnings/sales-report (docs/ROADMAP.md FDP-102)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    async function createApprovedStore() {
+      const store = await storesService.create(owner.sub, {
+        name: 'Market Square Supermarket',
+        type: 'groceries',
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return storesService.approve(store._id.toString());
+    }
+
+    async function createStoreOrderAtStatus(
+      storeId: string,
+      status: OrderStatus,
+    ) {
+      return orderModel.create({
+        orderNumber: `ORD-TEST-${Math.random().toString(36).slice(2, 8)}`,
+        customerId: userId,
+        sellerType: 'store',
+        restaurantId: null,
+        storeId,
+        items: [
+          {
+            productId: storeId,
+            name: 'Milk',
+            price: 10,
+            costPrice: null,
+            qty: 1,
+            selectedModifiers: [],
+            notes: '',
+          },
+        ],
+        subtotal: 10,
+        deliveryFee: 1,
+        serviceFee: 0.5,
+        tax: 0,
+        discount: 0,
+        total: 11.5,
+        platformFeeAmount: 1.5,
+        restaurantPayoutAmount: 8.5,
+        currency: 'NGN',
+        status,
+        statusHistory: [{ status, at: new Date(), by: userId }],
+        deliveredAt: status === 'DELIVERED' ? new Date() : null,
+        paymentProvider: 'paystack',
+        paymentStatus: 'pending',
+        deliveryAddress: validAddress,
+      });
+    }
+
+    it('getEarningsSummary sums a store’s DELIVERED orders only, scoped by storeId not restaurantId', async () => {
+      const store = await createApprovedStore();
+      await createStoreOrderAtStatus(store._id.toString(), 'DELIVERED');
+      await createStoreOrderAtStatus(store._id.toString(), 'DELIVERED');
+      await createStoreOrderAtStatus(store._id.toString(), 'PLACED');
+
+      const summary = await ordersService.getEarningsSummary(
+        owner,
+        'store',
+        store._id.toString(),
+      );
+
+      expect(summary.deliveredOrders).toBe(2);
+      expect(summary.grossRevenue).toBe(20);
+      expect(summary.netEarned).toBe(17);
+      expect(summary.currency).toBe('NGN');
+    });
+
+    it('getSalesReport computes totals for a store the same way as a restaurant', async () => {
+      const store = await createApprovedStore();
+      await createStoreOrderAtStatus(store._id.toString(), 'DELIVERED');
+      await createStoreOrderAtStatus(store._id.toString(), 'DELIVERED');
+
+      const report = await ordersService.getSalesReport(
+        owner,
+        'store',
+        store._id.toString(),
+      );
+
+      expect(report.currency).toBe('NGN');
+      expect(report.totals.orders).toBe(2);
+      expect(report.totals.revenue).toBe(20);
+    });
+
+    it('getSalesReportOrders returns only that store’s DELIVERED orders', async () => {
+      const store = await createApprovedStore();
+      const otherStore = await createApprovedStore();
+      await createStoreOrderAtStatus(store._id.toString(), 'DELIVERED');
+      await createStoreOrderAtStatus(otherStore._id.toString(), 'DELIVERED');
+
+      const orders = await ordersService.getSalesReportOrders(
+        owner,
+        'store',
+        store._id.toString(),
+      );
+
+      expect(orders).toHaveLength(1);
+      expect(orders[0].storeId?.toString()).toBe(store._id.toString());
+    });
+
+    it('rejects a caller who does not own the store, for all three methods', async () => {
+      const store = await createApprovedStore();
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.getEarningsSummary(
+          intruder,
+          'store',
+          store._id.toString(),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        ordersService.getSalesReport(intruder, 'store', store._id.toString()),
+      ).rejects.toThrow();
+      await expect(
+        ordersService.getSalesReportOrders(
+          intruder,
+          'store',
+          store._id.toString(),
+        ),
+      ).rejects.toThrow();
     });
   });
 

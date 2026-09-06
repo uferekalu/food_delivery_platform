@@ -766,9 +766,23 @@
     "orderQueue": "订单队列",
     "deliveryZones": "配送区域",
     "payouts": "打款",
+    "earnings": "收益",
+    "salesReport": "销售报告",
     "close": "打烊",
     "alsoRunARestaurant": "还经营着一家餐厅吗？",
     "addRestaurant": "添加餐厅"
+  },
+  "StoreEarningsPage": {
+    "storeNotFound": "未找到该商店",
+    "mayNotExistOrNoAccess": "该商店可能不存在，或者你无权访问。",
+    "earningsAppearHere": "该商店的订单送达后，收益将显示在这里。",
+    "automatedPayoutsNotAvailable": "该商店所用币种暂不支持自动打款——以下收益数据目前仅供参考。"
+  },
+  "StoreSalesReportPage": {
+    "storeNotFound": "未找到该商店",
+    "mayNotExistOrNoAccess": "该商店可能不存在，或者你无权访问。",
+    "salesFiguresAppearHere": "该商店的订单送达后，销售数据将显示在这里。",
+    "profitFiguresExclude": "以下利润数据不包含以下商品的成本：{items}。请在你的商品目录中为这些商品设置成本价，以获得完整数据。"
   },
   "StorePayoutsPage": {
     "payouts": "打款",

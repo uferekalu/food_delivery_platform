@@ -935,6 +935,8 @@ same footer buttons) — deliberately duplicated rather than extracted into a sh
 since the two are one small, self-contained dialog each, not a signal to abstract yet. On success
 it navigates to `/checkout` (with a toast if some items were skipped) — "buy again" is meant to
 get the customer moving again quickly, and checkout already reads whatever the cart resolves to.
+**Superseded by §27**: once a second call site (the orders list) needed the identical button, it
+was pulled into a shared `components/reorder-button.tsx` — see §27.
 
 ## 24. Algorithmic nearest-rider dispatch (docs/ROADMAP.md FDP-98)
 
@@ -1077,3 +1079,54 @@ can't produce negative tax (the same clamp `total` itself already has).
 authoritative total always comes from the created order") gained a duplicated `TAX_RATE_TABLE`
 for the same reason — a new "Tax (est.)" summary line, hidden entirely when the rate is 0 (most
 checkouts, given USD/EUR's default) rather than showing a redundant "$0.00 tax" row.
+
+## 27. Store earnings/sales-report parity + discoverability fixes (docs/ROADMAP.md FDP-102)
+
+Three user-reported gaps, all found from live app screenshots rather than a code audit: stores
+(groceries/pharmacy) had no earnings or sales-report pages though restaurants did; "near me" had
+no discoverable entry point anywhere in the app despite shipping in §22; and the orders list page
+had no reorder affordance even though §23 put one on the order detail page.
+
+**Earnings/sales-report parity** follows the same seller-type-generalization pattern §17's
+`DeliveryZonesService`/`PromoCodesService` established (`sellerType: 'restaurant' | 'store'` as
+the leading argument) — applied here to three `OrdersService` methods
+(`getEarningsSummary`/`getSalesReport`/`getSalesReportOrders`) and their shared
+`deliveredOrdersMatch` helper that FDP-90's own "seller parity" pass never touched, since none of
+the three existed at restaurant-only launch and nobody had circled back. A new private
+`findSellerOrThrow(sellerType, sellerId, requester)` centralizes the ownership-checked fetch,
+returning a minimal structural type (`{ _id, currency, payoutAccounts }`) rather than importing
+either concrete document type — both satisfy it as-is. `OrdersController` gained a `store/:storeId/…`
+twin of each existing `restaurant/:restaurantId/…` route, declared before the generic `:id` route
+like every other seller-scoped route pair in this controller. The sales-report CSV export's
+"Restaurant payout" column header became the generic "Seller payout", matching
+`restaurantPayoutAmount`'s own established "legacy field name, correct for either seller type"
+precedent. Frontend: `dashboard/stores/[id]/payouts/page.tsx` was deleted outright, its full
+payout-setup-form content folded into a new `dashboard/stores/[id]/earnings/page.tsx` alongside
+the previously-missing revenue-stats section, plus a new `dashboard/stores/[id]/sales-report/page.tsx`
+— both mirror their restaurant equivalents structurally, layering a small `StoreEarningsPage`/
+`StoreSalesReportPage` translation namespace over the existing shared `EarningsPage`/
+`SalesReportPage` namespace (already store-agnostic since FDP-94 reused it verbatim) for the
+handful of strings that do differ (not-found copy, "in your catalog" vs. "in your menu").
+
+**"Near me" discoverability** went through three iterations driven directly by user feedback
+rather than original design judgment. First attempt added a link to the persistent header nav
+(`app-shell.tsx`) and the mobile drawer — rejected: the header nav is already congested and
+another item there would make it worse. Second attempt considered the `/categories` page —
+abandoned before any JSX was written once the user circled a specific, different spot in a
+screenshot: directly beside the homepage hero's search box. Final placement pairs a new "Near me"
+pill `Link` with `HeaderSearch` inside one `hidden sm:flex` wrapper in the hero's top row: same
+visibility breakpoint as search itself, so neither appears alone below `sm`. The pre-existing
+"Near me" link in the hero's button-row CTA gained `sm:hidden` so mobile still gets an entry point
+once the paired desktop one disappears — avoiding showing "Near me" twice on desktop.
+
+**Reorder discoverability**: the `ReorderButton` (§23) only lived on the order detail page, one
+click deep from the orders list where a customer scanning past orders would actually look for it.
+Extracted from a local function in `orders/[id]/page.tsx` into an exported
+`components/reorder-button.tsx` (superseding §23's "not worth abstracting yet" call — a second
+call site was exactly the signal to revisit that) and added to every card on `orders/page.tsx`.
+Required restructuring `OrderRow`: the whole card could no longer be one big `Link` wrapper once
+it needed an interactive button inside it (a `<button>` nested in an `<a>` is invalid HTML) — the
+clickable "view details" region is now its own `Link` around just the summary row, with the
+`ReorderButton` sitting below as a sibling `<div>`, outside the anchor entirely. Its `onClick`
+calls `preventDefault`/`stopPropagation` defensively even though it's no longer nested inside the
+`Link`, since a future layout change could put it back inside one.
