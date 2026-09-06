@@ -539,7 +539,15 @@
     "checkingSession": "Verificando tu sesión",
     "logInToViewOrder": "Inicia sesión para ver este pedido",
     "needToBeLoggedInOrderDetails": "Debes iniciar sesión para ver los detalles del pedido.",
-    "logIn": "Iniciar sesión"
+    "logIn": "Iniciar sesión",
+    "reorder": "Volver a pedir",
+    "reorderedToast": "Añadido a tu carrito",
+    "reorderedWithSkippedToast": "Añadido a tu carrito — {count, plural, one {# artículo ya no estaba} other {# artículos ya no estaban}} disponible(s)",
+    "couldNotReorder": "No se pudo volver a pedir",
+    "startNewCartTitle": "¿Comenzar un nuevo carrito?",
+    "startNewCartDescription": "Tu carrito tiene artículos de otro restaurante o tienda. Volver a pedir esto lo vaciará.",
+    "cancel": "Cancelar",
+    "clearCartAndAdd": "Vaciar carrito y agregar"
   },
   "RestaurantsPage": {
     "metaTitle": "Restaurantes",

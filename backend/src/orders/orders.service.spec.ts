@@ -1744,4 +1744,40 @@ describe('OrdersService', () => {
       ]);
     });
   });
+
+  describe('reorder (docs/ROADMAP.md FDP-97)', () => {
+    it('rebuilds the cart from a past order the customer owns', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      const item = await createItem(restaurant._id.toString(), 100);
+      await cartService.addItem(userId, {
+        menuItemId: item._id.toString(),
+        qty: 2,
+      });
+      const order = await ordersService.createOrder(userId, {
+        deliveryAddress: validAddress,
+      });
+
+      const result = await ordersService.reorder(userId, order._id.toString());
+
+      expect(result.skippedItems).toEqual([]);
+      expect(result.cart.restaurantId).toBe(restaurant._id.toString());
+      expect(result.cart.items).toHaveLength(1);
+      expect(result.cart.items[0].qty).toBe(2);
+    });
+
+    it('rejects reordering an order that belongs to a different customer', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      const item = await createItem(restaurant._id.toString(), 100);
+      await cartService.addItem('other-customer-id', {
+        menuItemId: item._id.toString(),
+      });
+      const order = await ordersService.createOrder('other-customer-id', {
+        deliveryAddress: validAddress,
+      });
+
+      await expect(
+        ordersService.reorder(userId, order._id.toString()),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
 });

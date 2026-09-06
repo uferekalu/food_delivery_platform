@@ -886,3 +886,45 @@ an index in the background, non-blocking, on model compile — a `$geoNear` quer
 freshly-connected `mongodb-memory-server` before that index finishes building fails with "unable
 to find index for $geoNear query." Both new service spec files call `await
 restaurantModel.init()` / `await storeModel.init()` in `beforeAll` to wait for it explicitly.
+
+## 23. Reorder / "buy again" (docs/ROADMAP.md FDP-97)
+
+`POST /orders/:id/reorder` rebuilds the customer's cart from a past order's items in one call,
+rather than the frontend looping over the existing per-item `addItem`/`addStoreItem` endpoints —
+that would duplicate re-validation logic per call and trip the same cross-seller 409 conflict on
+every line instead of once for the whole order. `OrdersController.reorder` delegates to
+`OrdersService.reorder`, which reuses the existing ownership-checked `findOne` (so a customer can
+only reorder their own order — a `ForbiddenException` otherwise) and hands the hydrated
+`OrderDocument` straight to a new `CartService.reorderFromOrder`.
+
+**`reorderFromOrder` never trusts the order's frozen snapshot for anything that can have drifted
+since the order was placed.** An order's `price`/`selectedModifiers` are a point-in-time receipt,
+not a quote — so price is re-read from the current `MenuItem`/`Product`, and modifiers are
+re-resolved against the item's *current* `modifierGroups` via the same private `resolveModifiers`
+`addItem` already uses. A line whose item was deleted, is now `isAvailable: false`, or whose old
+modifier picks no longer resolve (a required group added since, an option removed) is silently
+dropped rather than failing the whole reorder — its name comes back in a `skippedItems` array so
+the frontend can tell the customer their cart doesn't fully match the original order. If every
+line gets dropped, or the order's restaurant/store is no longer approved/open, the whole call
+fails with a `BadRequestException` instead of silently handing back an empty cart.
+
+**Mirrors `addItem`/`addStoreItem`'s own replace-confirmation gate**, generalized from "adding an
+item from a different seller" to "rebuilding the whole cart from an order": a cart that already
+has items needs `replace: true` (a `ConflictException` otherwise) — the same 409-then-confirm
+pattern the frontend's `item-detail-modal.tsx` already handles for a cross-seller add is reused
+verbatim on the order detail page's new "Reorder" button.
+
+`CartService.reorderFromOrder`'s order parameter is typed as a structural `ReorderSourceOrder`
+interface (declared in `cart.service.ts`) rather than importing `OrderDocument` from
+`orders/schemas/order.schema` — `OrdersModule` already imports `CartModule` (it clears/reads the
+cart when creating an order), so a real import the other way would be circular. An `OrderDocument`
+satisfies the structural shape without any adapting, so `OrdersService.reorder` passes one
+through directly.
+
+Frontend: a "Reorder" button sits in the order detail page's Items card header
+(`orders/[id]/page.tsx`), calling a new `useReorderMutation`. Its confirm-replace modal is a
+direct copy of `item-detail-modal.tsx`'s "start a new cart?" dialog (same 409-detection helper,
+same footer buttons) — deliberately duplicated rather than extracted into a shared component,
+since the two are one small, self-contained dialog each, not a signal to abstract yet. On success
+it navigates to `/checkout` (with a toast if some items were skipped) — "buy again" is meant to
+get the customer moving again quickly, and checkout already reads whatever the cart resolves to.

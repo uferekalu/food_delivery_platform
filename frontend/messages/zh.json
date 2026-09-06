@@ -539,7 +539,15 @@
     "checkingSession": "正在检查你的登录状态",
     "logInToViewOrder": "登录以查看此订单",
     "needToBeLoggedInOrderDetails": "你需要登录才能查看订单详情。",
-    "logIn": "登录"
+    "logIn": "登录",
+    "reorder": "再来一单",
+    "reorderedToast": "已添加到购物车",
+    "reorderedWithSkippedToast": "已添加到购物车 — 有 {count} 件商品已不可用",
+    "couldNotReorder": "无法再来一单",
+    "startNewCartTitle": "开始新的购物车？",
+    "startNewCartDescription": "你的购物车中有来自另一家餐厅或商店的商品。再来一单将清空购物车。",
+    "cancel": "取消",
+    "clearCartAndAdd": "清空购物车并添加"
   },
   "RestaurantsPage": {
     "metaTitle": "餐厅",

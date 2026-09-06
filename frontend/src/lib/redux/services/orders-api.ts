@@ -1,5 +1,12 @@
 import { api } from "../api";
-import type { Address, Order, OrderStatus } from "../restaurant-types";
+import type { Address, Cart, Order, OrderStatus } from "../restaurant-types";
+
+// "Buy again" (docs/ROADMAP.md FDP-97).
+export interface ReorderResult {
+  cart: Cart;
+  /** Names of order lines that couldn't be carried over (deleted/unavailable/incompatible modifiers). */
+  skippedItems: string[];
+}
 
 export interface CreateOrderInput {
   deliveryAddress: Address;
@@ -129,6 +136,15 @@ export const ordersApi = api.injectEndpoints({
       providesTags: (_result, _error, { restaurantId }) => [{ type: "Order", id: `SALES-REPORT-${restaurantId}` }],
     }),
 
+    reorder: builder.mutation<ReorderResult, { orderId: string; replace?: boolean }>({
+      query: ({ orderId, replace }) => ({
+        url: `/orders/${orderId}/reorder`,
+        method: "POST",
+        body: { replace },
+      }),
+      invalidatesTags: ["Cart"],
+    }),
+
     updateOrderStatus: builder.mutation<Order, { orderId: string; status: OrderStatus }>({
       query: ({ orderId, status }) => ({ url: `/orders/${orderId}/status`, method: "PATCH", body: { status } }),
       // Shared by both seller types (the endpoint has no seller-type in its payload — the
@@ -152,4 +168,5 @@ export const {
   useGetRestaurantEarningsQuery,
   useGetSalesReportQuery,
   useUpdateOrderStatusMutation,
+  useReorderMutation,
 } = ordersApi;

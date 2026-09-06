@@ -6,8 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { Model } from 'mongoose';
-import { CartService } from './cart.service';
+import { Model, Types } from 'mongoose';
+import { CartService, type ReorderSourceOrder } from './cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
 import {
@@ -471,6 +471,239 @@ describe('CartService', () => {
       });
       expect(switchedBack.sellerType).toBe('restaurant');
       expect(switchedBack.items).toHaveLength(1);
+    });
+  });
+
+  describe('reorderFromOrder (docs/ROADMAP.md FDP-97)', () => {
+    function restaurantOrder(
+      restaurantId: Types.ObjectId,
+      items: ReorderSourceOrder['items'],
+    ): ReorderSourceOrder {
+      return { sellerType: 'restaurant', restaurantId, storeId: null, items };
+    }
+
+    function storeOrder(
+      storeId: Types.ObjectId,
+      items: ReorderSourceOrder['items'],
+    ): ReorderSourceOrder {
+      return { sellerType: 'store', restaurantId: null, storeId, items };
+    }
+
+    it('rebuilds a cart from a past restaurant order, re-resolving modifiers and current price', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const item = await createItem(restaurant._id.toString(), {
+        price: 12,
+        modifierGroups: [
+          {
+            name: 'Size',
+            min: 1,
+            max: 1,
+            options: [{ name: 'Large', priceDelta: 2 }],
+          },
+        ],
+      });
+
+      const order = restaurantOrder(restaurant._id, [
+        {
+          menuItemId: item._id,
+          productId: null,
+          name: item.name,
+          qty: 2,
+          notes: 'no onions',
+          selectedModifiers: [{ groupName: 'Size', optionName: 'Large' }],
+        },
+      ]);
+
+      const result = await cartService.reorderFromOrder(userId, order);
+
+      expect(result.skippedItems).toEqual([]);
+      expect(result.cart.restaurantId).toBe(restaurant._id.toString());
+      expect(result.cart.items).toHaveLength(1);
+      expect(result.cart.items[0].qty).toBe(2);
+      expect(result.cart.items[0].notes).toBe('no onions');
+      expect(result.cart.subtotal).toBe(28); // (12 + 2 priceDelta) * 2
+    });
+
+    it('rebuilds a cart from a past store order, using the current (possibly discounted) price', async () => {
+      const store = await createApprovedStore();
+      const product = await createProduct(store._id.toString(), {
+        price: 10,
+        discountedPrice: 7,
+      });
+
+      const order = storeOrder(store._id, [
+        {
+          menuItemId: null,
+          productId: product._id,
+          name: product.name,
+          qty: 3,
+          notes: '',
+          selectedModifiers: [],
+        },
+      ]);
+
+      const result = await cartService.reorderFromOrder(userId, order);
+
+      expect(result.skippedItems).toEqual([]);
+      expect(result.cart.storeId).toBe(store._id.toString());
+      expect(result.cart.items[0].price).toBe(7);
+      expect(result.cart.subtotal).toBe(21);
+    });
+
+    it('skips a line whose menu item was deleted or is now unavailable, reporting it in skippedItems', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const stillAvailable = await createItem(restaurant._id.toString(), {
+        name: 'Still here',
+      });
+      const nowUnavailable = await createItem(restaurant._id.toString(), {
+        name: 'Now unavailable',
+        isAvailable: false,
+      });
+      const deletedItemId = new Types.ObjectId();
+
+      const order = restaurantOrder(restaurant._id, [
+        {
+          menuItemId: stillAvailable._id,
+          productId: null,
+          name: stillAvailable.name,
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+        {
+          menuItemId: nowUnavailable._id,
+          productId: null,
+          name: nowUnavailable.name,
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+        {
+          menuItemId: deletedItemId,
+          productId: null,
+          name: 'Deleted item',
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+      ]);
+
+      const result = await cartService.reorderFromOrder(userId, order);
+
+      expect(result.skippedItems.sort()).toEqual(
+        ['Deleted item', 'Now unavailable'].sort(),
+      );
+      expect(result.cart.items).toHaveLength(1);
+      expect(result.cart.items[0].name).toBe('Still here');
+    });
+
+    it('skips a line whose old modifier selections no longer resolve against the item', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const item = await createItem(restaurant._id.toString(), {
+        modifierGroups: [
+          {
+            name: 'Size',
+            min: 1,
+            max: 1,
+            options: [{ name: 'Small', priceDelta: 0 }],
+          },
+        ],
+      });
+
+      const order = restaurantOrder(restaurant._id, [
+        {
+          menuItemId: item._id,
+          productId: null,
+          name: item.name,
+          qty: 1,
+          notes: '',
+          // "Large" no longer exists as an option on this item's one modifier group.
+          selectedModifiers: [{ groupName: 'Size', optionName: 'Large' }],
+        },
+      ]);
+
+      await expect(cartService.reorderFromOrder(userId, order)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('throws when the restaurant is no longer approved/open', async () => {
+      const restaurant = await restaurantsService.create('owner-id', {
+        name: 'Not Approved',
+        cuisineTypes: ['Test'],
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      const item = await createItem(restaurant._id.toString());
+      const order = restaurantOrder(restaurant._id, [
+        {
+          menuItemId: item._id,
+          productId: null,
+          name: item.name,
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+      ]);
+
+      await expect(cartService.reorderFromOrder(userId, order)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('requires replace: true when the cart already has items, and clears it when replace is set', async () => {
+      const restaurantA = await createApprovedRestaurant('Restaurant A');
+      const itemA = await createItem(restaurantA._id.toString(), {
+        name: 'From A',
+      });
+      await cartService.addItem(userId, { menuItemId: itemA._id.toString() });
+
+      const restaurantB = await createApprovedRestaurant('Restaurant B');
+      const itemB = await createItem(restaurantB._id.toString(), {
+        name: 'From B',
+      });
+      const order = restaurantOrder(restaurantB._id, [
+        {
+          menuItemId: itemB._id,
+          productId: null,
+          name: itemB.name,
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+      ]);
+
+      await expect(cartService.reorderFromOrder(userId, order)).rejects.toThrow(
+        ConflictException,
+      );
+
+      const result = await cartService.reorderFromOrder(userId, order, true);
+      expect(result.cart.restaurantId).toBe(restaurantB._id.toString());
+      expect(result.cart.items).toHaveLength(1);
+      expect(result.cart.items[0].name).toBe('From B');
+    });
+
+    it('throws when every line in the order is unavailable to reorder', async () => {
+      const restaurant = await createApprovedRestaurant();
+      const item = await createItem(restaurant._id.toString(), {
+        isAvailable: false,
+      });
+      const order = restaurantOrder(restaurant._id, [
+        {
+          menuItemId: item._id,
+          productId: null,
+          name: item.name,
+          qty: 1,
+          notes: '',
+          selectedModifiers: [],
+        },
+      ]);
+
+      await expect(cartService.reorderFromOrder(userId, order)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });
