@@ -1186,7 +1186,21 @@
     "refundOrderTitle": "Bestellung {orderNumber} erstatten?",
     "refundThisOrder": "Diese Bestellung erstatten?",
     "refundOrderDescription": "Dies erstattet {total} an den Kunden zurück und kann nicht rückgängig gemacht werden.",
-    "refund": "Erstatten"
+    "refund": "Erstatten",
+    "needsAttention": "Erfordert Aufmerksamkeit",
+    "needsAttentionDescription": "Bestellungen, die eine menschliche Entscheidung über ihren Erstattungsstatus benötigen — eine stornierte Bestellung, die nie erstattet wurde, oder eine Erstattung mit unbekanntem Ausgang.",
+    "nothingNeedsAttention": "Nichts erfordert Aufmerksamkeit",
+    "nothingNeedsAttentionDescription": "Jede stornierte Bestellung wurde erstattet, und kein Erstattungsversuch hängt bei der Abstimmung fest.",
+    "resolve": "Klären",
+    "reconciliationResolved": "Abstimmung geklärt",
+    "couldNotResolve": "Konnte nicht geklärt werden",
+    "resolveReconciliationTitle": "Erstattungsabstimmung klären",
+    "resolveReconciliationDescription": "Bestellung {orderNumber} hatte einen Erstattungsversuch von {amount} über {provider}, dessen Ausgang nie bestätigt wurde. Prüfen Sie das {provider}-Dashboard und teilen Sie uns dann mit, was tatsächlich passiert ist.",
+    "checkProviderDashboardFirst": "Prüfen Sie das {provider}-Dashboard auf eine Erstattung um diese Zeit, bevor Sie wählen — dies kann nicht rückgängig gemacht werden.",
+    "refundDidNotHappen": "Es ist nicht erfolgt",
+    "refundDidHappen": "Es ist erfolgt",
+    "onlyDeliveredOrCancelledCanBeRefunded": "Nur eine gelieferte oder stornierte Bestellung mit erfolgreicher Zahlung kann erstattet werden.",
+    "pendingReconciliationAlert": "Diese Bestellung hat einen Erstattungsversuch, der auf manuelle Abstimmung wartet — klären Sie dies zuerst in der obigen Liste."
   },
   "AdminRestaurantReviewPage": {
     "sunday": "Sonntag",

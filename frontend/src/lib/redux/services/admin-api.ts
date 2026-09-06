@@ -53,6 +53,26 @@ export const adminApi = api.injectEndpoints({
       invalidatesTags: (result, _error, orderId) => [
         { type: "Order", id: orderId },
         { type: "AdminAnalytics", id: "SUMMARY" },
+        { type: "Order", id: "NEEDS_REFUND_ATTENTION" },
+      ],
+    }),
+
+    // Refund-hardening pass (docs/ROADMAP.md FDP-104) — every order needing a human to look at
+    // its refund status: cancelled-but-never-refunded, or stuck on an ambiguous refund outcome.
+    getOrdersNeedingRefundAttention: builder.query<Order[], void>({
+      query: () => "/orders/admin/needs-refund-attention",
+      providesTags: [{ type: "Order", id: "NEEDS_REFUND_ATTENTION" }],
+    }),
+
+    resolveRefundReconciliation: builder.mutation<Order, { orderId: string; refundActuallySucceeded: boolean }>({
+      query: ({ orderId, refundActuallySucceeded }) => ({
+        url: `/payments/${orderId}/resolve-refund-reconciliation`,
+        method: "PATCH",
+        body: { refundActuallySucceeded },
+      }),
+      invalidatesTags: (result, _error, { orderId }) => [
+        { type: "Order", id: orderId },
+        { type: "Order", id: "NEEDS_REFUND_ATTENTION" },
       ],
     }),
   }),
@@ -66,4 +86,6 @@ export const {
   useGetOrderAsAdminQuery,
   useLazyGetOrderAsAdminQuery,
   useRefundOrderMutation,
+  useGetOrdersNeedingRefundAttentionQuery,
+  useResolveRefundReconciliationMutation,
 } = adminApi;

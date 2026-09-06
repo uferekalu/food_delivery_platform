@@ -9,6 +9,7 @@ import type {
   WebhookEvent,
 } from './payment-adapter.interface';
 import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
+import { RefundOutcomeUnknownError } from './refund-outcome-unknown.error';
 
 // Stripe Checkout (a hosted redirect session) rather than embedded Elements/card fields — no
 // PCI scope on this server, no Stripe.js frontend integration to maintain, and the redirect
@@ -92,14 +93,100 @@ export class StripeAdapter implements PaymentAdapter {
     });
   }
 
+  // docs/ROADMAP.md FDP-104: previously silently `return`ed (treated as a successful refund with
+  // zero network call) when a checkout session had no payment intent. `refundOrder` already gates
+  // on `paymentStatus === 'succeeded'` before ever calling this, so a real completed checkout
+  // should always have one — anything else means the order's state is wrong somewhere upstream,
+  // and PaymentsService.finalizeRefund must never run over that silently.
   async refund(paymentRef: string): Promise<void> {
     const session = await this.stripe.checkout.sessions.retrieve(paymentRef);
     const paymentIntent = session.payment_intent;
-    if (!paymentIntent) return;
-    await this.stripe.refunds.create({
-      payment_intent:
-        typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id,
+    if (!paymentIntent) {
+      throw new Error(
+        'Stripe checkout session has no payment intent to refund',
+      );
+    }
+    const paymentIntentId =
+      typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id;
+    try {
+      // Idempotency key mirrors transfer()'s own reasoning below — a retried call after a lost
+      // response (the network case RefundOutcomeUnknownError exists for) returns the original
+      // refund instead of risking a second one at Stripe.
+      await this.stripe.refunds.create(
+        { payment_intent: paymentIntentId },
+        { idempotencyKey: `refund:${paymentRef}` },
+      );
+    } catch (error) {
+      if (
+        error instanceof Stripe.errors.StripeConnectionError ||
+        error instanceof Stripe.errors.StripeAPIError
+      ) {
+        throw new RefundOutcomeUnknownError(
+          `Stripe refund outcome unknown: ${error.message}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Detects a refund or dispute issued OUTSIDE this app — a support agent refunding directly in
+   * the Stripe dashboard, or a customer's bank filing a chargeback (docs/ROADMAP.md FDP-104).
+   * Without this, `Order.paymentStatus` can only ever change via `PaymentsService.refundOrder`'s
+   * own code path, so any other kind of refund/dispute leaves the order looking normal and paid
+   * forever. Shares webhookSecret/signature verification with `handleWebhook` (both event types
+   * arrive on the same `/payments/webhooks/stripe` endpoint, same "each parse safely no-ops on
+   * the other's event type" pattern already used for `parseAccountWebhookEvent`).
+   *
+   * `charge.refunded`/`charge.dispute.created` events carry a Charge object, which has
+   * `payment_intent`, not the checkout session id `Order.paymentRef`/`paymentRefs` actually store
+   * — resolved via `checkout.sessions.list({ payment_intent })`, an extra API call but a rare,
+   * low-volume event so the cost is a non-issue.
+   */
+  async parseRefundOrDisputeWebhookEvent(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): Promise<{
+    sessionReference: string;
+    kind: 'refunded' | 'dispute_created';
+  } | null> {
+    if (!signature) return null;
+
+    let event: Stripe.Event;
+    try {
+      event = this.stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        this.webhookSecret,
+      );
+    } catch {
+      return null;
+    }
+
+    let kind: 'refunded' | 'dispute_created';
+    let paymentIntent: string | Stripe.PaymentIntent | null;
+    if (event.type === 'charge.refunded') {
+      kind = 'refunded';
+      paymentIntent = event.data.object.payment_intent;
+    } else if (event.type === 'charge.dispute.created') {
+      kind = 'dispute_created';
+      paymentIntent = event.data.object.payment_intent;
+    } else {
+      return null;
+    }
+    if (!paymentIntent) return null;
+    const paymentIntentId =
+      typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id;
+
+    const sessions = await this.stripe.checkout.sessions.list({
+      payment_intent: paymentIntentId,
+      limit: 1,
     });
+    const session = sessions.data[0];
+    if (!session) return null;
+
+    return { sessionReference: session.id, kind };
   }
 
   // --- Vendor payouts epic, part 4 of 4 (docs/ROADMAP.md FDP-54) ---

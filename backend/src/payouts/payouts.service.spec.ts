@@ -8,6 +8,11 @@ import {
   OrderDocument,
   OrderSchema,
 } from '../orders/schemas/order.schema';
+import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+  PayoutClawbackSchema,
+} from './schemas/payout-clawback.schema';
 
 jest.setTimeout(30_000);
 
@@ -16,6 +21,7 @@ describe('PayoutsService', () => {
   let moduleRef: TestingModule;
   let payoutsService: PayoutsService;
   let orderModel: Model<OrderDocument>;
+  let payoutClawbackModel: Model<PayoutClawbackDocument>;
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
@@ -26,17 +32,24 @@ describe('PayoutsService', () => {
     moduleRef = await Test.createTestingModule({
       imports: [
         MongooseModule.forRoot(mongod.getUri()),
-        MongooseModule.forFeature([{ name: Order.name, schema: OrderSchema }]),
+        MongooseModule.forFeature([
+          { name: Order.name, schema: OrderSchema },
+          { name: PayoutClawback.name, schema: PayoutClawbackSchema },
+        ]),
       ],
       providers: [PayoutsService],
     }).compile();
 
     payoutsService = moduleRef.get(PayoutsService);
     orderModel = moduleRef.get(getModelToken(Order.name));
+    payoutClawbackModel = moduleRef.get(getModelToken(PayoutClawback.name));
   }, 60_000);
 
   afterEach(async () => {
-    await orderModel.deleteMany({}).exec();
+    await Promise.all([
+      orderModel.deleteMany({}).exec(),
+      payoutClawbackModel.deleteMany({}).exec(),
+    ]);
   });
 
   afterAll(async () => {
@@ -294,6 +307,143 @@ describe('PayoutsService', () => {
 
       const result = await payoutsService.getUnpaidRiderEarnings('rider-1');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('refund clawback netting (docs/ROADMAP.md FDP-104)', () => {
+    it('nets a pending clawback against the matching (provider, currency) group', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+      });
+      await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order',
+        originalPayoutId: 'old-payout',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 20,
+        remainingAmount: 20,
+        status: 'pending',
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].grossAmount).toBe(65); // 85 - 20
+      expect(result[0].rawGrossAmount).toBe(85);
+      expect(result[0].clawbackDeducted).toBe(20);
+      expect(result[0].clawbackConsumption).toHaveLength(1);
+      expect(result[0].clawbackConsumption?.[0].amountConsumed).toBe(20);
+      expect(typeof result[0].clawbackConsumption?.[0].clawbackId).toBe(
+        'string',
+      );
+    });
+
+    it('never nets a group below zero, even when the clawback exceeds it', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+      });
+      await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order',
+        originalPayoutId: 'old-payout',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 500,
+        remainingAmount: 500,
+        status: 'pending',
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+
+      expect(result[0].grossAmount).toBe(0);
+      expect(result[0].clawbackDeducted).toBe(85);
+    });
+
+    it('never applies a clawback for a different (provider, currency) than the one it was recorded against', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+      });
+      await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order',
+        originalPayoutId: 'old-payout',
+        provider: 'paystack', // different provider — must not net against the stripe group
+        currency: 'NGN',
+        amount: 20,
+        remainingAmount: 20,
+        status: 'pending',
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+
+      expect(result[0].grossAmount).toBe(85);
+      expect(result[0].clawbackDeducted).toBeUndefined();
+    });
+
+    it('ignores an already fully_applied clawback', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+      });
+      await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order',
+        originalPayoutId: 'old-payout',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 20,
+        remainingAmount: 0,
+        status: 'fully_applied',
+      });
+
+      const result = await payoutsService.getUnpaidVendorEarnings(
+        'restaurant',
+        'restaurant-1',
+      );
+
+      expect(result[0].grossAmount).toBe(85);
+    });
+
+    it('never applies a vendor clawback to a rider group — riders keep 100% of deliveryFee regardless', async () => {
+      await createOrder({
+        sellerType: 'restaurant',
+        restaurantId: 'restaurant-1',
+        riderId: 'rider-1',
+        currency: 'NGN',
+        paymentProvider: 'stripe',
+        deliveryFee: 15,
+      });
+      // A clawback recorded against a RIDER vendorType should never exist per the schema (riders
+      // are excluded — see PayoutClawback's own doc comment), but this asserts the rider earnings
+      // path doesn't even attempt to look one up.
+      const result = await payoutsService.getUnpaidRiderEarnings('rider-1');
+      expect(result[0].grossAmount).toBe(15);
+      expect(result[0].clawbackDeducted).toBeUndefined();
     });
   });
 });

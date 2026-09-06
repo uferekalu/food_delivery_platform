@@ -1186,7 +1186,21 @@
     "refundOrderTitle": "Rembourser la commande {orderNumber} ?",
     "refundThisOrder": "Rembourser cette commande ?",
     "refundOrderDescription": "Ceci débitera {total} au client et ne peut pas être annulé.",
-    "refund": "Rembourser"
+    "refund": "Rembourser",
+    "needsAttention": "Nécessite une attention",
+    "needsAttentionDescription": "Commandes nécessitant une décision humaine sur leur statut de remboursement — une commande annulée jamais remboursée, ou un remboursement dont le résultat est inconnu.",
+    "nothingNeedsAttention": "Rien ne nécessite d'attention",
+    "nothingNeedsAttentionDescription": "Chaque commande annulée a été remboursée, et aucune tentative de remboursement n'est bloquée en attente de réconciliation.",
+    "resolve": "Résoudre",
+    "reconciliationResolved": "Réconciliation résolue",
+    "couldNotResolve": "Impossible de résoudre",
+    "resolveReconciliationTitle": "Résoudre la réconciliation du remboursement",
+    "resolveReconciliationDescription": "La commande {orderNumber} avait une tentative de remboursement de {amount} via {provider} dont le résultat n'a jamais été confirmé. Vérifiez le tableau de bord {provider}, puis indiquez-nous ce qui s'est réellement passé.",
+    "checkProviderDashboardFirst": "Vérifiez le tableau de bord {provider} pour un remboursement à cette période avant de choisir — c'est irréversible.",
+    "refundDidNotHappen": "Cela n'a pas abouti",
+    "refundDidHappen": "Cela a abouti",
+    "onlyDeliveredOrCancelledCanBeRefunded": "Seule une commande livrée ou annulée avec un paiement réussi peut être remboursée.",
+    "pendingReconciliationAlert": "Cette commande a une tentative de remboursement en attente de réconciliation manuelle — résolvez-la d'abord dans la liste ci-dessus."
   },
   "AdminRestaurantReviewPage": {
     "sunday": "Dimanche",

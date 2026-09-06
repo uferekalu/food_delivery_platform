@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -22,6 +23,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentProviderResolver } from './provider-resolver';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ListProvidersDto } from './dto/list-providers.dto';
+import { ResolveRefundReconciliationDto } from './dto/resolve-refund-reconciliation.dto';
 
 @ApiTags('payments')
 @Controller('payments')
@@ -63,6 +65,21 @@ export class PaymentsController {
     return this.paymentsService.refundOrder(orderId);
   }
 
+  /** Admin's manual close-out for an order flagged `refundReconciliationRequired` (docs/ROADMAP.md
+   * FDP-104) — same shape/reasoning as the payouts module's own reconciliation endpoint. */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Roles('admin')
+  @Patch(':orderId/resolve-refund-reconciliation')
+  resolveRefundReconciliation(
+    @Param('orderId') orderId: string,
+    @Body() dto: ResolveRefundReconciliationDto,
+  ) {
+    return this.paymentsService.resolveRefundReconciliation(
+      orderId,
+      dto.refundActuallySucceeded,
+    );
+  }
+
   /** Called by the checkout callback page right after the provider redirects back — an active
    * nudge alongside the passive webhook, so a customer never gets stuck on "Confirming your
    * payment…" waiting on a webhook that may never arrive at this deploy. Throttled to stop a
@@ -89,11 +106,17 @@ export class PaymentsController {
   ) {
     const rawBody = req.rawBody ?? Buffer.alloc(0);
     // One Stripe webhook URL carries every subscribed event type — checkout.session.completed
-    // (payments) and account.updated (Connect onboarding, docs/ROADMAP.md FDP-54) both land
-    // here. Each handler's own adapter-level parse safely no-ops on the other's event type, so
-    // calling both unconditionally is correct, not wasteful double-processing.
+    // (payments), account.updated (Connect onboarding, docs/ROADMAP.md FDP-54), and
+    // charge.refunded/charge.dispute.created (out-of-band refund/dispute detection, docs/ROADMAP.md
+    // FDP-104) all land here. Each handler's own adapter-level parse safely no-ops on the others'
+    // event types, so calling all three unconditionally is correct, not wasteful double-processing.
     await this.paymentsService.handleWebhook('stripe', rawBody, signature);
     await this.paymentsService.handleStripeAccountWebhook(rawBody, signature);
+    await this.paymentsService.handleRefundWebhook(
+      'stripe',
+      rawBody,
+      signature,
+    );
     return { received: true };
   }
 
@@ -104,9 +127,11 @@ export class PaymentsController {
     @Req() req: RawBodyRequest<Request>,
     @Headers('x-paystack-signature') signature?: string,
   ) {
-    await this.paymentsService.handleWebhook(
+    const rawBody = req.rawBody ?? Buffer.alloc(0);
+    await this.paymentsService.handleWebhook('paystack', rawBody, signature);
+    await this.paymentsService.handleRefundWebhook(
       'paystack',
-      req.rawBody ?? Buffer.alloc(0),
+      rawBody,
       signature,
     );
     return { received: true };
@@ -119,9 +144,11 @@ export class PaymentsController {
     @Req() req: RawBodyRequest<Request>,
     @Headers('verif-hash') signature?: string,
   ) {
-    await this.paymentsService.handleWebhook(
+    const rawBody = req.rawBody ?? Buffer.alloc(0);
+    await this.paymentsService.handleWebhook('flutterwave', rawBody, signature);
+    await this.paymentsService.handleRefundWebhook(
       'flutterwave',
-      req.rawBody ?? Buffer.alloc(0),
+      rawBody,
       signature,
     );
     return { received: true };

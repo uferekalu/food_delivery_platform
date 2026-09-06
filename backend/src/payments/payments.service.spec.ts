@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
+import { RefundOutcomeUnknownError } from './adapters/refund-outcome-unknown.error';
 import { OrdersService } from '../orders/orders.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
@@ -26,6 +27,9 @@ describe('PaymentsService', () => {
       | 'claimForRefund'
       | 'finalizeRefund'
       | 'revertFailedRefundClaim'
+      | 'flagAmbiguousRefund'
+      | 'resolveRefundReconciliation'
+      | 'flagDispute'
     >
   >;
   let restaurantsService: jest.Mocked<
@@ -54,12 +58,21 @@ describe('PaymentsService', () => {
     handleWebhook: jest.Mock;
     refund: jest.Mock;
     parseAccountWebhookEvent: jest.Mock;
+    parseRefundOrDisputeWebhookEvent: jest.Mock;
   };
   let paystackAdapter: {
     initiate: jest.Mock;
     verify: jest.Mock;
     handleWebhook: jest.Mock;
     refund: jest.Mock;
+    parseRefundOrDisputeWebhookEvent: jest.Mock;
+  };
+  let flutterwaveAdapter: {
+    initiate: jest.Mock;
+    verify: jest.Mock;
+    handleWebhook: jest.Mock;
+    refund: jest.Mock;
+    parseRefundWebhookEvent: jest.Mock;
   };
 
   const user = {
@@ -79,6 +92,9 @@ describe('PaymentsService', () => {
       claimForRefund: jest.fn(),
       finalizeRefund: jest.fn(),
       revertFailedRefundClaim: jest.fn(),
+      flagAmbiguousRefund: jest.fn(),
+      resolveRefundReconciliation: jest.fn(),
+      flagDispute: jest.fn(),
     };
     restaurantsService = {
       findByPayoutAccountReference: jest.fn(),
@@ -100,12 +116,21 @@ describe('PaymentsService', () => {
       handleWebhook: jest.fn(),
       refund: jest.fn(),
       parseAccountWebhookEvent: jest.fn(),
+      parseRefundOrDisputeWebhookEvent: jest.fn().mockResolvedValue(null),
     };
     paystackAdapter = {
       initiate: jest.fn(),
       verify: jest.fn(),
       handleWebhook: jest.fn(),
       refund: jest.fn(),
+      parseRefundOrDisputeWebhookEvent: jest.fn().mockResolvedValue(null),
+    };
+    flutterwaveAdapter = {
+      initiate: jest.fn(),
+      verify: jest.fn(),
+      handleWebhook: jest.fn(),
+      refund: jest.fn(),
+      parseRefundWebhookEvent: jest.fn().mockResolvedValue(null),
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -123,15 +148,7 @@ describe('PaymentsService', () => {
         },
         { provide: StripeAdapter, useValue: stripeAdapter },
         { provide: PaystackAdapter, useValue: paystackAdapter },
-        {
-          provide: FlutterwaveAdapter,
-          useValue: {
-            initiate: jest.fn(),
-            verify: jest.fn(),
-            handleWebhook: jest.fn(),
-            refund: jest.fn(),
-          },
-        },
+        { provide: FlutterwaveAdapter, useValue: flutterwaveAdapter },
       ],
     }).compile();
 
@@ -247,10 +264,11 @@ describe('PaymentsService', () => {
 
       await service.initiatePayment(user, 'order-1');
 
-      const callArgs = paystackAdapter.initiate.mock.calls[0][0] as Record<
-        string,
-        unknown
-      >;
+      const callArgs = (
+        paystackAdapter.initiate.mock.calls as unknown as [
+          Record<string, unknown>,
+        ][]
+      )[0][0];
       expect(callArgs).not.toHaveProperty('restaurantPayoutAccountReference');
       expect(callArgs).not.toHaveProperty('restaurantPayoutAmount');
       expect(ordersService.setPaymentRef).toHaveBeenCalledWith(
@@ -573,6 +591,184 @@ describe('PaymentsService', () => {
         'DELIVERED',
       );
       expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
+    });
+
+    it('rejects up front an order already flagged refundReconciliationRequired — never claims or calls the provider', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+        refundReconciliationRequired: true,
+      } as never);
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        'This order has a refund attempt pending manual reconciliation',
+      );
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
+      expect(stripeAdapter.refund).not.toHaveBeenCalled();
+    });
+
+    it('docs/ROADMAP.md FDP-104: on RefundOutcomeUnknownError, flags for manual reconciliation instead of reverting the claim, and never finalizes', async () => {
+      ordersService.adminFindOrThrow.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentStatus: 'succeeded',
+        paymentProvider: 'stripe',
+        paymentRef: 'cs_test_abc',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
+      stripeAdapter.refund.mockRejectedValue(
+        new RefundOutcomeUnknownError('connection reset mid-request'),
+      );
+
+      await expect(service.refundOrder('order-1')).rejects.toThrow(
+        'flagged for manual reconciliation',
+      );
+
+      expect(ordersService.flagAmbiguousRefund).toHaveBeenCalledWith(
+        'order-1',
+        'DELIVERED',
+        'connection reset mid-request',
+      );
+      expect(ordersService.revertFailedRefundClaim).not.toHaveBeenCalled();
+      expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveRefundReconciliation (docs/ROADMAP.md FDP-104)', () => {
+    it('passes through to OrdersService.resolveRefundReconciliation', async () => {
+      ordersService.resolveRefundReconciliation.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      const result = await service.resolveRefundReconciliation('order-1', true);
+
+      expect(ordersService.resolveRefundReconciliation).toHaveBeenCalledWith(
+        'order-1',
+        true,
+      );
+      expect(result).toEqual({ status: 'REFUNDED' });
+    });
+  });
+
+  describe('handleRefundWebhook (docs/ROADMAP.md FDP-104)', () => {
+    it('does nothing when the adapter reports no verifiable refund/dispute event', async () => {
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), undefined);
+      expect(ordersService.findByPaymentRef).not.toHaveBeenCalled();
+    });
+
+    it('finalizes an out-of-band Stripe refund via the same claim/finalize pair the manual flow uses', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'stripe',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
+      ordersService.finalizeRefund.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.claimForRefund).toHaveBeenCalledWith('order-1');
+      expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+    });
+
+    it('is a safe no-op when the order is already REFUNDED (duplicate webhook delivery, or our own admin refund already ran)', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'REFUNDED',
+        paymentProvider: 'stripe',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
+      expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
+    });
+
+    it('ignores an event whose order belongs to a different provider (cross-provider spoofing guard)', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'paystack',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
+    });
+
+    it('flags a dispute without touching order status/paymentStatus', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'dispute_created',
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'stripe',
+        disputeFlagged: false,
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.flagDispute).toHaveBeenCalledWith('order-1');
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
+    });
+
+    it('routes to the Flutterwave adapter for the flutterwave provider', async () => {
+      flutterwaveAdapter.parseRefundWebhookEvent.mockResolvedValue({
+        sessionReference: 'ORD-1-abcd',
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'flutterwave',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
+      ordersService.finalizeRefund.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      await service.handleRefundWebhook(
+        'flutterwave',
+        Buffer.from('{}'),
+        'sig',
+      );
+
+      expect(flutterwaveAdapter.parseRefundWebhookEvent).toHaveBeenCalled();
+      expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+    });
+
+    it('never throws when the adapter parse itself throws — defense in depth on a @Public() route', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockRejectedValue(
+        new Error('malformed payload'),
+      );
+
+      await expect(
+        service.handleRefundWebhook('stripe', Buffer.from('not json'), 'sig'),
+      ).resolves.toBeUndefined();
     });
   });
 

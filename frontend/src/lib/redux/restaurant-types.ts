@@ -413,6 +413,10 @@ export interface Order {
   scheduledFor: string | null;
   estimatedDeliveryAt: string | null;
   promoCode: string | null;
+  // Refund-hardening pass (docs/ROADMAP.md FDP-104)
+  refundReconciliationRequired: boolean;
+  refundFailureReason: string | null;
+  disputeFlagged: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -1186,7 +1186,21 @@
     "refundOrderTitle": "Refund order {orderNumber}?",
     "refundThisOrder": "Refund this order?",
     "refundOrderDescription": "This charges back {total} to the customer and can't be undone.",
-    "refund": "Refund"
+    "refund": "Refund",
+    "needsAttention": "Needs attention",
+    "needsAttentionDescription": "Orders that need a human decision about their refund status — a cancelled order that was never refunded, or a refund whose outcome is unknown.",
+    "nothingNeedsAttention": "Nothing needs attention",
+    "nothingNeedsAttentionDescription": "Every cancelled order has been refunded, and no refund attempt is stuck awaiting reconciliation.",
+    "resolve": "Resolve",
+    "reconciliationResolved": "Reconciliation resolved",
+    "couldNotResolve": "Could not resolve",
+    "resolveReconciliationTitle": "Resolve refund reconciliation",
+    "resolveReconciliationDescription": "Order {orderNumber} had a refund attempt of {amount} via {provider} whose outcome was never confirmed. Check the {provider} dashboard, then tell us what actually happened.",
+    "checkProviderDashboardFirst": "Check the {provider} dashboard for a refund around this time before choosing — this can't be undone.",
+    "refundDidNotHappen": "It did not go through",
+    "refundDidHappen": "It went through",
+    "onlyDeliveredOrCancelledCanBeRefunded": "Only a delivered or cancelled order with a successful payment can be refunded.",
+    "pendingReconciliationAlert": "This order has a refund attempt pending manual reconciliation — resolve it in the list above first."
   },
   "AdminRestaurantReviewPage": {
     "sunday": "Sunday",

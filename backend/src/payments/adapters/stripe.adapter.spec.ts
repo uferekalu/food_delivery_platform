@@ -359,4 +359,214 @@ describe('StripeAdapter', () => {
       });
     });
   });
+
+  describe('refund (docs/ROADMAP.md FDP-104)', () => {
+    let adapter: StripeAdapter;
+
+    beforeEach(() => {
+      adapter = new StripeAdapter(configWith(TEST_WEBHOOK_SECRET));
+    });
+
+    it('retrieves the checkout session and refunds its payment intent, with the paymentRef as the idempotency key', async () => {
+      const retrieveMock = jest
+        .fn()
+        .mockResolvedValue({ payment_intent: 'pi_test_123' });
+      const refundCreateMock = jest.fn().mockResolvedValue({ id: 're_test_1' });
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        checkout: { sessions: { retrieve: retrieveMock } },
+        refunds: { create: refundCreateMock },
+      } as unknown as Stripe;
+
+      await adapter.refund('cs_test_abc');
+
+      expect(retrieveMock).toHaveBeenCalledWith('cs_test_abc');
+      expect(refundCreateMock).toHaveBeenCalledWith(
+        { payment_intent: 'pi_test_123' },
+        { idempotencyKey: 'refund:cs_test_abc' },
+      );
+    });
+
+    it('handles a payment_intent object (not just a string id)', async () => {
+      const retrieveMock = jest
+        .fn()
+        .mockResolvedValue({ payment_intent: { id: 'pi_test_obj' } });
+      const refundCreateMock = jest.fn().mockResolvedValue({ id: 're_test_2' });
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        checkout: { sessions: { retrieve: retrieveMock } },
+        refunds: { create: refundCreateMock },
+      } as unknown as Stripe;
+
+      await adapter.refund('cs_test_abc');
+
+      expect(refundCreateMock).toHaveBeenCalledWith(
+        { payment_intent: 'pi_test_obj' },
+        { idempotencyKey: 'refund:cs_test_abc' },
+      );
+    });
+
+    it('throws (does not silently no-op) when the checkout session has no payment intent', async () => {
+      const retrieveMock = jest
+        .fn()
+        .mockResolvedValue({ payment_intent: null });
+      const refundCreateMock = jest.fn();
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        checkout: { sessions: { retrieve: retrieveMock } },
+        refunds: { create: refundCreateMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.refund('cs_test_abc')).rejects.toThrow(
+        'Stripe checkout session has no payment intent to refund',
+      );
+      expect(refundCreateMock).not.toHaveBeenCalled();
+    });
+
+    it('throws a plain Error on a confirmed rejection (e.g. already refunded) — safe to retry', async () => {
+      const retrieveMock = jest
+        .fn()
+        .mockResolvedValue({ payment_intent: 'pi_test_123' });
+      const refundCreateMock = jest.fn().mockRejectedValue(
+        new Stripe.errors.StripeInvalidRequestError({
+          message: 'Charge already refunded',
+        }),
+      );
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        checkout: { sessions: { retrieve: retrieveMock } },
+        refunds: { create: refundCreateMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.refund('cs_test_abc')).rejects.toThrow(
+        'Charge already refunded',
+      );
+    });
+
+    it('throws RefundOutcomeUnknownError (not a plain Error) on a connection error — outcome genuinely unknown', async () => {
+      const retrieveMock = jest
+        .fn()
+        .mockResolvedValue({ payment_intent: 'pi_test_123' });
+      const refundCreateMock = jest
+        .fn()
+        .mockRejectedValue(
+          new Stripe.errors.StripeConnectionError({ message: 'ECONNRESET' }),
+        );
+      (adapter as unknown as { stripe: Stripe }).stripe = {
+        checkout: { sessions: { retrieve: retrieveMock } },
+        refunds: { create: refundCreateMock },
+      } as unknown as Stripe;
+
+      await expect(adapter.refund('cs_test_abc')).rejects.toMatchObject({
+        name: 'RefundOutcomeUnknownError',
+      });
+    });
+  });
+
+  describe('parseRefundOrDisputeWebhookEvent (docs/ROADMAP.md FDP-104)', () => {
+    let adapter: StripeAdapter;
+
+    beforeEach(() => {
+      adapter = new StripeAdapter(configWith(TEST_WEBHOOK_SECRET));
+    });
+
+    function withSessionsList(sessions: { id: string }[]): void {
+      const listMock = jest.fn().mockResolvedValue({ data: sessions });
+      (adapter as unknown as { stripe: Stripe }).stripe = Object.assign(
+        (adapter as unknown as { stripe: Stripe }).stripe,
+        { checkout: { sessions: { list: listMock } } },
+      );
+    }
+
+    it('returns null when no signature header is present', async () => {
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from('{}'),
+        undefined,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('resolves charge.refunded to the checkout session reference via its payment_intent', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_test',
+        object: 'event',
+        type: 'charge.refunded',
+        data: { object: { id: 'ch_test', payment_intent: 'pi_test_123' } },
+      });
+      const header = Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: TEST_WEBHOOK_SECRET,
+      });
+      withSessionsList([{ id: 'cs_test_abc' }]);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(payload),
+        header,
+      );
+
+      expect(result).toEqual({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+      });
+    });
+
+    it('resolves charge.dispute.created the same way, with kind dispute_created', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_test',
+        object: 'event',
+        type: 'charge.dispute.created',
+        data: { object: { id: 'dp_test', payment_intent: 'pi_test_123' } },
+      });
+      const header = Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: TEST_WEBHOOK_SECRET,
+      });
+      withSessionsList([{ id: 'cs_test_abc' }]);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(payload),
+        header,
+      );
+
+      expect(result).toEqual({
+        sessionReference: 'cs_test_abc',
+        kind: 'dispute_created',
+      });
+    });
+
+    it('ignores an event type it does not act on', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_test',
+        object: 'event',
+        type: 'checkout.session.completed',
+        data: { object: { id: 'cs_test_abc', payment_status: 'paid' } },
+      });
+      const header = Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: TEST_WEBHOOK_SECRET,
+      });
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(payload),
+        header,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null when no matching checkout session is found for the payment intent', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_test',
+        object: 'event',
+        type: 'charge.refunded',
+        data: { object: { id: 'ch_test', payment_intent: 'pi_test_123' } },
+      });
+      const header = Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: TEST_WEBHOOK_SECRET,
+      });
+      withSessionsList([]);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(payload),
+        header,
+      );
+      expect(result).toBeNull();
+    });
+  });
 });

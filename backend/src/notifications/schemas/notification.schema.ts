@@ -13,6 +13,10 @@ export const NOTIFICATION_TYPES = [
   'payout_succeeded',
   'payout_failed',
   'payout_reconciliation_needed',
+  'refund_clawback_created',
+  'refund_reconciliation_needed',
+  'order_refunded_externally',
+  'order_dispute_flagged',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

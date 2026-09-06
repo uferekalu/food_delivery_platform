@@ -9,6 +9,7 @@ import type {
   WebhookEvent,
 } from './payment-adapter.interface';
 import { TransferOutcomeUnknownError } from './transfer-outcome-unknown.error';
+import { RefundOutcomeUnknownError } from './refund-outcome-unknown.error';
 
 const BASE_URL = 'https://api.flutterwave.com/v3';
 
@@ -56,6 +57,16 @@ interface FlutterwaveCreateSubaccountResponse {
 interface FlutterwaveRefundResponse {
   status: string;
   message?: string;
+}
+
+interface FlutterwaveRefundWebhookPayload {
+  event: string;
+  data?: { charge_id: number | string };
+}
+
+interface FlutterwaveVerifyByIdResponse {
+  status: string;
+  data?: { tx_ref: string };
 }
 
 interface FlutterwaveTransferResponse {
@@ -177,6 +188,9 @@ export class FlutterwaveAdapter implements PaymentAdapter {
   }
 
   async refund(paymentRef: string): Promise<void> {
+    // Read-only lookup, no side effect yet — a failure here (including a network-layer throw)
+    // means nothing has been attempted at Flutterwave, so it's a plain confirmed failure, not an
+    // ambiguous one (docs/ROADMAP.md FDP-104).
     const verification = await this.request<FlutterwaveVerifyResponse>(
       `/transactions/verify_by_reference?tx_ref=${encodeURIComponent(paymentRef)}`,
     );
@@ -187,15 +201,80 @@ export class FlutterwaveAdapter implements PaymentAdapter {
         'Could not find the original Flutterwave transaction to refund',
       );
     }
-    const result = await this.request<FlutterwaveRefundResponse>(
-      `/transactions/${verification.data.id}/refund`,
-      { method: 'POST', body: JSON.stringify({}) },
-    );
+
+    let result: FlutterwaveRefundResponse;
+    try {
+      result = await this.request<FlutterwaveRefundResponse>(
+        `/transactions/${verification.data.id}/refund`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+    } catch (error) {
+      // The actual money-moving call — a network-layer throw here means the outcome is genuinely
+      // unknown (docs/ROADMAP.md FDP-104), unlike the read-only verify step above.
+      throw new RefundOutcomeUnknownError(
+        `Flutterwave refund outcome unknown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
     if (result.status !== 'success') {
       // Previously unchecked entirely — a provider-side rejection here (e.g. already refunded,
       // insufficient balance) was indistinguishable from success.
       throw new Error(result.message ?? 'Flutterwave refund failed');
     }
+  }
+
+  /**
+   * Detects a refund issued OUTSIDE this app (docs/ROADMAP.md FDP-104) — confirmed against
+   * Flutterwave's official docs: the `refund.completed` event's `data` only carries `charge_id`
+   * (the original charge's numeric id), not `tx_ref` directly, so it's resolved via
+   * `GET /transactions/{id}/verify`, which does return `tx_ref` (also per official docs).
+   *
+   * Operational note this code cannot itself satisfy: Flutterwave does not send refund webhooks
+   * by default — the platform's account needs Flutterwave support to explicitly enable them, the
+   * same class of "dashboard setting, not code" prerequisite as Paystack's transfer-OTP
+   * requirement (backend/CLAUDE.md). No confirmed Flutterwave dispute/chargeback webhook event
+   * was found while building this — that leg is a known, documented gap, not silently skipped.
+   *
+   * Never throws — an unexpected payload shape (this event's exact fields weren't verified
+   * against a live sandbox delivery) logs nothing here and returns `null`, same "return null,
+   * don't crash a @Public() webhook route" posture as `handleWebhook` above.
+   */
+  async parseRefundWebhookEvent(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): Promise<{ sessionReference: string } | null> {
+    if (!signature) return null;
+
+    const expectedBuf = Buffer.from(this.webhookHash, 'utf8');
+    const signatureBuf = Buffer.from(signature, 'utf8');
+    if (
+      expectedBuf.length !== signatureBuf.length ||
+      !timingSafeEqual(expectedBuf, signatureBuf)
+    ) {
+      return null;
+    }
+
+    let payload: FlutterwaveRefundWebhookPayload;
+    try {
+      payload = JSON.parse(
+        rawBody.toString('utf8'),
+      ) as FlutterwaveRefundWebhookPayload;
+    } catch {
+      return null;
+    }
+    if (payload.event !== 'refund.completed' || !payload.data?.charge_id) {
+      return null;
+    }
+
+    const verification = await this.request<FlutterwaveVerifyByIdResponse>(
+      `/transactions/${payload.data.charge_id}/verify`,
+    );
+    if (verification.status !== 'success' || !verification.data?.tx_ref) {
+      return null;
+    }
+    return { sessionReference: verification.data.tx_ref };
   }
 
   // --- Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) ---

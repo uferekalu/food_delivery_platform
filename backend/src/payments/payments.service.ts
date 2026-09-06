@@ -12,6 +12,7 @@ import type { PaymentProvider } from './payment-provider';
 import { StripeAdapter } from './adapters/stripe.adapter';
 import { PaystackAdapter } from './adapters/paystack.adapter';
 import { FlutterwaveAdapter } from './adapters/flutterwave.adapter';
+import { RefundOutcomeUnknownError } from './adapters/refund-outcome-unknown.error';
 import type {
   PaymentAdapter,
   InitiatePaymentResult,
@@ -230,6 +231,14 @@ export class PaymentsService {
         'Only a delivered or cancelled order with a successful payment can be refunded',
       );
     }
+    if (order.refundReconciliationRequired) {
+      // docs/ROADMAP.md FDP-104 — a previous attempt's outcome is genuinely unknown; blindly
+      // retrying risks a second real refund at the provider. An admin must resolve it first via
+      // resolveRefundReconciliation.
+      throw new BadRequestException(
+        'This order has a refund attempt pending manual reconciliation — resolve that first',
+      );
+    }
     if (!order.paymentRef) {
       throw new BadRequestException(
         'This order has no payment reference to refund',
@@ -247,6 +256,25 @@ export class PaymentsService {
     try {
       await adapter.refund(order.paymentRef);
     } catch (error) {
+      if (error instanceof RefundOutcomeUnknownError) {
+        // docs/ROADMAP.md FDP-104 — the reversal may already have happened at the provider;
+        // reverting the claim here (as a confirmed rejection would) risks a false "still
+        // refundable" state that ends up double-refunded on a naive retry. Flag for manual
+        // reconciliation instead — mirrors TransferOutcomeUnknownError's handling on the payout
+        // side.
+        await this.ordersService.flagAmbiguousRefund(
+          orderId,
+          claimed.status,
+          error.message,
+        );
+        this.logger.error(
+          `${order.paymentProvider} refund outcome UNKNOWN for order ${orderId} — flagged for manual reconciliation`,
+          error,
+        );
+        throw new BadRequestException(
+          `Couldn't confirm the refund via ${order.paymentProvider} — it has been flagged for manual reconciliation rather than retried automatically`,
+        );
+      }
       await this.ordersService.revertFailedRefundClaim(orderId, claimed.status);
       this.logger.error(
         `${order.paymentProvider} refund failed for order ${orderId}`,
@@ -260,6 +288,94 @@ export class PaymentsService {
     }
 
     return this.ordersService.finalizeRefund(orderId);
+  }
+
+  /** Admin's manual close-out for an order flagged `refundReconciliationRequired` (docs/ROADMAP.md
+   * FDP-104) — thin passthrough, `OrdersService.resolveRefundReconciliation` owns the actual
+   * state transitions (including re-running the refund-clawback check on success). */
+  resolveRefundReconciliation(
+    orderId: string,
+    refundActuallySucceeded: boolean,
+  ): Promise<OrderDocument> {
+    return this.ordersService.resolveRefundReconciliation(
+      orderId,
+      refundActuallySucceeded,
+    );
+  }
+
+  /**
+   * Detects a refund or dispute issued OUTSIDE this app (docs/ROADMAP.md FDP-104) — a support
+   * agent refunding directly in a provider's dashboard, or a customer's bank filing a chargeback.
+   * Called unconditionally alongside `handleWebhook`/`handleStripeAccountWebhook`, same "one URL,
+   * multiple event types, each parse safely no-ops on the others" pattern already used for the
+   * Stripe Connect account webhook.
+   */
+  async handleRefundWebhook(
+    providerName: PaymentProvider,
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): Promise<void> {
+    let result: {
+      reference: string;
+      kind: 'refunded' | 'dispute_created';
+    } | null;
+    try {
+      if (providerName === 'stripe') {
+        const parsed =
+          await this.stripeAdapter.parseRefundOrDisputeWebhookEvent(
+            rawBody,
+            signature,
+          );
+        result = parsed
+          ? { reference: parsed.sessionReference, kind: parsed.kind }
+          : null;
+      } else if (providerName === 'paystack') {
+        result = await this.paystackAdapter.parseRefundOrDisputeWebhookEvent(
+          rawBody,
+          signature,
+        );
+      } else {
+        const parsed = await this.flutterwaveAdapter.parseRefundWebhookEvent(
+          rawBody,
+          signature,
+        );
+        result = parsed
+          ? { reference: parsed.sessionReference, kind: 'refunded' }
+          : null;
+      }
+    } catch (error) {
+      // Same defense-in-depth as handleWebhook — this is a @Public() route, a malformed or
+      // unexpected payload here must never surface as an uncaught 500.
+      this.logger.error(
+        `${providerName} refund/dispute webhook handling threw`,
+        error,
+      );
+      return;
+    }
+    if (!result) return;
+
+    const order = await this.ordersService.findByPaymentRef(result.reference);
+    if (!order || order.paymentProvider !== providerName) return;
+
+    if (result.kind === 'dispute_created') {
+      if (order.disputeFlagged) return;
+      await this.ordersService.flagDispute(order._id.toString());
+      return;
+    }
+
+    // An out-of-band refund. Safe no-op if we already know about it (our own admin-triggered
+    // refund, or a duplicate webhook delivery — all providers explicitly guarantee at-least-once
+    // delivery) — reuses the exact atomic claim/finalize pair the manual admin flow already uses,
+    // so idempotency and concurrency safety come for free.
+    if (order.status === 'REFUNDED') return;
+    const claimed = await this.ordersService.claimForRefund(
+      order._id.toString(),
+    );
+    if (!claimed) return;
+    await this.ordersService.finalizeRefund(order._id.toString());
+    this.logger.warn(
+      `Order ${order._id.toString()} was refunded outside the app via ${providerName} — order marked REFUNDED from webhook.`,
+    );
   }
 
   /**

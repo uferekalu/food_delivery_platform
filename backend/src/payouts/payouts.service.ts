@@ -2,13 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
+import {
+  PayoutClawback,
+  PayoutClawbackDocument,
+} from './schemas/payout-clawback.schema';
+import type { PayoutClawbackVendorType } from './schemas/payout-clawback.schema';
 import type { PaymentProvider } from '../payments/payment-provider';
 
 export interface UnpaidEarningsGroup {
   provider: PaymentProvider;
   currency: string;
+  /** Net amount to actually pay this run — already reduced by any pending clawback. This is what
+   * PayoutExecutionService transfers and records as Payout.grossAmount; no other change needed
+   * there for the "how much to send" question. */
   grossAmount: number;
   orderIds: string[];
+  /** Undefined for a rider group (no clawback concept — riders keep 100% of deliveryFee
+   * regardless, docs/ARCHITECTURE.md §28) and for a vendor group with no pending clawback. */
+  rawGrossAmount?: number;
+  clawbackDeducted?: number;
+  clawbackConsumption?: { clawbackId: string; amountConsumed: number }[];
 }
 
 // Same fix as OrdersService's round2 (docs/ROADMAP.md FDP-65) — `+ Number.EPSILON` before
@@ -29,6 +42,8 @@ function round2(value: number): number {
 export class PayoutsService {
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
+    @InjectModel(PayoutClawback.name)
+    private readonly payoutClawbackModel: Model<PayoutClawbackDocument>,
   ) {}
 
   /**
@@ -65,7 +80,7 @@ export class PayoutsService {
       .select('_id currency paymentProvider restaurantPayoutAmount')
       .exec();
 
-    return this.groupByProviderAndCurrency(
+    const rawGroups = this.groupByProviderAndCurrency(
       orders.map((o) => ({
         id: o._id.toString(),
         provider: o.paymentProvider,
@@ -73,6 +88,60 @@ export class PayoutsService {
         amount: o.restaurantPayoutAmount,
       })),
     );
+
+    return this.applyClawbacks(vendorType, vendorId, rawGroups);
+  }
+
+  /**
+   * Nets each raw earnings group against this vendor's pending clawbacks for the same
+   * (provider, currency) — docs/ROADMAP.md FDP-104, docs/ARCHITECTURE.md §28. Oldest-first,
+   * greedy consumption, capped so the net amount can never go negative; any unconsumed remainder
+   * simply isn't included this run (it stays `pending` at its current `remainingAmount` and is
+   * recomputed fresh — never snapshotted — next time this runs). `clawbackConsumption` records
+   * exactly how much of each clawback THIS group's net amount would settle, so
+   * `PayoutExecutionService` can decrement them only once the payout actually, confirmedly
+   * succeeds — never here, since nothing has been paid yet at aggregation time.
+   */
+  private async applyClawbacks(
+    vendorType: PayoutClawbackVendorType,
+    vendorId: string,
+    rawGroups: UnpaidEarningsGroup[],
+  ): Promise<UnpaidEarningsGroup[]> {
+    if (rawGroups.length === 0) return rawGroups;
+
+    const pendingClawbacks = await this.payoutClawbackModel
+      .find({ vendorType, vendorId, status: 'pending' })
+      .sort({ createdAt: 1 })
+      .exec();
+    if (pendingClawbacks.length === 0) return rawGroups;
+
+    return rawGroups.map((group) => {
+      const matching = pendingClawbacks.filter(
+        (c) => c.provider === group.provider && c.currency === group.currency,
+      );
+      if (matching.length === 0) return group;
+
+      let remaining = group.grossAmount;
+      const consumption: { clawbackId: string; amountConsumed: number }[] = [];
+      for (const clawback of matching) {
+        if (remaining <= 0) break;
+        const consumed = round2(Math.min(remaining, clawback.remainingAmount));
+        if (consumed <= 0) continue;
+        consumption.push({
+          clawbackId: clawback._id.toString(),
+          amountConsumed: consumed,
+        });
+        remaining = round2(remaining - consumed);
+      }
+      const clawbackDeducted = round2(group.grossAmount - remaining);
+      return {
+        ...group,
+        rawGrossAmount: group.grossAmount,
+        grossAmount: remaining,
+        clawbackDeducted,
+        clawbackConsumption: consumption,
+      };
+    });
   }
 
   /** Same idea as `getUnpaidVendorEarnings`, but for a rider's own delivery-fee earnings — riders
