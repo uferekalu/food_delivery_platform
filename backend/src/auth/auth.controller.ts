@@ -15,7 +15,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import type { CookieOptions, Request, Response } from 'express';
 import { AuthService, AuthTokens, PublicUser } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
@@ -37,6 +37,28 @@ const REFRESH_COOKIE_NAME = 'refresh_token';
 // than third-party — the path must match the browser-visible request path, not the backend's
 // own route path, or the browser won't attach the cookie to /api/auth/refresh calls.
 const REFRESH_COOKIE_PATH = '/api/auth';
+
+/**
+ * Pulled out of `setRefreshCookie` and exported (docs/ROADMAP.md FDP-99) so both `isProduction`
+ * branches are directly unit-testable without booting two separate `NODE_ENV`-specific apps —
+ * `auth.controller.spec.ts` asserts both. This is also where the CSRF exposure this cookie
+ * carries lives (docs/ARCHITECTURE.md §11's CSRF paragraph): `httpOnly` blocks JS/XSS reads,
+ * `sameSite` is what actually matters for cross-site *request forgery* specifically, and
+ * `path` scopes it so nothing outside `/auth/refresh`+`/auth/logout` ever reads it at all.
+ */
+export function buildRefreshCookieOptions(
+  isProduction: boolean,
+  expires: Date,
+): CookieOptions {
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    // See docs/ARCHITECTURE.md §11 — frontend/backend are cross-site in production only.
+    sameSite: isProduction ? 'none' : 'lax',
+    path: REFRESH_COOKIE_PATH,
+    expires,
+  };
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -269,13 +291,10 @@ export class AuthController {
 
   private setRefreshCookie(res: Response, tokens: AuthTokens): void {
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.cookie(REFRESH_COOKIE_NAME, tokens.refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      // See docs/ARCHITECTURE.md §11 — frontend/backend are cross-site in production only.
-      sameSite: isProduction ? 'none' : 'lax',
-      path: REFRESH_COOKIE_PATH,
-      expires: tokens.refreshTokenExpiresAt,
-    });
+    res.cookie(
+      REFRESH_COOKIE_NAME,
+      tokens.refreshToken,
+      buildRefreshCookieOptions(isProduction, tokens.refreshTokenExpiresAt),
+    );
   }
 }

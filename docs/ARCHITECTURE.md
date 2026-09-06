@@ -301,9 +301,16 @@ that doesn't exist yet); `isEmailVerified` is exposed via `GET /auth/me` so the 
 show a banner, and future phases can gate specific actions (e.g. placing an order) on it.
 
 CSRF: `SameSite=Lax`/`None` alone doesn't stop cross-site requests the way `Strict` would, but
-`/auth/refresh` is the only cookie-authenticated endpoint (everything else uses the
-Bearer-token access token, which a cross-site page can't read or attach), so the actual CSRF
-exposure is narrow. Revisit with a double-submit token if that endpoint's risk profile changes.
+`/auth/refresh` (and `/auth/logout`, same cookie) are the only cookie-authenticated endpoints
+(everything else uses the Bearer-token access token, which a cross-site page can't read or
+attach), so the actual CSRF exposure is narrow — a forged request to either can at worst rotate
+or end the victim's own session, never anything higher-value. Revisit with a double-submit token
+if that risk profile changes. Re-confirmed rather than just re-asserted in docs/ROADMAP.md
+FDP-99: the cookie-options logic was pulled into an exported `buildRefreshCookieOptions()`
+(`auth.controller.ts`) specifically so both the production and non-production attribute sets are
+directly unit-tested (`auth.controller.spec.ts`), plus a real end-to-end `Set-Cookie` header
+assertion in `auth.e2e-spec.ts` — so a future accidental loosening of `httpOnly`/`secure`/
+`sameSite`/`path` fails a test instead of shipping silently.
 
 **Silent reauth on access-token expiry (FDP-6):** the frontend's single RTK Query base query
 (`frontend/src/lib/redux/api.ts`) wraps `fetchBaseQuery` so a 401 from any endpoint (other than

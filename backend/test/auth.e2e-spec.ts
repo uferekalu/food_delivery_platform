@@ -119,6 +119,20 @@ describe('Auth (e2e)', () => {
       'refresh_token',
     );
 
+    // CSRF review (docs/ROADMAP.md FDP-99): the refresh cookie is the only cookie-authenticated
+    // surface in this app (docs/ARCHITECTURE.md §11) — a real end-to-end check (not just reading
+    // the source) that the actual HTTP response still carries the attributes that keep that
+    // exposure narrow. `NODE_ENV=test` here takes the non-production branch (HttpOnly + SameSite=
+    // Lax, no Secure); `auth.controller.spec.ts` covers the production branch directly, since this
+    // one app instance can't flip `NODE_ENV` mid-suite.
+    const rawRefreshCookie = (
+      registerRes.headers['set-cookie'] as unknown as string[]
+    ).find((c) => c.startsWith('refresh_token='));
+    expect(rawRefreshCookie).toContain('HttpOnly');
+    expect(rawRefreshCookie).toContain('SameSite=Lax');
+    expect(rawRefreshCookie).not.toContain('Secure');
+    expect(rawRefreshCookie).toContain('Path=/api/auth');
+
     // A registered-but-unverified user can still reach a protected endpoint with their access token.
     const meRes = await request(server)
       .get('/auth/me')
