@@ -6,6 +6,13 @@ export interface ListNotificationsParams {
   limit?: number;
 }
 
+// Web push (docs/ROADMAP.md FDP-100) — matches the browser's `PushSubscriptionJSON` shape
+// (`pushManager.subscribe()`'s return value, JSON-serialized) verbatim.
+export interface PushSubscriptionInput {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
 const LIST_TAG = { type: "Notification" as const, id: "LIST" };
 const UNREAD_COUNT_TAG = { type: "Notification" as const, id: "UNREAD_COUNT" };
 
@@ -39,6 +46,18 @@ export const notificationsApi = api.injectEndpoints({
       query: () => ({ url: "/notifications/read-all", method: "PATCH" }),
       invalidatesTags: [LIST_TAG, UNREAD_COUNT_TAG],
     }),
+
+    getPushPublicKey: builder.query<{ publicKey: string | null }, void>({
+      query: () => "/notifications/push/public-key",
+    }),
+
+    subscribeToPush: builder.mutation<{ success: true }, PushSubscriptionInput>({
+      query: (body) => ({ url: "/notifications/push/subscribe", method: "POST", body }),
+    }),
+
+    unsubscribeFromPush: builder.mutation<{ success: true }, { endpoint: string }>({
+      query: (body) => ({ url: "/notifications/push/subscribe", method: "DELETE", body }),
+    }),
   }),
 });
 
@@ -47,4 +66,7 @@ export const {
   useGetUnreadNotificationCountQuery,
   useMarkNotificationReadMutation,
   useMarkAllNotificationsReadMutation,
+  useGetPushPublicKeyQuery,
+  useSubscribeToPushMutation,
+  useUnsubscribeFromPushMutation,
 } = notificationsApi;

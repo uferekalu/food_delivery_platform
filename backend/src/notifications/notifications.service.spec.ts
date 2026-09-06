@@ -7,6 +7,7 @@ import { NotificationsService } from './notifications.service';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from './sms.service';
+import { PushService } from './push.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import {
   Notification,
@@ -24,6 +25,7 @@ describe('NotificationsService', () => {
   let usersService: { findById: jest.Mock };
   let mailService: { sendNotificationEmail: jest.Mock };
   let smsService: { send: jest.Mock };
+  let pushService: { send: jest.Mock };
   let realtimeGateway: { emitNotification: jest.Mock };
 
   beforeAll(async () => {
@@ -56,6 +58,10 @@ describe('NotificationsService', () => {
           useValue: { send: jest.fn().mockResolvedValue(true) },
         },
         {
+          provide: PushService,
+          useValue: { send: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
           provide: RealtimeGateway,
           useValue: { emitNotification: jest.fn() },
         },
@@ -67,6 +73,7 @@ describe('NotificationsService', () => {
     usersService = moduleRef.get(UsersService);
     mailService = moduleRef.get(MailService);
     smsService = moduleRef.get(SmsService);
+    pushService = moduleRef.get(PushService);
     realtimeGateway = moduleRef.get(RealtimeGateway);
   }, 60_000);
 
@@ -98,6 +105,30 @@ describe('NotificationsService', () => {
     expect(usersService.findById).not.toHaveBeenCalled(); // no need to look the user up at all
     expect(mailService.sendNotificationEmail).not.toHaveBeenCalled();
     expect(smsService.send).not.toHaveBeenCalled();
+    // Unlike email/sms, push is attempted unconditionally — PushService itself decides whether
+    // the user actually has a subscription (docs/ROADMAP.md FDP-100).
+    expect(pushService.send).toHaveBeenCalledWith(userId, {
+      title: 'Order confirmed',
+      body: 'Body text',
+      url: undefined,
+    });
+  });
+
+  it('never adds "push" to channels, and passes pushUrl through — PushService decides eligibility on its own', async () => {
+    const notification = await service.notify({
+      userId,
+      type: 'order_status',
+      title: 'Out for delivery',
+      body: 'Body text',
+      pushUrl: '/orders/123',
+    });
+
+    expect(notification.channels).toEqual(['inapp']);
+    expect(pushService.send).toHaveBeenCalledWith(userId, {
+      title: 'Out for delivery',
+      body: 'Body text',
+      url: '/orders/123',
+    });
   });
 
   it('adds "email" to channels and sends it when an email payload is given and the user exists', async () => {

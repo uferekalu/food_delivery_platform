@@ -5,6 +5,7 @@ import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { SmsService } from './sms.service';
+import { PushService } from './push.service';
 import type { PaginatedResult } from '../restaurants/restaurants.service';
 import {
   Notification,
@@ -27,6 +28,11 @@ export interface NotifyInput {
   /** Sent via `SmsService` if provided *and* the recipient has a saved phone number — silently
    * skipped otherwise (no phone, or Termii unconfigured — see `SmsService`). */
   sms?: string;
+  /** Where a web push notification's click should focus/open (docs/ROADMAP.md FDP-100) —
+   * defaults to `/notifications` in `PushService.send` when omitted. Unlike email/sms, push is
+   * never opt-in per call: every `notify()` attempts it automatically using `title`/`body`,
+   * silently skipped if the user has no saved subscription or `PushService` is unconfigured. */
+  pushUrl?: string;
 }
 
 @Injectable()
@@ -39,15 +45,16 @@ export class NotificationsService {
     private readonly usersService: UsersService,
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
+    private readonly pushService: PushService,
     private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
   /**
    * The only write path onto the `Notification` collection (backend/CLAUDE.md's "one service
    * owns a model's writes" convention) — always creates one `inapp` row, and best-effort fans
-   * out to email/SMS alongside it. Never throws on an email/SMS delivery failure; the caller
-   * (e.g. `OrdersService`, right after a status transition) shouldn't have its own success/
-   * failure hinge on a side channel.
+   * out to email/SMS/push alongside it. Never throws on an email/SMS/push delivery failure; the
+   * caller (e.g. `OrdersService`, right after a status transition) shouldn't have its own
+   * success/failure hinge on a side channel.
    */
   async notify(input: NotifyInput): Promise<NotificationDocument> {
     const channels: NotificationChannel[] = ['inapp'];
@@ -88,6 +95,16 @@ export class NotificationsService {
     if (input.sms && user?.phone) {
       void this.smsService.send(user.phone, input.sms);
     }
+
+    // Not added to `channels` (unlike email/sms) — whether a subscription actually exists is
+    // only known inside PushService's own async lookup, and checking it synchronously here just
+    // to populate a cosmetic list isn't worth an extra DB round trip on every single notify()
+    // call. Attempted unconditionally, unlike email/sms which are per-call opt-ins.
+    void this.pushService.send(input.userId, {
+      title: input.title,
+      body: input.body,
+      url: input.pushUrl,
+    });
 
     return notification;
   }

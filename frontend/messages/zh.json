@@ -500,7 +500,11 @@
     "logInToViewNotifications": "登录以查看你的通知",
     "needToBeLoggedInNotifications": "你需要登录才能查看通知。",
     "logIn": "登录",
-    "notifications": "通知"
+    "notifications": "通知",
+    "pushNotifications": "推送通知",
+    "pushNotificationsDescription": "即使未打开应用，也能在此设备上收到通知。",
+    "pushPermissionDenied": "通知已被阻止。请在浏览器的网站设置中启用通知以开启此功能。",
+    "pushCouldNotUpdate": "无法更新你的通知设置"
   },
   "OrdersPage": {
     "itemCount": "{count} 件商品",

@@ -52,4 +52,14 @@ export const envValidationSchema = Joi.object({
   FACEBOOK_APP_ID: Joi.string().optional(),
   FACEBOOK_APP_SECRET: Joi.string().optional(),
   FACEBOOK_CALLBACK_URL: Joi.string().uri().optional(),
+
+  // Web push notifications (docs/ROADMAP.md FDP-100) — same optional, graceful-degradation
+  // pattern as Termii above. Generate with `npx web-push generate-vapid-keys`; PushService
+  // degrades to a no-op log when these are unset, so the rest of NotificationsService.notify()'s
+  // fan-out (in-app/email/SMS) is unaffected. VAPID_SUBJECT is a mailto: or https: URI identifying
+  // the sender to push services — deliberately not `.uri()`-validated since Joi's URI check
+  // doesn't universally accept `mailto:` schemes across versions; `web-push` validates it itself.
+  VAPID_PUBLIC_KEY: Joi.string().optional(),
+  VAPID_PRIVATE_KEY: Joi.string().optional(),
+  VAPID_SUBJECT: Joi.string().optional(),
 });

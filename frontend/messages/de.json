@@ -500,7 +500,11 @@
     "logInToViewNotifications": "Melde dich an, um deine Benachrichtigungen zu sehen",
     "needToBeLoggedInNotifications": "Du musst angemeldet sein, um deine Benachrichtigungen zu sehen.",
     "logIn": "Anmelden",
-    "notifications": "Benachrichtigungen"
+    "notifications": "Benachrichtigungen",
+    "pushNotifications": "Push-Benachrichtigungen",
+    "pushNotificationsDescription": "Werde auf diesem Gerät benachrichtigt, auch wenn die App nicht geöffnet ist.",
+    "pushPermissionDenied": "Benachrichtigungen wurden blockiert. Aktiviere sie in den Website-Einstellungen deines Browsers, um dies einzuschalten.",
+    "pushCouldNotUpdate": "Deine Benachrichtigungseinstellung konnte nicht aktualisiert werden"
   },
   "OrdersPage": {
     "itemCount": "{count, plural, one {# Artikel} other {# Artikel}}",

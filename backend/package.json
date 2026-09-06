@@ -60,7 +60,8 @@
     "resend": "^6.20.0",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
-    "stripe": "^22.5.0"
+    "stripe": "^22.5.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -77,6 +78,7 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^7.0.0",
+    "@types/web-push": "^3.6.4",
     "bson": "^7.3.2",
     "dotenv": "^17.4.2",
     "eslint": "^9.18.0",

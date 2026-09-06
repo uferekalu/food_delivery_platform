@@ -500,7 +500,11 @@
     "logInToViewNotifications": "Log in to view your notifications",
     "needToBeLoggedInNotifications": "You'll need to be logged in to see your notifications.",
     "logIn": "Log in",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "pushNotifications": "Push notifications",
+    "pushNotificationsDescription": "Get notified on this device, even when the app isn't open.",
+    "pushPermissionDenied": "Notifications were blocked. Enable them in your browser's site settings to turn this on.",
+    "pushCouldNotUpdate": "Couldn't update your notification setting"
   },
   "OrdersPage": {
     "itemCount": "{count, plural, one {# item} other {# items}}",
