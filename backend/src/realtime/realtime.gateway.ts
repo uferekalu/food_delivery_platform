@@ -14,12 +14,13 @@ import { Model } from 'mongoose';
 import type { Server, Socket } from 'socket.io';
 import { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
-import type { OrderStatus } from '../orders/schemas/order-status';
+import { ACTIVE_DELIVERY_STATUSES } from '../orders/schemas/order-status';
 import {
   Restaurant,
   RestaurantDocument,
 } from '../restaurants/schemas/restaurant.schema';
 import { Store, StoreDocument } from '../stores/schemas/store.schema';
+import { Rider, RiderDocument } from '../riders/schemas/rider.schema';
 
 function orderRoom(orderId: string): string {
   return `order:${orderId}`;
@@ -36,14 +37,6 @@ function storeRoom(storeId: string): string {
 function userRoom(userId: string): string {
   return `user:${userId}`;
 }
-
-/** Statuses where a rider's live position is actually meaningful to broadcast — matches the
- * frontend rider dashboard's own ACTIVE_RIDER_STATUSES (docs/ROADMAP.md FDP-16/17). */
-const ACTIVE_DELIVERY_STATUSES: OrderStatus[] = [
-  'ASSIGNED_TO_RIDER',
-  'PICKED_UP',
-  'OUT_FOR_DELIVERY',
-];
 
 /**
  * Reads the connected user off the socket rather than the request — `@nestjs/websockets`
@@ -84,6 +77,7 @@ export class RealtimeGateway implements OnGatewayConnection {
     @InjectModel(Restaurant.name)
     private readonly restaurantModel: Model<RestaurantDocument>,
     @InjectModel(Store.name) private readonly storeModel: Model<StoreDocument>,
+    @InjectModel(Rider.name) private readonly riderModel: Model<RiderDocument>,
   ) {}
 
   /**
@@ -189,11 +183,18 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   /**
-   * A rider's live GPS ping (docs/ROADMAP.md FDP-17) — deliberately not persisted anywhere
-   * (no `Rider.currentLocation` field), purely relayed to whichever order rooms currently need
-   * it. The client only sends `{lat, lng}`; the server looks up *all* of that rider's
-   * in-flight orders itself rather than trusting a client-supplied orderId, so a rider with
-   * more than one active delivery updates every room in one ping.
+   * A rider's live GPS ping (docs/ROADMAP.md FDP-17), now also persisted onto
+   * `Rider.currentLocation` (docs/ROADMAP.md FDP-98) so nearest-rider dispatch has something
+   * fresh to query — previously relayed only, never stored. Persisted unconditionally (an
+   * online-but-idle rider pings this too, per the rider dashboard's location-sharing toggle now
+   * being available any time they're online, not just mid-delivery), while the order-room
+   * broadcast below still only fires when the rider actually has an in-flight delivery to relay
+   * it to. The client only sends `{lat, lng}`; the server looks up *all* of that rider's
+   * in-flight orders itself rather than trusting a client-supplied orderId, so a rider with more
+   * than one active delivery updates every room in one ping. Injects the `Rider` model directly
+   * (not `RidersService`) for the same reason as the `Order`/`Restaurant`/`Store` models above —
+   * `OrdersModule`/`RidersModule` both depend on this module to emit events, so depending back on
+   * either would be circular.
    */
   @SubscribeMessage('rider:locationUpdate')
   async handleRiderLocation(
@@ -203,6 +204,16 @@ export class RealtimeGateway implements OnGatewayConnection {
     const user = client.data.user;
     if (!user || user.role !== 'rider') return;
     if (typeof body?.lat !== 'number' || typeof body?.lng !== 'number') return;
+
+    await this.riderModel
+      .updateOne(
+        { userId: user.sub },
+        {
+          currentLocation: { type: 'Point', coordinates: [body.lng, body.lat] },
+          locationUpdatedAt: new Date(),
+        },
+      )
+      .exec();
 
     const activeOrders = await this.orderModel
       .find({ riderId: user.sub, status: { $in: ACTIVE_DELIVERY_STATUSES } })

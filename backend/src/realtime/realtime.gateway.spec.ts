@@ -6,6 +6,7 @@ import { RealtimeGateway } from './realtime.gateway';
 import { Order } from '../orders/schemas/order.schema';
 import { Restaurant } from '../restaurants/schemas/restaurant.schema';
 import { Store } from '../stores/schemas/store.schema';
+import { Rider } from '../riders/schemas/rider.schema';
 
 function fakeSocket() {
   return {
@@ -26,12 +27,16 @@ describe('RealtimeGateway', () => {
   let orderModel: { findById: jest.Mock; find: jest.Mock };
   let restaurantModel: { findById: jest.Mock };
   let storeModel: { findById: jest.Mock };
+  let riderModel: { updateOne: jest.Mock };
 
   beforeEach(async () => {
     jwtService = { verifyAsync: jest.fn() };
     orderModel = { findById: jest.fn(), find: jest.fn() };
     restaurantModel = { findById: jest.fn() };
     storeModel = { findById: jest.fn() };
+    riderModel = {
+      updateOne: jest.fn().mockReturnValue({ exec: () => Promise.resolve() }),
+    };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +49,7 @@ describe('RealtimeGateway', () => {
         { provide: getModelToken(Order.name), useValue: orderModel },
         { provide: getModelToken(Restaurant.name), useValue: restaurantModel },
         { provide: getModelToken(Store.name), useValue: storeModel },
+        { provide: getModelToken(Rider.name), useValue: riderModel },
       ],
     }).compile();
 
@@ -224,6 +230,30 @@ describe('RealtimeGateway', () => {
       );
     });
 
+    // Nearest-rider dispatch (docs/ROADMAP.md FDP-98) needs this persisted regardless of
+    // whether the rider currently has any active delivery to relay it to.
+    it("persists the rider's location onto Rider.currentLocation", async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'rider-1', role: 'rider' };
+      orderModel.find.mockReturnValue(fakeOrderQuery([]));
+
+      await gateway.handleRiderLocation(client as never, {
+        lat: 6.5,
+        lng: 3.4,
+      });
+
+      const [filter, update] = riderModel.updateOne.mock.calls[0] as [
+        { userId: string },
+        { currentLocation: unknown; locationUpdatedAt: unknown },
+      ];
+      expect(filter).toEqual({ userId: 'rider-1' });
+      expect(update.currentLocation).toEqual({
+        type: 'Point',
+        coordinates: [3.4, 6.5],
+      });
+      expect(update.locationUpdatedAt).toBeInstanceOf(Date);
+    });
+
     it('does nothing for a non-rider', async () => {
       const client = fakeSocket();
       client.data.user = { sub: 'customer-1', role: 'customer' };
@@ -233,6 +263,7 @@ describe('RealtimeGateway', () => {
         lng: 3.4,
       });
 
+      expect(riderModel.updateOne).not.toHaveBeenCalled();
       expect(orderModel.find).not.toHaveBeenCalled();
       expect(gateway.server.emit).not.toHaveBeenCalled();
     });
@@ -247,6 +278,7 @@ describe('RealtimeGateway', () => {
         lng: 3.4,
       });
 
+      expect(riderModel.updateOne).not.toHaveBeenCalled();
       expect(orderModel.find).not.toHaveBeenCalled();
     });
 

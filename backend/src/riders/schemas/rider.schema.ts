@@ -4,6 +4,10 @@ import {
   PayoutAccount,
   PayoutAccountSchema,
 } from '../../common/schemas/payout-account.schema';
+import {
+  GeoPoint,
+  GeoPointSchema,
+} from '../../common/schemas/geo-point.schema';
 
 export const VEHICLE_TYPES = ['bicycle', 'motorcycle', 'car', 'van'] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
@@ -52,6 +56,20 @@ export class Rider {
 
   @Prop({ type: Boolean, default: false })
   isOnline: boolean;
+
+  // Nearest-rider dispatch (docs/ROADMAP.md FDP-98) — kept fresh by the realtime gateway's
+  // `rider:locationUpdate` handler whenever a rider has location sharing on, regardless of
+  // whether they currently have an active delivery (unlike the transient, never-persisted
+  // location relay that already existed for in-flight deliveries — see RealtimeGateway's doc
+  // comment on why that one stays a pure relay). `null` for any rider who has never shared their
+  // location, or whose last-known fix is now considered stale — such a rider simply can't be
+  // found by `$geoNear`, the same graceful "excluded, not errored" precedent FDP-96 established
+  // for a restaurant/store with no coordinates.
+  @Prop({ type: GeoPointSchema, default: null })
+  currentLocation: GeoPoint | null;
+
+  @Prop({ type: Date, default: null })
+  locationUpdatedAt: Date | null;
 
   /** Gate set by an admin — mirrors Restaurant.isApproved. Unverified riders can see the
    * unassigned queue but can't self-assign to an order yet (see RidersController's `/assign`
@@ -124,3 +142,4 @@ export class Rider {
 
 export type RiderDocument = HydratedDocument<Rider>;
 export const RiderSchema = SchemaFactory.createForClass(Rider);
+RiderSchema.index({ currentLocation: '2dsphere' });

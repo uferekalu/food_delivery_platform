@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { OrdersService } from './orders.service';
 import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
@@ -44,6 +44,11 @@ import {
   PromoCode,
   PromoCodeSchema,
 } from '../promo-codes/schemas/promo-code.schema';
+import {
+  Rider,
+  RiderDocument,
+  RiderSchema,
+} from '../riders/schemas/rider.schema';
 
 jest.setTimeout(30_000);
 
@@ -64,6 +69,7 @@ describe('OrdersService', () => {
   let cartModel: Model<CartDocument>;
   let orderModel: Model<OrderDocument>;
   let zoneModel: Model<DeliveryZoneDocument>;
+  let riderModel: Model<RiderDocument>;
 
   const userId = 'customer-id';
   const validAddress = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' };
@@ -86,6 +92,7 @@ describe('OrdersService', () => {
           { name: Product.name, schema: ProductSchema },
           { name: PromoCode.name, schema: PromoCodeSchema },
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
+          { name: Rider.name, schema: RiderSchema },
         ]),
       ],
       providers: [
@@ -123,6 +130,11 @@ describe('OrdersService', () => {
     cartModel = moduleRef.get(getModelToken(Cart.name));
     orderModel = moduleRef.get(getModelToken(Order.name));
     zoneModel = moduleRef.get(getModelToken(DeliveryZone.name));
+    riderModel = moduleRef.get(getModelToken(Rider.name));
+    // $geoNear (nearest-rider dispatch, docs/ROADMAP.md FDP-98) needs the 2dsphere index built
+    // before the first geo query — see backend/CLAUDE.md/docs/ARCHITECTURE.md §22 for why this
+    // can't be assumed ready right after `MongooseModule.forFeature` resolves.
+    await riderModel.init();
   }, 60_000);
 
   afterEach(async () => {
@@ -139,6 +151,7 @@ describe('OrdersService', () => {
       cartModel.deleteMany({}).exec(),
       orderModel.deleteMany({}).exec(),
       zoneModel.deleteMany({}).exec(),
+      riderModel.deleteMany({}).exec(),
     ]);
   });
 
@@ -1742,6 +1755,202 @@ describe('OrdersService', () => {
         second._id.toString(),
         first._id.toString(),
       ]);
+    });
+  });
+
+  describe('nearest-rider dispatch (docs/ROADMAP.md FDP-98)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    // Restaurant sits here for every test in this block.
+    const restaurantOrigin = { lat: 6.5, lng: 3.35 };
+
+    async function createRider(
+      lat: number,
+      lng: number,
+      overrides: Partial<{ isOnline: boolean; isVerified: boolean }> = {},
+    ): Promise<string> {
+      const userId = new Types.ObjectId().toString();
+      await riderModel.create({
+        userId,
+        vehicleType: 'bicycle',
+        isOnline: overrides.isOnline ?? true,
+        isVerified: overrides.isVerified ?? true,
+        currentLocation: { type: 'Point', coordinates: [lng, lat] },
+        locationUpdatedAt: new Date(),
+        dateOfBirth: new Date('1995-01-01'),
+        governmentIdType: 'national_id',
+        governmentIdNumber: 'A1234567',
+        governmentIdDocumentUrl: 'https://example.com/id.pdf',
+        proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+        guarantor: {
+          fullName: 'Jane Guarantor',
+          phone: '+2348000000000',
+          relationship: 'Sister',
+          address: '1 Guarantor St',
+        },
+        nextOfKinName: 'John Next',
+        nextOfKinPhone: '+2348000000001',
+        nextOfKinRelationship: 'Brother',
+      });
+      return userId;
+    }
+
+    async function readyOrderFrom(restaurantId: string) {
+      const order = await createOrderAtStatus(restaurantId, 'PREPARING');
+      return ordersService.updateStatusByOwner(
+        owner,
+        order._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+    }
+
+    it('auto-assigns the nearest online, verified rider once an order becomes READY_FOR_PICKUP', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const closeRiderId = await createRider(6.501, 3.35); // ~0.11km away
+      const farRiderId = await createRider(6.55, 3.35); // ~5.5km away
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.status).toBe('ASSIGNED_TO_RIDER');
+      expect(order.riderId?.toString()).toBe(closeRiderId);
+      expect(order.riderId?.toString()).not.toBe(farRiderId);
+      expect(order.statusHistory.at(-1)).toMatchObject({
+        status: 'ASSIGNED_TO_RIDER',
+        by: closeRiderId,
+      });
+    });
+
+    it('skips the nearest rider if they already have an active delivery, dispatching to the next-nearest instead', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const busyRiderId = await createRider(6.501, 3.35); // nearest, but already busy
+      const freeRiderId = await createRider(6.52, 3.35); // next-nearest, free
+
+      const otherRestaurant = await createApprovedRestaurant('NGN', {
+        line1: '2 Other St',
+        city: 'Lagos',
+        state: 'Lagos',
+      });
+      const busyOrder = await createOrderAtStatus(
+        otherRestaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel
+        .updateOne({ _id: busyOrder._id }, { riderId: busyRiderId })
+        .exec();
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.riderId?.toString()).toBe(freeRiderId);
+    });
+
+    it('never dispatches to an unverified rider, even if they are nearest', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      await createRider(6.501, 3.35, { isVerified: false });
+      const verifiedRiderId = await createRider(6.52, 3.35);
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.riderId?.toString()).toBe(verifiedRiderId);
+    });
+
+    it('never dispatches to an offline rider, even if they are nearest', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      await createRider(6.501, 3.35, { isOnline: false });
+      const onlineRiderId = await createRider(6.52, 3.35);
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.riderId?.toString()).toBe(onlineRiderId);
+    });
+
+    it('leaves the order unassigned (for the manual queue) when nobody eligible is nearby', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      // Well outside the dispatch radius.
+      await createRider(7.5, 3.35);
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.status).toBe('READY_FOR_PICKUP');
+      expect(order.riderId).toBeNull();
+    });
+
+    it('leaves the order unassigned when the restaurant has no geocoded address', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        // no lat/lng
+      });
+      await createRider(6.501, 3.35);
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.status).toBe('READY_FOR_PICKUP');
+      expect(order.riderId).toBeNull();
+    });
+
+    it('leaves the order unassigned when no rider has ever shared a location', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      // Online and verified, but currentLocation stays null — never resolvable by $geoNear.
+      await riderModel.create({
+        userId: new Types.ObjectId().toString(),
+        vehicleType: 'bicycle',
+        isOnline: true,
+        isVerified: true,
+        dateOfBirth: new Date('1995-01-01'),
+        governmentIdType: 'national_id',
+        governmentIdNumber: 'A1234567',
+        governmentIdDocumentUrl: 'https://example.com/id.pdf',
+        proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+        guarantor: {
+          fullName: 'Jane Guarantor',
+          phone: '+2348000000000',
+          relationship: 'Sister',
+          address: '1 Guarantor St',
+        },
+        nextOfKinName: 'John Next',
+        nextOfKinPhone: '+2348000000001',
+        nextOfKinRelationship: 'Brother',
+      });
+
+      const order = await readyOrderFrom(restaurant._id.toString());
+
+      expect(order.status).toBe('READY_FOR_PICKUP');
+      expect(order.riderId).toBeNull();
     });
   });
 

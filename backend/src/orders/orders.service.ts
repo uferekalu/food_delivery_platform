@@ -12,6 +12,7 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
 import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
 import { Product, ProductDocument } from '../stores/schemas/product.schema';
+import { Rider, RiderDocument } from '../riders/schemas/rider.schema';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -24,9 +25,20 @@ import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
-import { ORDER_STATUSES } from './schemas/order-status';
+import {
+  ACTIVE_DELIVERY_STATUSES,
+  ORDER_STATUSES,
+} from './schemas/order-status';
 import type { OrderStatus } from './schemas/order-status';
 import type { PaymentProvider } from '../payments/payment-provider';
+
+// Nearest-rider dispatch (docs/ROADMAP.md FDP-98) only looks this far from the seller — beyond
+// this, dispatching would hand a rider a trip not actually worth taking, and the order is better
+// left for the manual queue (`findUnassignedForRiders`) instead.
+const NEARBY_RIDER_DISPATCH_RADIUS_KM = 15;
+// How many nearest-by-distance candidates to pull before filtering out already-busy riders —
+// generous enough that a handful of busy riders near the front doesn't exhaust the list.
+const NEARBY_RIDER_CANDIDATE_LIMIT = 15;
 
 // Customer-facing copy for each status a notification is sent for — every entry here also
 // gets an in-app row + email; only OUT_FOR_DELIVERY/DELIVERED additionally go out over SMS
@@ -179,6 +191,7 @@ export class OrdersService {
     private readonly menuItemModel: Model<MenuItemDocument>,
     @InjectModel(Product.name)
     private readonly productModel: Model<ProductDocument>,
+    @InjectModel(Rider.name) private readonly riderModel: Model<RiderDocument>,
     private readonly cartService: CartService,
     private readonly restaurantsService: RestaurantsService,
     private readonly storesService: StoresService,
@@ -708,7 +721,104 @@ export class OrdersService {
 
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
+    if (targetStatus === 'READY_FOR_PICKUP') {
+      // Awaited, unlike `notifyOrderStatus` — the caller (the restaurant/store owner marking the
+      // order ready) gets back whatever this actually decided, so their response already shows
+      // the assigned rider instead of momentarily looking unassigned until the next refetch.
+      // Never throws (see the doc comment below), so this can't turn a dispatch failure into a
+      // failed transition — the transition itself already committed above.
+      const dispatched = await this.dispatchToNearestRider(order);
+      if (dispatched) return dispatched;
+    }
     return order;
+  }
+
+  /**
+   * Algorithmic nearest-rider dispatch (docs/ROADMAP.md FDP-98) — replaces pure "any online
+   * rider can grab any ready order" with an automatic first attempt at the closest eligible one.
+   * Swallows its own errors (a missing seller location, nobody nearby, a transient DB error) and
+   * resolves `null` rather than rejecting — a dispatch failure must never fail the
+   * READY_FOR_PICKUP transition that already committed. `findUnassignedForRiders`'s manual queue
+   * stays exactly as it was — the fallback for whenever this finds nobody, not replaced by it.
+   */
+  private async dispatchToNearestRider(
+    order: OrderDocument,
+  ): Promise<OrderDocument | null> {
+    try {
+      const riderUserId = await this.findNearestAvailableRiderId(order);
+      if (!riderUserId) return null;
+      return await this.assignToRider(riderUserId, order._id.toString());
+    } catch (err) {
+      this.logger.error(
+        `Nearest-rider dispatch failed for order ${order._id.toString()}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * `$geoNear` over `Rider.currentLocation` (docs/ARCHITECTURE.md §22's pattern, reused verbatim)
+   * rather than an in-memory haversine sort — same reasoning as FDP-96's restaurant/store "near
+   * me" search: radius filtering happens at the database level, and a rider who's never shared
+   * their location (`currentLocation: null`) is silently excluded rather than erroring, since
+   * `$geoNear` can't match a document with no valid geo field for its 2dsphere index. Returns
+   * `null` (never throws) whenever there's simply nobody to dispatch to — a missing seller
+   * location, nobody online nearby, or every nearby rider already mid-delivery are all
+   * unremarkable, expected outcomes that fall back to the manual queue, not errors.
+   */
+  private async findNearestAvailableRiderId(
+    order: OrderDocument,
+  ): Promise<string | null> {
+    const sellerLocation = await this.getSellerLocation(order);
+    if (!sellerLocation) return null;
+
+    const candidates = await this.riderModel
+      .aggregate<{ userId: string }>([
+        {
+          $geoNear: {
+            near: sellerLocation,
+            distanceField: 'distanceMeters',
+            maxDistance: NEARBY_RIDER_DISPATCH_RADIUS_KM * 1000,
+            spherical: true,
+            query: { isOnline: true, isVerified: true },
+          },
+        },
+        { $limit: NEARBY_RIDER_CANDIDATE_LIMIT },
+        { $project: { userId: { $toString: '$userId' } } },
+      ])
+      .exec();
+    if (candidates.length === 0) return null;
+
+    // $geoNear already returns nearest-first — a rider already mid-delivery is skipped in favor
+    // of the next-nearest one, rather than being dispatched a second concurrent order.
+    const candidateIds = candidates.map((c) => c.userId);
+    const busyRiderIds = await this.orderModel
+      .distinct('riderId', {
+        riderId: { $in: candidateIds },
+        status: { $in: ACTIVE_DELIVERY_STATUSES },
+      })
+      .exec();
+    const busy = new Set(busyRiderIds.map((id: unknown) => String(id)));
+
+    return candidateIds.find((id) => !busy.has(id)) ?? null;
+  }
+
+  /** The point dispatch measures distance from — the seller's own address, not the customer's
+   * delivery address, since the rider has to reach the restaurant/store first. Reuses whichever
+   * `address.location` FDP-96 already computed and kept in sync, rather than recomputing it. */
+  private async getSellerLocation(
+    order: OrderDocument,
+  ): Promise<{ type: 'Point'; coordinates: [number, number] } | null> {
+    if (order.sellerType === 'store') {
+      const store = await this.storesService.findByIdOrThrow(
+        (order.storeId as NonNullable<typeof order.storeId>).toString(),
+      );
+      return store.address.location ?? null;
+    }
+    const restaurant = await this.restaurantsService.findByIdOrThrow(
+      (order.restaurantId as NonNullable<typeof order.restaurantId>).toString(),
+    );
+    return restaurant.address.location ?? null;
   }
 
   /** The platform-wide rider queue (docs/ROADMAP.md FDP-16) — not restaurant-scoped, since a

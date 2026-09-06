@@ -131,10 +131,13 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
 }
 
 /**
- * Only ever mounted while `activeDeliveries.length > 0` (see below) — this makes React's own
- * unmount lifecycle the trigger for stopping the browser's GPS watch, instead of a separate
- * effect that watches a delivery count and calls setState from inside an effect body (which
- * the React Compiler's `set-state-in-effect` rule flags — see frontend/CLAUDE.md).
+ * Only ever mounted while `rider.isOnline` (see below) — this makes React's own unmount
+ * lifecycle the trigger for stopping the browser's GPS watch, instead of a separate effect that
+ * watches online status and calls setState from inside an effect body (which the React
+ * Compiler's `set-state-in-effect` rule flags — see frontend/CLAUDE.md). Available any time the
+ * rider is online, not just mid-delivery, since nearest-rider dispatch (docs/ROADMAP.md FDP-98)
+ * needs a fresh location for an idle-but-online rider to even be considered — going offline (or
+ * closing the tab) simply lets this go stale, the same way `isOnline` itself already can.
  */
 function LocationSharingToggle() {
   const t = useTranslations("RiderDashboardPage");
@@ -236,23 +239,26 @@ function RiderDashboard() {
       {!rider.isVerified && <Alert variant="warning">{t("pendingVerificationWarning")}</Alert>}
 
       <Card>
-        <CardContent className="flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-text">{rider.isOnline ? t("youreOnline") : t("youreOffline")}</span>
-            <span className="text-sm text-text-muted">{t("goOnlineDescription")}</span>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-text">{rider.isOnline ? t("youreOnline") : t("youreOffline")}</span>
+              <span className="text-sm text-text-muted">{t("goOnlineDescription")}</span>
+            </div>
+            <Switch
+              label={t("online")}
+              checked={rider.isOnline}
+              disabled={toggling}
+              onChange={() =>
+                void toggleOnline()
+                  .unwrap()
+                  .catch((err: unknown) =>
+                    toast({ title: t("couldNotUpdateStatus"), description: getErrorMessage(err), variant: "danger" }),
+                  )
+              }
+            />
           </div>
-          <Switch
-            label={t("online")}
-            checked={rider.isOnline}
-            disabled={toggling}
-            onChange={() =>
-              void toggleOnline()
-                .unwrap()
-                .catch((err: unknown) =>
-                  toast({ title: t("couldNotUpdateStatus"), description: getErrorMessage(err), variant: "danger" }),
-                )
-            }
-          />
+          {rider.isOnline && <LocationSharingToggle />}
         </CardContent>
       </Card>
 
@@ -270,10 +276,7 @@ function RiderDashboard() {
 
       {activeDeliveries.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-text">{t("yourActiveDeliveries")}</h2>
-            <LocationSharingToggle />
-          </div>
+          <h2 className="text-lg font-semibold text-text">{t("yourActiveDeliveries")}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeDeliveries.map((order) => (
               <ActiveDeliveryCard key={order._id} order={order} />
