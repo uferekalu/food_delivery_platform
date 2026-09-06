@@ -10,6 +10,7 @@ import {
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { SmsModule } from './sms.module';
+import { PushModule } from './push.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SmsModule } from './sms.module';
     MailModule,
     RealtimeModule,
     SmsModule,
+    PushModule,
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],

@@ -996,3 +996,45 @@ rider has to reach the restaurant/store first — reusing whichever `address.loc
 already geocoded and kept in sync, rather than recomputing it. A restaurant/store that's never
 had its address geocoded simply can't be dispatched to (falls back to the manual queue), the same
 graceful precedent FDP-96 already established for "near me" search on the customer side.
+
+## 25. Web push notifications (docs/ROADMAP.md FDP-100)
+
+A fourth notification channel alongside the existing in-app/email/SMS fan-out — delivers a real
+OS-level notification even with no tab open, via the browser's Push API and a minimal service
+worker (`frontend/public/sw.js`, push-only, no manifest/installability — PWA installability
+stays explicitly out of scope, see FDP-22's note). No real VAPID key pair exists for this project
+yet; generate one with `npx web-push generate-vapid-keys`.
+
+**`PushService` mirrors `SmsService`'s graceful-degradation pattern exactly**: `VAPID_PUBLIC_KEY`/
+`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are read via `ConfigService.get()` (undefined, not thrown, if
+unset), `isConfigured` is computed from all three being present, and `send()` logs and no-ops
+rather than throwing when they're not — so the rest of `NotificationsService.notify()`'s fan-out
+is never blocked by a missing push provider, same as every other optional integration in this
+codebase (Termii, Sentry, Google/Facebook OAuth).
+
+**Unlike email/SMS, push is attempted unconditionally on every `notify()` call**, not opted into
+per call site — `NotifyInput` gained only an optional `pushUrl` (the service worker's
+`notificationclick` target, defaulting to `/notifications`), reusing the same `title`/`body`
+every call already provides rather than requiring every existing `OrdersService` call site to
+also pass push-specific copy. `PushService.send()` itself decides whether the user actually has
+a subscription; a push attempt is deliberately **not** recorded in `Notification.channels`
+(unlike `'email'`/`'sms'`) — checking subscription existence synchronously just to populate that
+cosmetic list isn't worth an extra DB round trip on every single notification.
+
+**One `PushSubscription` document per browser/device, not per user** (a new, separate collection
+from `Notification` — `endpoint` is the natural dedup key, upserted on): a customer can have the
+feature on across a work laptop, a home laptop, and a phone browser simultaneously, unlike
+`User.phone` for SMS which is a single value. A push service returning 404/410 (the browser
+itself unsubscribed, or the endpoint expired) deletes that one subscription; any other error is
+logged and the subscription left alone, since a transient outage isn't evidence the subscription
+itself is bad.
+
+**Frontend**: `usePushNotifications()` (`lib/push-notifications.ts`) mirrors `useGeolocation()`'s
+on-demand-only shape — the service worker is registered and the browser's permission prompt is
+requested only from an explicit `subscribe()` call (a "Enable push notifications" toggle on
+`/notifications`), never automatically on mount, for the same "don't get reflexively denied"
+reason FDP-96 already established. A VAPID public key arrives base64url-encoded but
+`pushManager.subscribe()`'s `applicationServerKey` needs a raw `Uint8Array`, converted client-side
+(`urlBase64ToUint8Array`) — fetched from the backend (`GET /notifications/push/public-key`, `null`
+when unconfigured, in which case the toggle stays hidden) rather than duplicated into a
+`NEXT_PUBLIC_*` env var, keeping the VAPID key pair single-sourced on the backend.

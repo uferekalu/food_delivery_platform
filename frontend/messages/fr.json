@@ -500,7 +500,11 @@
     "logInToViewNotifications": "Connectez-vous pour voir vos notifications",
     "needToBeLoggedInNotifications": "Vous devez être connecté pour voir vos notifications.",
     "logIn": "Se connecter",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "pushNotifications": "Notifications push",
+    "pushNotificationsDescription": "Soyez averti sur cet appareil, même lorsque l'application n'est pas ouverte.",
+    "pushPermissionDenied": "Les notifications ont été bloquées. Activez-les dans les paramètres du site de votre navigateur pour les réactiver.",
+    "pushCouldNotUpdate": "Impossible de mettre à jour votre paramètre de notification"
   },
   "OrdersPage": {
     "itemCount": "{count, plural, one {# article} other {# articles}}",

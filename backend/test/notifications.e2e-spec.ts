@@ -6,6 +6,8 @@ import type { App } from 'supertest/types';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { setupApp } from '../src/setup-app';
 import type { NotificationsService } from '../src/notifications/notifications.service';
+import type { Model } from 'mongoose';
+import type { PushSubscriptionDocument } from '../src/notifications/schemas/push-subscription.schema';
 
 jest.setTimeout(60_000);
 
@@ -13,6 +15,7 @@ describe('Notifications (e2e)', () => {
   let app: INestApplication<App>;
   let mongod: MongoMemoryServer;
   let notificationsService: NotificationsService;
+  let pushSubscriptionModel: Model<PushSubscriptionDocument>;
 
   beforeAll(async () => {
     // See auth.e2e-spec.ts for why `launchTimeout` is set explicitly.
@@ -43,6 +46,10 @@ describe('Notifications (e2e)', () => {
       require('../src/mail/mail.service') as typeof import('../src/mail/mail.service');
     const { NotificationsService: NotificationsServiceClass } =
       require('../src/notifications/notifications.service') as typeof import('../src/notifications/notifications.service');
+    const { getModelToken } =
+      require('@nestjs/mongoose') as typeof import('@nestjs/mongoose');
+    const { PushSubscription: PushSubscriptionClass } =
+      require('../src/notifications/schemas/push-subscription.schema') as typeof import('../src/notifications/schemas/push-subscription.schema');
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -59,6 +66,7 @@ describe('Notifications (e2e)', () => {
     setupApp(app);
     await app.init();
     notificationsService = app.get(NotificationsServiceClass);
+    pushSubscriptionModel = app.get(getModelToken(PushSubscriptionClass.name));
   }, 60_000);
 
   afterAll(async () => {
@@ -199,5 +207,69 @@ describe('Notifications (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .expect(200);
     expect((countB.body as { count: number }).count).toBe(1);
+  });
+
+  describe('web push (docs/ROADMAP.md FDP-100)', () => {
+    it('reports no public key when VAPID is unconfigured, and rejects an unauthenticated request', async () => {
+      const server = app.getHttpServer();
+      await request(server).get('/notifications/push/public-key').expect(401);
+
+      const user = await registerAndLogin('push-unconfigured@example.com');
+      const res = await request(server)
+        .get('/notifications/push/public-key')
+        .set('Authorization', `Bearer ${user.accessToken}`)
+        .expect(200);
+      expect((res.body as { publicKey: string | null }).publicKey).toBeNull();
+    });
+
+    it('subscribes, persists the subscription, and unsubscribing removes it — scoped to the caller', async () => {
+      const server = app.getHttpServer();
+      const user = await registerAndLogin('push-subscriber@example.com');
+      const subscription = {
+        endpoint: 'https://push.example.com/e2e-endpoint',
+        keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
+      };
+
+      await request(server)
+        .post('/notifications/push/subscribe')
+        .set('Authorization', `Bearer ${user.accessToken}`)
+        .send(subscription)
+        .expect(201);
+
+      const stored = await pushSubscriptionModel
+        .findOne({ endpoint: subscription.endpoint })
+        .exec();
+      expect(stored?.userId.toString()).toBe(user.user.id);
+      expect(stored?.keys.p256dh).toBe('p256dh-value');
+
+      await request(server)
+        .delete('/notifications/push/subscribe')
+        .set('Authorization', `Bearer ${user.accessToken}`)
+        .send({ endpoint: subscription.endpoint })
+        .expect(200);
+
+      expect(
+        await pushSubscriptionModel
+          .findOne({ endpoint: subscription.endpoint })
+          .exec(),
+      ).toBeNull();
+    });
+
+    it('rejects a subscribe payload missing required fields', async () => {
+      const server = app.getHttpServer();
+      const user = await registerAndLogin('push-invalid@example.com');
+
+      await request(server)
+        .post('/notifications/push/subscribe')
+        .set('Authorization', `Bearer ${user.accessToken}`)
+        .send({ endpoint: 'not-a-url' })
+        .expect(400);
+
+      await request(server)
+        .post('/notifications/push/subscribe')
+        .set('Authorization', `Bearer ${user.accessToken}`)
+        .send({ endpoint: 'https://push.example.com/valid-but-no-keys' })
+        .expect(400);
+    });
   });
 });
