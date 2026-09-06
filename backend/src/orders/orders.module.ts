@@ -14,6 +14,7 @@ import { Order, OrderSchema } from './schemas/order.schema';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
+import { TaxResolver } from './tax-resolver';
 
 @Module({
   imports: [
@@ -35,7 +36,7 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
     NotificationsModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, PaymentProviderResolver],
+  providers: [OrdersService, PaymentProviderResolver, TaxResolver],
   exports: [OrdersService],
 })
 export class OrdersModule {}

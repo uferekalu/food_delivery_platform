@@ -24,6 +24,7 @@ import { formatMoney } from '../common/utils/currency';
 import { PLATFORM_COMMISSION_RATE } from '../common/constants/platform-fee';
 import { Order, OrderDocument } from './schemas/order.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { TaxResolver } from './tax-resolver';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
 import {
   ACTIVE_DELIVERY_STATUSES,
@@ -197,6 +198,7 @@ export class OrdersService {
     private readonly storesService: StoresService,
     private readonly promoCodesService: PromoCodesService,
     private readonly paymentProviderResolver: PaymentProviderResolver,
+    private readonly taxResolver: TaxResolver,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly deliveryZonesService: DeliveryZonesService,
     private readonly notificationsService: NotificationsService,
@@ -372,7 +374,6 @@ export class OrdersService {
       subtotal,
     );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
-    const tax = 0;
     // Vendor payouts epic (docs/ROADMAP.md FDP-51 onward) — the platform's commission on the
     // food subtotal only, not deliveryFee (the rider's earnings, see findForRider) or
     // serviceFee (already the platform's own revenue line). Computed on the pre-discount
@@ -394,6 +395,14 @@ export class OrdersService {
       discount = round2(validation.discountAmount);
       redeemedPromoCodeId = validation.promoCodeId;
     }
+
+    // Real per-order VAT/sales tax (docs/ROADMAP.md FDP-101), currency-keyed via TaxResolver —
+    // computed after discount, on the amount actually charged (subtotal + deliveryFee +
+    // serviceFee - discount), not the pre-discount list price.
+    const tax = this.taxResolver.calculate(
+      subtotal + deliveryFee + serviceFee - discount,
+      restaurant.currency,
+    );
 
     const total = Math.max(
       0,
@@ -523,7 +532,6 @@ export class OrdersService {
       subtotal,
     );
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
-    const tax = 0;
     // Same commission model as a restaurant order — see createRestaurantOrder's comment.
     // restaurantPayoutAmount's field name is legacy (kept for the reason on Order.schema.ts);
     // it means "what the seller is owed" for either seller type.
@@ -542,6 +550,13 @@ export class OrdersService {
       discount = round2(validation.discountAmount);
       redeemedPromoCodeId = validation.promoCodeId;
     }
+
+    // Real per-order VAT/sales tax (docs/ROADMAP.md FDP-101) — see createRestaurantOrder's
+    // comment for the taxable-base/ordering reasoning.
+    const tax = this.taxResolver.calculate(
+      subtotal + deliveryFee + serviceFee - discount,
+      store.currency,
+    );
 
     const total = Math.max(
       0,

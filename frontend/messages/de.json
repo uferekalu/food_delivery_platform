@@ -450,6 +450,7 @@
     "promotion": "Aktion",
     "deliveryEst": "Lieferung (gesch.)",
     "serviceFeeEst": "Servicegebühr (gesch.)",
+    "taxEst": "Steuer (gesch.)",
     "total": "Gesamt",
     "payToOrder": "Bestellung bezahlen",
     "checkingSession": "Deine Sitzung wird überprüft",

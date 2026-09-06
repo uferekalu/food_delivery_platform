@@ -1038,3 +1038,42 @@ reason FDP-96 already established. A VAPID public key arrives base64url-encoded 
 (`urlBase64ToUint8Array`) — fetched from the backend (`GET /notifications/push/public-key`, `null`
 when unconfigured, in which case the toggle stays hidden) rather than duplicated into a
 `NEXT_PUBLIC_*` env var, keeping the VAPID key pair single-sourced on the backend.
+
+## 26. Real tax calculation (docs/ROADMAP.md FDP-101)
+
+Replaces the flat `tax: 0` placeholder `Order.tax` carried since FDP-11 ("jurisdiction-specific
+rules vary too much to fake meaningfully at this stage") with a real, working, currency-keyed VAT
+calculation — scoped honestly, not as a full nexus/jurisdiction-aware tax engine (unrealistic to
+build accurately for arbitrary jurisdictions), but as a single flat national rate per currency,
+the same scope a small marketplace platform can actually keep correct.
+
+**New `TaxResolver`** (`orders/tax-resolver.ts`) follows `PaymentProviderResolver`'s exact
+established config-table convention (docs/ARCHITECTURE.md §4): a plain `Record<string, number>`
+keyed by currency (uppercased on lookup), a `DEFAULT_TAX_RATE` fallback, no DB/config-service
+indirection — a new currency/rate is a table edit, not a code change. Seeded with each currently-
+supported currency's one real-world country's standard national VAT rate (Nigeria 7.5%, Ghana
+15%, Kenya 16%, South Africa 15%, Uganda 18%, UK 20%) — a starting point, not a live regulatory
+feed; **the table's own doc comment is explicit that these need verifying against current law
+before relying on them in production**, since tax rates change and nothing here refreshes
+automatically. `USD`/`EUR` are deliberately left out of the table (falling through to the 0
+default) rather than assigned a number: neither identifies one jurisdiction with a single
+accurate flat rate (US sales tax is state/county-variable with no national rate; Eurozone
+national VAT rates range roughly 17–27%), so stating a number for either would be actively wrong
+rather than approximately right — the same "don't fake accuracy" reasoning the original `tax: 0`
+placeholder's own doc comment already gave.
+
+**Tax is computed on the post-discount taxable amount** — `subtotal + deliveryFee + serviceFee -
+discount` — standard VAT practice, since tax applies to what the customer is actually charged,
+not the pre-discount list price. This required moving the `tax` calculation in both
+`OrdersService.createRestaurantOrder`/`createStoreOrder` to *after* promo-code validation
+resolves `discount` (it was previously computed — as the literal `0` — before discount, since
+order didn't matter when the value was always zero); the `total` formula itself
+(`subtotal + deliveryFee + serviceFee + tax - discount`) needed no change, since `tax` was
+already wired in as an additive term. Clamped at 0 so a discount larger than the pre-tax total
+can't produce negative tax (the same clamp `total` itself already has).
+
+**Frontend**: the checkout page's existing client-side fee-preview pattern (a duplicated
+`DELIVERY_FEE_RATE`/`SERVICE_FEE_RATE` constant, explicitly documented as "preview only, the
+authoritative total always comes from the created order") gained a duplicated `TAX_RATE_TABLE`
+for the same reason — a new "Tax (est.)" summary line, hidden entirely when the rate is 0 (most
+checkouts, given USD/EUR's default) rather than showing a redundant "$0.00 tax" row.

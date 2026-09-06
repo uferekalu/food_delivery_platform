@@ -6,6 +6,7 @@ import { Model } from 'mongoose';
 import { ReviewsService } from './reviews.service';
 import { Review, ReviewDocument, ReviewSchema } from './schemas/review.schema';
 import { OrdersService } from '../orders/orders.service';
+import { TaxResolver } from '../orders/tax-resolver';
 import { CartService } from '../cart/cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
@@ -97,6 +98,7 @@ describe('ReviewsService', () => {
         StoresService,
         PromoCodesService,
         PaymentProviderResolver,
+        TaxResolver,
         DeliveryZonesService,
         RidersService,
         UsersService,
