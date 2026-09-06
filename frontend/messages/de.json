@@ -766,9 +766,23 @@
     "orderQueue": "Bestellwarteschlange",
     "deliveryZones": "Liefergebiete",
     "payouts": "Auszahlungen",
+    "earnings": "Einnahmen",
+    "salesReport": "Verkaufsbericht",
     "close": "Schließen",
     "alsoRunARestaurant": "Betreibst du auch ein Restaurant?",
     "addRestaurant": "Restaurant hinzufügen"
+  },
+  "StoreEarningsPage": {
+    "storeNotFound": "Shop nicht gefunden",
+    "mayNotExistOrNoAccess": "Er existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
+    "earningsAppearHere": "Einnahmen erscheinen hier, sobald eine Bestellung für diesen Shop geliefert wurde.",
+    "automatedPayoutsNotAvailable": "Automatische Auszahlungen sind für die Währung dieses Shops noch nicht verfügbar — deine Einnahmen unten sind vorerst nur informativ."
+  },
+  "StoreSalesReportPage": {
+    "storeNotFound": "Shop nicht gefunden",
+    "mayNotExistOrNoAccess": "Er existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
+    "salesFiguresAppearHere": "Verkaufszahlen erscheinen hier, sobald eine Bestellung für diesen Shop geliefert wurde.",
+    "profitFiguresExclude": "Die Gewinnzahlen unten schließen die Kosten für Folgendes aus: {items}. Lege für diese Produkte in deinem Katalog einen Einkaufspreis fest, um ein vollständiges Bild zu erhalten."
   },
   "StorePayoutsPage": {
     "payouts": "Auszahlungen",

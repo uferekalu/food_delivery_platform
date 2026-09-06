@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
+import { ReorderButton } from "@/components/reorder-button";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { useGetMyOrdersQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
@@ -36,9 +37,9 @@ function OrderRow({ order }: { order: Order }) {
   const itemCount = order.items.reduce((sum, item) => sum + item.qty, 0);
 
   return (
-    <Link href={`/orders/${order._id}`}>
-      <Card className="transition-colors duration-150 hover:border-border-strong">
-        <CardContent className="flex items-center justify-between gap-3">
+    <Card className="transition-colors duration-150 hover:border-border-strong">
+      <CardContent className="flex flex-col gap-3">
+        <Link href={`/orders/${order._id}`} className="flex items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-medium text-text">{order.orderNumber}</span>
             <span className="text-xs text-text-muted">
@@ -51,9 +52,12 @@ function OrderRow({ order }: { order: Order }) {
             </span>
             <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
           </div>
-        </CardContent>
-      </Card>
-    </Link>
+        </Link>
+        <div className="flex justify-end border-t border-border pt-3">
+          <ReorderButton orderId={order._id} />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

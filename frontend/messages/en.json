@@ -766,9 +766,23 @@
     "orderQueue": "Order queue",
     "deliveryZones": "Delivery zones",
     "payouts": "Payouts",
+    "earnings": "Earnings",
+    "salesReport": "Sales report",
     "close": "Close",
     "alsoRunARestaurant": "Also run a restaurant?",
     "addRestaurant": "Add a restaurant"
+  },
+  "StoreEarningsPage": {
+    "storeNotFound": "Store not found",
+    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
+    "earningsAppearHere": "Earnings appear here once an order for this store is delivered.",
+    "automatedPayoutsNotAvailable": "Automated payouts aren't available for this store's currency yet — your earnings below are informational for now."
+  },
+  "StoreSalesReportPage": {
+    "storeNotFound": "Store not found",
+    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
+    "salesFiguresAppearHere": "Sales figures appear here once an order for this store is delivered.",
+    "profitFiguresExclude": "Profit figures below exclude cost for: {items}. Set a cost price on these items in your catalog for a complete picture."
   },
   "StorePayoutsPage": {
     "payouts": "Payouts",

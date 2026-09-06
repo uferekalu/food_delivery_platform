@@ -766,9 +766,23 @@
     "orderQueue": "Fila de pedidos",
     "deliveryZones": "Zonas de entrega",
     "payouts": "Pagamentos",
+    "earnings": "Ganhos",
+    "salesReport": "Relatório de vendas",
     "close": "Fechar",
     "alsoRunARestaurant": "Também administra um restaurante?",
     "addRestaurant": "Adicionar um restaurante"
+  },
+  "StoreEarningsPage": {
+    "storeNotFound": "Loja não encontrada",
+    "mayNotExistOrNoAccess": "Ela pode não existir, ou você não tem acesso a ela.",
+    "earningsAppearHere": "Os ganhos aparecem aqui assim que um pedido desta loja for entregue.",
+    "automatedPayoutsNotAvailable": "Pagamentos automáticos ainda não estão disponíveis para a moeda desta loja — seus ganhos abaixo são apenas informativos por enquanto."
+  },
+  "StoreSalesReportPage": {
+    "storeNotFound": "Loja não encontrada",
+    "mayNotExistOrNoAccess": "Ela pode não existir, ou você não tem acesso a ela.",
+    "salesFiguresAppearHere": "Os números de vendas aparecem aqui assim que um pedido desta loja for entregue.",
+    "profitFiguresExclude": "Os números de lucro abaixo excluem o custo de: {items}. Defina um preço de custo para esses produtos no seu catálogo para uma visão completa."
   },
   "StorePayoutsPage": {
     "payouts": "Pagamentos",

@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -10,74 +10,18 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { LiveDeliveryMap, type LatLng } from "@/components/live-delivery-map";
 import { ReviewForm } from "@/components/review-form";
-import { useToast } from "@/components/ui/toast";
+import { ReorderButton } from "@/components/reorder-button";
 import { useAppSelector } from "@/lib/redux/hooks";
-import { useGetOrderQuery, useReorderMutation } from "@/lib/redux/services/orders-api";
+import { useGetOrderQuery } from "@/lib/redux/services/orders-api";
 import { useVerifyPaymentMutation } from "@/lib/redux/services/payments-api";
 import { useGetReviewEligibilityQuery } from "@/lib/redux/services/reviews-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
-
-function isConflictError(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "status" in err && (err as { status: unknown }).status === 409;
-}
-
-function ReorderButton({ orderId }: { orderId: string }) {
-  const t = useTranslations("OrderDetailPage");
-  const router = useRouter();
-  const { toast } = useToast();
-  const [reorder, { isLoading }] = useReorderMutation();
-  const [confirmingReplace, setConfirmingReplace] = useState(false);
-
-  async function submit(replace = false) {
-    try {
-      const result = await reorder({ orderId, replace }).unwrap();
-      setConfirmingReplace(false);
-      toast(
-        result.skippedItems.length > 0
-          ? { title: t("reorderedWithSkippedToast", { count: result.skippedItems.length }), variant: "warning" }
-          : { title: t("reorderedToast"), variant: "success" },
-      );
-      router.push("/checkout");
-    } catch (err) {
-      if (isConflictError(err)) {
-        setConfirmingReplace(true);
-        return;
-      }
-      toast({ title: t("couldNotReorder"), description: getErrorMessage(err), variant: "danger" });
-    }
-  }
-
-  return (
-    <>
-      <Button variant="outline" size="sm" isLoading={isLoading} onClick={() => void submit(false)}>
-        {t("reorder")}
-      </Button>
-      <Modal
-        open={confirmingReplace}
-        onClose={() => setConfirmingReplace(false)}
-        title={t("startNewCartTitle")}
-        description={t("startNewCartDescription")}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmingReplace(false)}>
-              {t("cancel")}
-            </Button>
-            <Button variant="destructive" isLoading={isLoading} onClick={() => void submit(true)}>
-              {t("clearCartAndAdd")}
-            </Button>
-          </>
-        }
-      />
-    </>
-  );
-}
 
 // The Stepper collapses these into one "Out for delivery" milestone, but the map should still
 // render for all three — a rider's GPS ping is meaningful from the moment they're assigned.

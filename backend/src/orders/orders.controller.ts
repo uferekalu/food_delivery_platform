@@ -81,7 +81,23 @@ export class OrdersController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('restaurantId') restaurantId: string,
   ) {
-    return this.ordersService.getEarningsSummary(user, restaurantId);
+    return this.ordersService.getEarningsSummary(
+      user,
+      'restaurant',
+      restaurantId,
+    );
+  }
+
+  // Store-catalog counterpart of `restaurant/:restaurantId/earnings` above (docs/ROADMAP.md
+  // FDP-102) — was a real gap left over from FDP-90's own seller-parity pass, which generalized
+  // delivery-zones/promo-codes but not earnings/sales-report.
+  @Roles('restaurant_owner', 'admin')
+  @Get('store/:storeId/earnings')
+  getStoreEarnings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+  ) {
+    return this.ordersService.getEarningsSummary(user, 'store', storeId);
   }
 
   // Declared before `:id` for the same reason as `restaurant/:restaurantId` above — detailed
@@ -95,7 +111,26 @@ export class OrdersController {
   ) {
     return this.ordersService.getSalesReport(
       user,
+      'restaurant',
       restaurantId,
+      query.from ? new Date(query.from) : undefined,
+      parseRangeTo(query.to),
+    );
+  }
+
+  // Store-catalog counterpart of `restaurant/:restaurantId/sales-report` above (docs/ROADMAP.md
+  // FDP-102).
+  @Roles('restaurant_owner', 'admin')
+  @Get('store/:storeId/sales-report')
+  getStoreSalesReport(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+    @Query() query: SalesReportQueryDto,
+  ) {
+    return this.ordersService.getSalesReport(
+      user,
+      'store',
+      storeId,
       query.from ? new Date(query.from) : undefined,
       parseRangeTo(query.to),
     );
@@ -114,11 +149,44 @@ export class OrdersController {
   ) {
     const orders = await this.ordersService.getSalesReportOrders(
       user,
+      'restaurant',
       restaurantId,
       query.from ? new Date(query.from) : undefined,
       parseRangeTo(query.to),
     );
+    return this.sendSalesReportCsv(res, orders, restaurantId);
+  }
 
+  // Store-catalog counterpart of `restaurant/:restaurantId/sales-report/export` above
+  // (docs/ROADMAP.md FDP-102).
+  @Roles('restaurant_owner', 'admin')
+  @Get('store/:storeId/sales-report/export')
+  async exportStoreSalesReport(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+    @Query() query: SalesReportQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const orders = await this.ordersService.getSalesReportOrders(
+      user,
+      'store',
+      storeId,
+      query.from ? new Date(query.from) : undefined,
+      parseRangeTo(query.to),
+    );
+    return this.sendSalesReportCsv(res, orders, storeId);
+  }
+
+  /** Shared CSV-building tail for both sales-report exports above — the column header says
+   * "Seller payout" rather than "Restaurant payout", matching `restaurantPayoutAmount`'s own
+   * established "legacy field name, means whichever seller type owns this order" convention
+   * (docs/ROADMAP.md FDP-56/90) rather than introducing a restaurant-specific label a store
+   * owner's export would then have to carry too. */
+  private sendSalesReportCsv(
+    res: Response,
+    orders: Awaited<ReturnType<OrdersService['getSalesReportOrders']>>,
+    sellerId: string,
+  ): string {
     const header = csvRow([
       'Order number',
       'Delivered at',
@@ -129,7 +197,7 @@ export class OrdersController {
       'Discount',
       'Total',
       'Platform fee',
-      'Restaurant payout',
+      'Seller payout',
       'COGS',
       'Gross profit',
       'Promo code',
@@ -159,7 +227,7 @@ export class OrdersController {
     res.header('Content-Type', 'text/csv; charset=utf-8');
     res.header(
       'Content-Disposition',
-      `attachment; filename="sales-report-${restaurantId}.csv"`,
+      `attachment; filename="sales-report-${sellerId}.csv"`,
     );
     return [header, ...rows].join('\r\n');
   }

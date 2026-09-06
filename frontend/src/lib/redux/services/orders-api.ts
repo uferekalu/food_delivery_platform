@@ -34,6 +34,15 @@ export interface SalesReportQuery {
   to?: string;
 }
 
+// Store counterpart of SalesReportQuery/RestaurantEarnings above (docs/ROADMAP.md FDP-102) —
+// earnings/sales-report were restaurant-only until this ticket, a real gap left over from
+// FDP-90's own seller-parity pass (which generalized delivery-zones/promo-codes but not these).
+export interface StoreSalesReportQuery {
+  storeId: string;
+  from?: string;
+  to?: string;
+}
+
 export interface SalesReportItemBreakdown {
   menuItemId: string;
   name: string;
@@ -136,6 +145,16 @@ export const ordersApi = api.injectEndpoints({
       providesTags: (_result, _error, { restaurantId }) => [{ type: "Order", id: `SALES-REPORT-${restaurantId}` }],
     }),
 
+    getStoreEarnings: builder.query<RestaurantEarnings, string>({
+      query: (storeId) => `/orders/store/${storeId}/earnings`,
+      providesTags: (_result, _error, storeId) => [{ type: "Order", id: `EARNINGS-${storeId}` }],
+    }),
+
+    getStoreSalesReport: builder.query<SalesReport, StoreSalesReportQuery>({
+      query: ({ storeId, ...range }) => `/orders/store/${storeId}/sales-report${salesReportQueryString(range)}`,
+      providesTags: (_result, _error, { storeId }) => [{ type: "Order", id: `SALES-REPORT-${storeId}` }],
+    }),
+
     reorder: builder.mutation<ReorderResult, { orderId: string; replace?: boolean }>({
       query: ({ orderId, replace }) => ({
         url: `/orders/${orderId}/reorder`,
@@ -167,6 +186,8 @@ export const {
   useGetStoreOrdersQuery,
   useGetRestaurantEarningsQuery,
   useGetSalesReportQuery,
+  useGetStoreEarningsQuery,
+  useGetStoreSalesReportQuery,
   useUpdateOrderStatusMutation,
   useReorderMutation,
 } = ordersApi;

@@ -766,9 +766,23 @@
     "orderQueue": "File d'attente des commandes",
     "deliveryZones": "Zones de livraison",
     "payouts": "Paiements",
+    "earnings": "Revenus",
+    "salesReport": "Rapport de ventes",
     "close": "Fermer",
     "alsoRunARestaurant": "Vous gérez aussi un restaurant ?",
     "addRestaurant": "Ajouter un restaurant"
+  },
+  "StoreEarningsPage": {
+    "storeNotFound": "Boutique introuvable",
+    "mayNotExistOrNoAccess": "Elle n'existe peut-être pas, ou vous n'y avez pas accès.",
+    "earningsAppearHere": "Les revenus apparaissent ici une fois qu'une commande pour cette boutique est livrée.",
+    "automatedPayoutsNotAvailable": "Les paiements automatiques ne sont pas encore disponibles pour la devise de cette boutique — vos revenus ci-dessous sont pour l'instant informatifs."
+  },
+  "StoreSalesReportPage": {
+    "storeNotFound": "Boutique introuvable",
+    "mayNotExistOrNoAccess": "Elle n'existe peut-être pas, ou vous n'y avez pas accès.",
+    "salesFiguresAppearHere": "Les chiffres de vente apparaissent ici une fois qu'une commande pour cette boutique est livrée.",
+    "profitFiguresExclude": "Les chiffres de profit ci-dessous excluent le coût pour : {items}. Définissez un prix de revient pour ces produits dans votre catalogue pour une vue complète."
   },
   "StorePayoutsPage": {
     "payouts": "Paiements",

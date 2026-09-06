@@ -136,6 +136,20 @@ function StarIcon() {
   );
 }
 
+function PinIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="size-4">
+      <path
+        d="M10 18s6-5.7 6-10.2A6 6 0 104 7.8C4 12.3 10 18 10 18z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="7.8" r="2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 function ArrowIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5">
@@ -306,11 +320,20 @@ export default function Home() {
             <span className="w-fit rounded-full border border-white/30 px-3 py-1 text-xs font-semibold tracking-wide text-white uppercase">
               {t("nowDelivering")}
             </span>
-            <HeaderSearch
-              className="hidden w-full max-w-xs sm:block"
-              inputClassName="border-white/30 bg-white/10 text-white placeholder:text-white/70 focus-visible:outline-white"
-              iconClassName="text-white/70"
-            />
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link
+                href="/near-me"
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-white/20"
+              >
+                <PinIcon />
+                {t("nearMeCta")}
+              </Link>
+              <HeaderSearch
+                className="w-full max-w-xs"
+                inputClassName="border-white/30 bg-white/10 text-white placeholder:text-white/70 focus-visible:outline-white"
+                iconClassName="text-white/70"
+              />
+            </div>
           </div>
           <h1 className="max-w-2xl text-4xl font-bold text-balance text-white sm:text-5xl lg:text-6xl">
             {t("heroTitle")}
@@ -326,9 +349,13 @@ export default function Home() {
             >
               {partnerCta.label}
             </SmartLink>
+            {/* Below `sm`, the search-adjacent "Near me" pill above is hidden (mobile keeps the
+                header's own search instead — see the comment on the section above), so this is
+                mobile's only entry point to it; desktop drops it here to avoid showing the same
+                link twice. */}
             <Link
               href="/near-me"
-              className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "text-white hover:bg-white/10")}
+              className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "text-white hover:bg-white/10 sm:hidden")}
             >
               {t("nearMeCta")}
             </Link>
