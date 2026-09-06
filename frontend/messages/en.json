@@ -539,7 +539,15 @@
     "checkingSession": "Checking your session",
     "logInToViewOrder": "Log in to view this order",
     "needToBeLoggedInOrderDetails": "You'll need to be logged in to see order details.",
-    "logIn": "Log in"
+    "logIn": "Log in",
+    "reorder": "Reorder",
+    "reorderedToast": "Added to your cart",
+    "reorderedWithSkippedToast": "Added to your cart — {count, plural, one {# item wasn't} other {# items weren't}} available anymore",
+    "couldNotReorder": "Couldn't reorder this",
+    "startNewCartTitle": "Start a new cart?",
+    "startNewCartDescription": "Your cart has items from a different restaurant or store. Reordering this will clear it.",
+    "cancel": "Cancel",
+    "clearCartAndAdd": "Clear cart and add"
   },
   "RestaurantsPage": {
     "metaTitle": "Restaurants",

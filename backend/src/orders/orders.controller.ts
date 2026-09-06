@@ -18,6 +18,7 @@ import { OrdersService, round2 } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
+import { ReorderDto } from './dto/reorder.dto';
 
 /**
  * A bare date-only `to` value ("2026-09-30", the shape a native `<input type="date">` sends)
@@ -175,6 +176,16 @@ export class OrdersController {
   @Get(':id')
   findOne(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.ordersService.findOne(user.sub, id);
+  }
+
+  // "Buy again" (docs/ROADMAP.md FDP-97).
+  @Post(':id/reorder')
+  reorder(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() dto: ReorderDto,
+  ) {
+    return this.ordersService.reorder(user.sub, id, dto.replace);
   }
 
   @Roles('restaurant_owner', 'admin')

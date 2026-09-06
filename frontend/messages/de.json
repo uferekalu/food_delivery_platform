@@ -539,7 +539,15 @@
     "checkingSession": "Deine Sitzung wird überprüft",
     "logInToViewOrder": "Melde dich an, um diese Bestellung zu sehen",
     "needToBeLoggedInOrderDetails": "Du musst angemeldet sein, um die Bestelldetails zu sehen.",
-    "logIn": "Anmelden"
+    "logIn": "Anmelden",
+    "reorder": "Erneut bestellen",
+    "reorderedToast": "Zu deinem Warenkorb hinzugefügt",
+    "reorderedWithSkippedToast": "Zu deinem Warenkorb hinzugefügt — {count, plural, one {# Artikel war} other {# Artikel waren}} nicht mehr verfügbar",
+    "couldNotReorder": "Konnte nicht erneut bestellt werden",
+    "startNewCartTitle": "Neuen Warenkorb starten?",
+    "startNewCartDescription": "Dein Warenkorb enthält Artikel eines anderen Restaurants oder Shops. Diese Bestellung zu wiederholen leert ihn.",
+    "cancel": "Abbrechen",
+    "clearCartAndAdd": "Warenkorb leeren und hinzufügen"
   },
   "RestaurantsPage": {
     "metaTitle": "Restaurants",

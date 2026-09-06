@@ -539,7 +539,15 @@
     "checkingSession": "Vérification de votre session",
     "logInToViewOrder": "Connectez-vous pour voir cette commande",
     "needToBeLoggedInOrderDetails": "Vous devez être connecté pour voir les détails de la commande.",
-    "logIn": "Se connecter"
+    "logIn": "Se connecter",
+    "reorder": "Commander à nouveau",
+    "reorderedToast": "Ajouté à votre panier",
+    "reorderedWithSkippedToast": "Ajouté à votre panier — {count, plural, one {# article n'était} other {# articles n'étaient}} plus disponible(s)",
+    "couldNotReorder": "Impossible de recommander",
+    "startNewCartTitle": "Démarrer un nouveau panier ?",
+    "startNewCartDescription": "Votre panier contient des articles d'un autre restaurant ou commerce. Recommander ceci le videra.",
+    "cancel": "Annuler",
+    "clearCartAndAdd": "Vider le panier et ajouter"
   },
   "RestaurantsPage": {
     "metaTitle": "Restaurants",

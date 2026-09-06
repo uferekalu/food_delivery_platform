@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
 import { MenuItem, MenuItemDocument } from '../menu/schemas/menu-item.schema';
@@ -15,6 +15,32 @@ import type { CartItem } from './schemas/cart-item.schema';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { AddStoreCartItemDto } from './dto/add-store-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+
+// Structural, not imported from orders/schemas/order.schema — OrdersModule already depends on
+// CartModule (it clears/reads the cart when creating an order), so a real import the other way
+// would be circular. An OrderDocument satisfies this shape, so OrdersService can pass one
+// straight through to reorderFromOrder below with no adapting.
+export interface ReorderSourceOrder {
+  sellerType: 'restaurant' | 'store';
+  restaurantId: Types.ObjectId | null;
+  storeId: Types.ObjectId | null;
+  items: {
+    menuItemId: Types.ObjectId | null;
+    productId: Types.ObjectId | null;
+    name: string;
+    qty: number;
+    notes: string;
+    selectedModifiers: { groupName: string; optionName: string }[];
+  }[];
+}
+
+export interface ReorderResult {
+  cart: CartResponse;
+  // Names of order lines that couldn't be carried over (item deleted, no longer available, or
+  // its modifiers no longer resolve against the item's current modifierGroups) — the frontend
+  // surfaces these so the customer knows their cart doesn't fully match the original order.
+  skippedItems: string[];
+}
 
 export interface CartResponse {
   sellerType: 'restaurant' | 'store' | null;
@@ -212,6 +238,150 @@ export class CartService {
 
     await cart.save();
     return await this.toResponse(cart);
+  }
+
+  /** "Buy again" (docs/ROADMAP.md FDP-97) — rebuilds the customer's cart from a past order's
+   * items. Never trusts the order's frozen snapshot for anything that can drift after the order
+   * was placed: price is re-read from the current MenuItem/Product (an order's price is a
+   * point-in-time receipt, not a quote), and modifiers are re-resolved against the item's
+   * *current* modifierGroups via resolveModifiers, same as a fresh addItem. A line whose item
+   * was deleted, is no longer available, or whose old modifier picks no longer resolve (a
+   * required group added since, an option removed) is silently dropped rather than failing the
+   * whole reorder — its name is returned in `skippedItems` so the caller can tell the customer.
+   * Mirrors addItem/addStoreItem's own replace-confirmation gate: an already-non-empty cart
+   * needs `replace: true`, exactly like adding an item from a different seller. */
+  async reorderFromOrder(
+    userId: string,
+    order: ReorderSourceOrder,
+    replace = false,
+  ): Promise<ReorderResult> {
+    let cart = await this.cartModel.findOne({ userId }).exec();
+    if (cart && cart.items.length > 0 && !replace) {
+      throw new ConflictException(
+        'Your cart already has items. Pass replace: true to start a new cart from this order.',
+      );
+    }
+
+    const skippedItems: string[] = [];
+
+    if (order.sellerType === 'restaurant') {
+      const restaurant = await this.restaurantsService.findByIdOrThrow(
+        (
+          order.restaurantId as NonNullable<typeof order.restaurantId>
+        ).toString(),
+      );
+      if (!restaurant.isApproved || !restaurant.isOpen) {
+        throw new BadRequestException(
+          'This restaurant is not currently accepting orders',
+        );
+      }
+
+      if (!cart) {
+        cart = new this.cartModel({
+          userId,
+          sellerType: 'restaurant',
+          restaurantId: order.restaurantId,
+          storeId: null,
+          items: [],
+        });
+      } else {
+        cart.items = [];
+        cart.sellerType = 'restaurant';
+        cart.restaurantId = order.restaurantId;
+        cart.storeId = null;
+      }
+
+      for (const line of order.items) {
+        const menuItem = line.menuItemId
+          ? await this.menuItemModel.findById(line.menuItemId).exec()
+          : null;
+        if (!menuItem || !menuItem.isAvailable) {
+          skippedItems.push(line.name);
+          continue;
+        }
+
+        let resolvedModifiers: {
+          groupName: string;
+          optionName: string;
+          priceDelta: number;
+        }[];
+        try {
+          resolvedModifiers = this.resolveModifiers(
+            menuItem,
+            line.selectedModifiers.map(({ groupName, optionName }) => ({
+              groupName,
+              optionName,
+            })),
+          );
+        } catch {
+          skippedItems.push(line.name);
+          continue;
+        }
+
+        cart.items.push({
+          menuItemId: menuItem._id,
+          name: menuItem.name,
+          price: menuItem.price,
+          imageUrl: menuItem.imageUrl,
+          qty: line.qty,
+          selectedModifiers: resolvedModifiers,
+          notes: line.notes,
+        } as CartItem);
+      }
+    } else {
+      const store = await this.storesService.findByIdOrThrow(
+        (order.storeId as NonNullable<typeof order.storeId>).toString(),
+      );
+      if (!store.isApproved || !store.isOpen) {
+        throw new BadRequestException(
+          'This store is not currently accepting orders',
+        );
+      }
+
+      if (!cart) {
+        cart = new this.cartModel({
+          userId,
+          sellerType: 'store',
+          storeId: order.storeId,
+          restaurantId: null,
+          items: [],
+        });
+      } else {
+        cart.items = [];
+        cart.sellerType = 'store';
+        cart.storeId = order.storeId;
+        cart.restaurantId = null;
+      }
+
+      for (const line of order.items) {
+        const product = line.productId
+          ? await this.productModel.findById(line.productId).exec()
+          : null;
+        if (!product || !product.isAvailable) {
+          skippedItems.push(line.name);
+          continue;
+        }
+
+        cart.items.push({
+          productId: product._id,
+          name: product.name,
+          price: product.discountedPrice ?? product.price,
+          imageUrl: product.imageUrl,
+          qty: line.qty,
+          selectedModifiers: [],
+          notes: line.notes,
+        } as unknown as CartItem);
+      }
+    }
+
+    if (cart.items.length === 0) {
+      throw new BadRequestException(
+        "None of this order's items are available to reorder",
+      );
+    }
+
+    await cart.save();
+    return { cart: await this.toResponse(cart), skippedItems };
   }
 
   async updateItem(

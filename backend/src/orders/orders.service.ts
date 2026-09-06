@@ -602,6 +602,14 @@ export class OrdersService {
       .exec();
   }
 
+  /** "Buy again" (docs/ROADMAP.md FDP-97) — ownership-checked via the existing findOne, then
+   * handed straight to CartService, which owns all the "is this still orderable" validation
+   * (item availability, seller open/approved, modifier re-resolution). */
+  async reorder(userId: string, orderId: string, replace = false) {
+    const order = await this.findOne(userId, orderId);
+    return this.cartService.reorderFromOrder(userId, order, replace);
+  }
+
   /** Unrestricted lookup for admin tooling (dispute/refund handling, docs/ROADMAP.md FDP-20) —
    * no ownership check, unlike `findOne`. The caller is responsible for admin-gating (the
    * `@Roles('admin')` route this backs), not this method. */
