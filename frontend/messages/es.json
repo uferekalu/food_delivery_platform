@@ -450,6 +450,7 @@
     "promotion": "Promoción",
     "deliveryEst": "Entrega (est.)",
     "serviceFeeEst": "Tarifa de servicio (est.)",
+    "taxEst": "Impuesto (est.)",
     "total": "Total",
     "payToOrder": "Pagar pedido",
     "checkingSession": "Verificando tu sesión",

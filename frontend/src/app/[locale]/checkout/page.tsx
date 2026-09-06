@@ -34,6 +34,18 @@ import type { PaymentProvider } from "@/lib/redux/restaurant-types";
 const DELIVERY_FEE_RATE = 0.1;
 const SERVICE_FEE_RATE = 0.05;
 
+// Mirrors backend/src/orders/tax-resolver.ts's TAX_RATE_TABLE (docs/ROADMAP.md FDP-101) — see
+// that file for the "why these currencies, why USD/EUR are absent" reasoning. Preview only, same
+// caveat as the rates above; keep the two tables in sync.
+const TAX_RATE_TABLE: Record<string, number> = {
+  NGN: 0.075,
+  GHS: 0.15,
+  KES: 0.16,
+  ZAR: 0.15,
+  UGX: 0.18,
+  GBP: 0.2,
+};
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -235,8 +247,10 @@ function CheckoutForm() {
   const estDeliveryFee = round2(subtotal * DELIVERY_FEE_RATE);
   const estServiceFee = round2(subtotal * SERVICE_FEE_RATE);
   const discount = appliedPromo?.discountAmount ?? 0;
-  const estTotal = Math.max(0, round2(subtotal + estDeliveryFee + estServiceFee - discount));
   const currency = cart.currency ?? "";
+  const taxRate = TAX_RATE_TABLE[currency.toUpperCase()] ?? 0;
+  const estTax = round2(Math.max(0, subtotal + estDeliveryFee + estServiceFee - discount) * taxRate);
+  const estTotal = Math.max(0, round2(subtotal + estDeliveryFee + estServiceFee + estTax - discount));
   const sellerName = cart.restaurantName ?? cart.storeName ?? "";
 
   return (
@@ -443,6 +457,12 @@ function CheckoutForm() {
                 <span>{t("serviceFeeEst")}</span>
                 <span>{formatMoney(estServiceFee, currency, locale)}</span>
               </div>
+              {estTax > 0 && (
+                <div className="flex items-center justify-between text-text-muted">
+                  <span>{t("taxEst")}</span>
+                  <span>{formatMoney(estTax, currency, locale)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold text-text">
                 <span>{t("total")}</span>
                 <span>{formatMoney(estTotal, currency, locale)}</span>

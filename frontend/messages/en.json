@@ -450,6 +450,7 @@
     "promotion": "Promotion",
     "deliveryEst": "Delivery (est.)",
     "serviceFeeEst": "Service fee (est.)",
+    "taxEst": "Tax (est.)",
     "total": "Total",
     "payToOrder": "Pay to order",
     "checkingSession": "Checking your session",

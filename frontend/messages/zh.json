@@ -450,6 +450,7 @@
     "promotion": "优惠",
     "deliveryEst": "配送费（预估）",
     "serviceFeeEst": "服务费（预估）",
+    "taxEst": "税费（预估）",
     "total": "总计",
     "payToOrder": "付款下单",
     "checkingSession": "正在检查你的登录状态",

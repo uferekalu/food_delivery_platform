@@ -9,6 +9,7 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
+import { TaxResolver } from './tax-resolver';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -102,6 +103,7 @@ describe('OrdersService', () => {
         StoresService,
         PromoCodesService,
         PaymentProviderResolver,
+        TaxResolver,
         DeliveryZonesService,
         {
           provide: RealtimeGateway,
@@ -215,9 +217,9 @@ describe('OrdersService', () => {
     expect(order.subtotal).toBe(200);
     expect(order.deliveryFee).toBe(20); // 10% of 200
     expect(order.serviceFee).toBe(10); // 5% of 200
-    expect(order.tax).toBe(0);
+    expect(order.tax).toBe(17.25); // NGN's 7.5% VAT rate on (200 + 20 + 10 - 0)
     expect(order.discount).toBe(0);
-    expect(order.total).toBe(230);
+    expect(order.total).toBe(247.25);
     expect(order.platformFeeAmount).toBe(30); // 15% of 200 subtotal
     expect(order.restaurantPayoutAmount).toBe(170); // 200 - 30
     expect(order.currency).toBe('NGN');
@@ -289,7 +291,8 @@ describe('OrdersService', () => {
       expect(order.subtotal).toBe(200);
       expect(order.deliveryFee).toBe(20); // same FALLBACK_DELIVERY_FEE_RATE as a zone-less restaurant
       expect(order.serviceFee).toBe(10);
-      expect(order.total).toBe(230);
+      expect(order.tax).toBe(17.25); // NGN's 7.5% VAT rate on (200 + 20 + 10 - 0)
+      expect(order.total).toBe(247.25);
       expect(order.platformFeeAmount).toBe(30);
       expect(order.restaurantPayoutAmount).toBe(170);
       expect(order.currency).toBe('NGN');
@@ -338,7 +341,8 @@ describe('OrdersService', () => {
 
       expect(order.discount).toBe(20); // 10% of 200
       expect(order.promoCode).toBe('STORE10');
-      expect(order.total).toBe(210); // 200 + 20 deliveryFee + 10 serviceFee - 20 discount
+      expect(order.tax).toBe(15.75); // NGN's 7.5% VAT rate on (200 + 20 + 10 - 20 discount)
+      expect(order.total).toBe(225.75); // 200 + 20 deliveryFee + 10 serviceFee + 15.75 tax - 20 discount
 
       const updatedPromo = await promoCodesService.findAll();
       expect(
@@ -674,8 +678,9 @@ describe('OrdersService', () => {
 
     expect(order.discount).toBe(10);
     expect(order.promoCode).toBe('SAVE10');
+    expect(order.tax).toBeGreaterThan(0); // NGN has a nonzero VAT rate — confirms it's not silently 0
     expect(order.total).toBe(
-      order.subtotal + order.deliveryFee + order.serviceFee - 10,
+      order.subtotal + order.deliveryFee + order.serviceFee + order.tax - 10,
     );
 
     const promoAfter = await promoCodesService.findAll();
