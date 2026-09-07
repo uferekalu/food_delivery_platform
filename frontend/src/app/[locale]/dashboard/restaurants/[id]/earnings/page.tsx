@@ -17,6 +17,7 @@ import { Select, type SelectOption } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { useGetMyRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetRestaurantEarningsQuery } from "@/lib/redux/services/orders-api";
+import { classifyPayoutFailure } from "@/lib/payout-failure-reason";
 import {
   useGetPaymentProvidersQuery,
   useListPaystackBanksQuery,
@@ -63,7 +64,7 @@ function PayoutHistory({ restaurantId }: { restaurantId: string }) {
         {data.items.map((payout) => (
           <div
             key={payout._id}
-            className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
+            className="flex flex-col gap-2 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium text-text">
@@ -72,6 +73,11 @@ function PayoutHistory({ restaurantId }: { restaurantId: string }) {
               <span className="text-xs text-text-muted">{payout.provider}</span>
               {payout.reconciliationRequired && (
                 <span className="text-xs text-warning">{t("pendingReconciliation")}</span>
+              )}
+              {payout.status === "failed" && payout.failureReason && (
+                <span className="text-xs text-danger">
+                  {t(`payoutFailureHint_${classifyPayoutFailure(payout.failureReason)}`)}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-3">

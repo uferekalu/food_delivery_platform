@@ -22,6 +22,7 @@ import {
 import type { Payout, PayoutStatus, PayoutVendorType } from "@/lib/redux/services/payouts-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
+import { classifyPayoutFailure } from "@/lib/payout-failure-reason";
 
 const STATUS_BADGE_VARIANT: Record<PayoutStatus, BadgeProps["variant"]> = {
   pending: "neutral",
@@ -89,18 +90,28 @@ function PayoutRow({ payout, onResolve }: { payout: Payout; onResolve: (p: Payou
   const t = useTranslations("AdminPayoutsTab");
   const tStatus = useTranslations("PayoutStatus");
   const locale = useLocale();
+  const failureCategory = classifyPayoutFailure(payout.failureReason);
 
   return (
     <div className="flex flex-col gap-2 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-0.5">
         <span className="text-sm font-medium text-text">
-          {t("vendorLine", { vendorType: payout.vendorType, vendorId: payout.vendorId })}
+          {/* docs/ROADMAP.md FDP-105 — the raw vendorId used to be all an admin saw here, making
+              it impossible to tell which real restaurant/store/rider a row was about at a glance. */}
+          {payout.vendorName ?? t("vendorLine", { vendorType: payout.vendorType, vendorId: payout.vendorId })}
         </span>
         <span className="text-xs text-text-muted">
           {new Date(payout.createdAt).toLocaleString(locale)} · {payout.provider}
+          {payout.clawbackDeducted > 0 &&
+            ` · ${t("clawbackNote", { amount: formatMoney(payout.clawbackDeducted, payout.currency, locale) })}`}
         </span>
         {payout.failureReason && (
-          <span className="text-xs text-danger">{payout.failureReason}</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-danger">
+              {t(`failureHint_${failureCategory}`)}
+            </span>
+            <span className="text-xs text-text-muted">{t("technicalDetail", { reason: payout.failureReason })}</span>
+          </div>
         )}
       </div>
       <div className="flex items-center gap-3">

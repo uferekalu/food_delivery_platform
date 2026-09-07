@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
     "payoutHistory": "Payout history",
     "payoutHistoryDescription": "Your weekly payouts from the platform, most recent first.",
-    "pendingReconciliation": "Pending manual review"
+    "pendingReconciliation": "Pending manual review",
+    "payoutFailureHint_missingBankDetails": "Your payout account's bank details look incomplete or incorrect — please reconnect your payout account with a valid bank account number.",
+    "payoutFailureHint_insufficientBalance": "This is a temporary issue on our end — no action needed from you. It will be retried automatically.",
+    "payoutFailureHint_invalidAccount": "We couldn't verify the bank account on file — please double-check your account number and bank, then reconnect your payout account.",
+    "payoutFailureHint_otpRequired": "This is a temporary issue on our end — no action needed from you. It will be retried automatically.",
+    "payoutFailureHint_unknown": "Please check your payout account details are correct, or contact support if this keeps happening."
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "Couldn't download CSV",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "It did NOT go through",
     "transferDidHappen": "It DID go through",
     "reconciliationResolved": "Payout reconciliation resolved",
-    "couldNotResolve": "Couldn't resolve this payout"
+    "couldNotResolve": "Couldn't resolve this payout",
+    "clawbackNote": "{amount} withheld to recover a prior refund",
+    "technicalDetail": "Technical detail: {reason}",
+    "failureHint_missingBankDetails": "Missing or invalid bank account details on file — ask the vendor to reconnect their payout account with a valid account number and bank.",
+    "failureHint_insufficientBalance": "The platform's payout balance is too low to send this transfer — not something the vendor can fix; the platform account needs topping up.",
+    "failureHint_invalidAccount": "The bank account on file couldn't be verified — ask the vendor to double-check their account number and bank, then reconnect their payout account.",
+    "failureHint_otpRequired": "The payment provider is asking for manual OTP finalization — a platform configuration issue, not something the vendor needs to fix.",
+    "failureHint_unknown": "See the technical detail below, or check the payment provider's own dashboard for more information."
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Search by name or email",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "Completed deliveries",
     "deliveryHistory": "Delivery history",
     "payoutHistory": "Payout history",
-    "payoutHistoryDescription": "Your weekly payouts from the platform, most recent first."
+    "payoutHistoryDescription": "Your weekly payouts from the platform, most recent first.",
+    "pendingReconciliation": "Pending manual review",
+    "payoutFailureHint_missingBankDetails": "Your payout account's bank details look incomplete or incorrect — please reconnect your payout account with a valid bank account number.",
+    "payoutFailureHint_insufficientBalance": "This is a temporary issue on our end — no action needed from you. It will be retried automatically.",
+    "payoutFailureHint_invalidAccount": "We couldn't verify the bank account on file — please double-check your account number and bank, then reconnect your payout account.",
+    "payoutFailureHint_otpRequired": "This is a temporary issue on our end — no action needed from you. It will be retried automatically.",
+    "payoutFailureHint_unknown": "Please check your payout account details are correct, or contact support if this keeps happening."
   },
   "RiderApplyPage": {
     "required": "Required",

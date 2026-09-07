@@ -273,17 +273,22 @@ export default function Home() {
     : undefined;
   const liveOrder = activeOrder && activeOrderRestaurant ? { order: activeOrder, restaurant: activeOrderRestaurant } : null;
 
+  // Matches AuthStatus's own role check for these same two links (header nav) — an admin can
+  // reach /dashboard/restaurants and /dashboard/stores exactly like a restaurant_owner can, so
+  // this branch missing `admin` (a real bug, docs/ROADMAP.md FDP-105) sent an authenticated admin
+  // through the customer-facing signup flow instead, just like a logged-out visitor would see.
   const partnerCta =
-    authenticated && user.role === "restaurant_owner"
+    authenticated && (user.role === "restaurant_owner" || user.role === "admin")
       ? { href: "/dashboard/restaurants", label: t("goToMyRestaurants") }
       : { href: "/register?role=restaurant_owner", label: t("registerYourBusiness") };
 
   // Store ownership reuses the restaurant_owner role (docs/ROADMAP.md FDP-56), so an existing
-  // restaurant owner is sent to their stores list rather than back through registration; anyone
-  // else gets a registration link preselecting the groceries account-type radio (the register
-  // page's own form still lets them switch to pharmacy & beauty from there).
+  // restaurant owner (or an admin, same reasoning as partnerCta above) is sent to their stores
+  // list rather than back through registration; anyone else gets a registration link
+  // preselecting the groceries account-type radio (the register page's own form still lets them
+  // switch to pharmacy & beauty from there).
   const storeCta =
-    authenticated && user.role === "restaurant_owner"
+    authenticated && (user.role === "restaurant_owner" || user.role === "admin")
       ? { href: "/dashboard/stores", label: t("goToMyStores") }
       : { href: "/register?type=groceries", label: t("sellGroceriesOrPharmacy") };
 

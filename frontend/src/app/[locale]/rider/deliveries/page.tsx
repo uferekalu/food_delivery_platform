@@ -29,6 +29,7 @@ import {
 } from "@/lib/redux/services/payments-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
+import { classifyPayoutFailure } from "@/lib/payout-failure-reason";
 import type { Order, OrderStatus, Rider } from "@/lib/redux/restaurant-types";
 
 const PAYOUT_STATUS_BADGE_VARIANT: Record<PayoutStatus, BadgeProps["variant"]> = {
@@ -387,13 +388,21 @@ function RiderPayoutList() {
         {data.items.map((payout) => (
           <div
             key={payout._id}
-            className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
+            className="flex flex-col gap-2 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium text-text">
                 {new Date(payout.createdAt).toLocaleDateString(locale)}
               </span>
               <span className="text-xs text-text-muted">{payout.provider}</span>
+              {payout.reconciliationRequired && (
+                <span className="text-xs text-warning">{t("pendingReconciliation")}</span>
+              )}
+              {payout.status === "failed" && payout.failureReason && (
+                <span className="text-xs text-danger">
+                  {t(`payoutFailureHint_${classifyPayoutFailure(payout.failureReason)}`)}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-text">

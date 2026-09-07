@@ -24,11 +24,12 @@ export type PayoutAccountStatus = (typeof PAYOUT_ACCOUNT_STATUSES)[number];
  * `bankCode`/`accountNumber` (FDP-92) are populated for Paystack/Flutterwave alongside
  * `reference` at onboarding time — already resolved once via each adapter's `resolveAccount`
  * before the subaccount was created, just not previously persisted. Needed for real payout
- * execution: Flutterwave's Transfers API has no "pay this subaccount" call, only a standalone
- * bank transfer (`account_bank`/`account_number`), so the raw bank details have to be on hand.
- * Paystack *can* transfer straight to a subaccount reference (no bank details needed), and
- * Stripe's `reference` (a connected account id) is everything a Stripe transfer needs — both
- * leave these two fields `null`.
+ * execution: neither Flutterwave's nor Paystack's Transfers API can target a subaccount
+ * reference directly — both need a standalone transfer recipient built from the raw
+ * `bank_code`/`account_number` (docs/ROADMAP.md FDP-105 fixed a real bug where Paystack's
+ * `transfer()` assumed otherwise and every live transfer was rejected as a result — see
+ * `PaystackAdapter.transfer`'s doc comment). Only Stripe's `reference` (a connected account id)
+ * is everything a Stripe transfer needs on its own; it leaves these two fields `null`.
  */
 @Schema({ _id: false })
 export class PayoutAccount {

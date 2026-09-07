@@ -54,6 +54,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
   let paystackTransfer: jest.Mock;
   let notify: jest.Mock;
   let listAll: jest.Mock;
+  let findUserById: jest.Mock;
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
@@ -71,6 +72,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       limit: 50,
       totalPages: 0,
     });
+    findUserById = jest.fn().mockResolvedValue(null);
 
     moduleRef = await Test.createTestingModule({
       imports: [
@@ -91,7 +93,10 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
         { provide: PaystackAdapter, useValue: { transfer: paystackTransfer } },
         { provide: FlutterwaveAdapter, useValue: { transfer: jest.fn() } },
         { provide: NotificationsService, useValue: { notify } },
-        { provide: UsersService, useValue: { listAll } },
+        {
+          provide: UsersService,
+          useValue: { listAll, findById: findUserById },
+        },
       ],
     }).compile();
 
@@ -117,6 +122,7 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
     paystackTransfer.mockReset();
     notify.mockClear();
     listAll.mockClear();
+    findUserById.mockClear();
   });
 
   afterAll(async () => {
@@ -276,6 +282,63 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
     expect(reconciliationCalls.length).toBeGreaterThan(0);
   });
 
+  it("pays a restaurant's Paystack account via a nuban recipient built from its stored bank details (docs/ROADMAP.md FDP-105 — regression test for the subaccount-transfer bug)", async () => {
+    const restaurant = await createRestaurant([
+      {
+        provider: 'paystack',
+        status: 'active',
+        reference: 'ACCT_test123',
+        bankCode: '044',
+        accountNumber: '0123456789',
+      },
+    ]);
+    const order = await createDeliveredOrder({
+      restaurantId: restaurant._id.toString(),
+      paymentProvider: 'paystack',
+    });
+    paystackTransfer.mockResolvedValue({ transferReference: 'TRF_abc' });
+
+    const summary = await executionService.runWeeklyBatch();
+
+    expect(summary).toEqual({
+      succeeded: 1,
+      failed: 0,
+      reconciliationNeeded: 0,
+      skipped: 0,
+    });
+    expect(paystackTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({ bankCode: '044', accountNumber: '0123456789' }),
+    );
+    const reloaded = await orderModel.findById(order._id).exec();
+    expect(reloaded?.vendorPayoutId).not.toBeNull();
+  });
+
+  it('fails cleanly (confirmed rejection, retried next run) when a Paystack account is active but missing the bank details a transfer needs', async () => {
+    const restaurant = await createRestaurant([
+      { provider: 'paystack', status: 'active', reference: 'ACCT_test123' },
+      // bankCode/accountNumber deliberately omitted — an account onboarded before FDP-92 added
+      // this persistence, or a data-entry gap.
+    ]);
+    const order = await createDeliveredOrder({
+      restaurantId: restaurant._id.toString(),
+      paymentProvider: 'paystack',
+    });
+
+    const summary = await executionService.runWeeklyBatch();
+
+    expect(summary).toEqual({
+      succeeded: 0,
+      failed: 1,
+      reconciliationNeeded: 0,
+      skipped: 0,
+    });
+    expect(paystackTransfer).not.toHaveBeenCalled();
+    const payouts = await payoutModel.find({}).exec();
+    expect(payouts[0].failureReason).toContain('missing bank details');
+    const reloaded = await orderModel.findById(order._id).exec();
+    expect(reloaded?.vendorPayoutId).toBeNull(); // released for retry
+  });
+
   it('skips a vendor whose unpaid earnings are in a currency/provider it has no active payout account for, leaving those orders unpaid rather than forcing them through the wrong account', async () => {
     const restaurant = await createRestaurant([
       { provider: 'stripe', status: 'active', reference: 'acct_123' },
@@ -410,6 +473,63 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
         newer._id.toString(),
         older._id.toString(),
       ]);
+    });
+
+    it('listAll resolves each payout to its real vendor display name, not just a raw id (docs/ROADMAP.md FDP-105)', async () => {
+      const restaurant = await createRestaurant([], 'restaurant-owner-1');
+      const store = await storeModel.create({
+        ownerId: 'store-owner-1',
+        name: 'Preen Mart',
+        slug: 'preen-mart',
+        type: 'groceries',
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
+        payoutAccounts: [],
+      });
+      await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: restaurant._id.toString(),
+        orderIds: [] as Types.ObjectId[],
+        grossAmount: 50,
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'succeeded',
+      });
+      await payoutModel.create({
+        vendorType: 'store',
+        vendorId: store._id.toString(),
+        orderIds: [] as Types.ObjectId[],
+        grossAmount: 30,
+        currency: 'NGN',
+        provider: 'paystack',
+        payoutAccountReference: 'acct_2',
+        status: 'succeeded',
+      });
+      // A vendor id that no longer resolves to any document — must show null, not throw.
+      await payoutModel.create({
+        vendorType: 'store',
+        vendorId: '507f1f77bcf86cd799439099',
+        orderIds: [] as Types.ObjectId[],
+        grossAmount: 10,
+        currency: 'NGN',
+        provider: 'paystack',
+        payoutAccountReference: 'acct_3',
+        status: 'succeeded',
+      });
+
+      const result = await executionService.listAll({ page: 1, limit: 20 });
+
+      const byVendorId = new Map(
+        result.items.map((item) => [item.vendorId, item.vendorName]),
+      );
+      // `createRestaurant`'s auto-generated name (`Restaurant ${counter}`) isn't a fixed literal
+      // since `counter` is shared across every test in this file — compare against the fixture's
+      // own `.name` rather than a hardcoded string.
+      expect(byVendorId.get(restaurant._id.toString())).toBe(restaurant.name);
+      expect(byVendorId.get(store._id.toString())).toBe('Preen Mart');
+      expect(byVendorId.get('507f1f77bcf86cd799439099')).toBeNull();
     });
 
     it('listAll applies status/vendorType/reconciliationRequired filters together', async () => {

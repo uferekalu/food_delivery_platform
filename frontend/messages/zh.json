@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "该餐厅可能不存在，或你无权访问。",
     "payoutHistory": "打款记录",
     "payoutHistoryDescription": "平台向你发放的每周打款，按最近到最早排序。",
-    "pendingReconciliation": "待人工核实"
+    "pendingReconciliation": "待人工核实",
+    "payoutFailureHint_missingBankDetails": "您的收款账户银行信息似乎不完整或不正确——请使用有效的银行账号重新连接您的收款账户。",
+    "payoutFailureHint_insufficientBalance": "这是我们这边的临时问题——您无需采取任何操作，系统将自动重试。",
+    "payoutFailureHint_invalidAccount": "我们无法验证所留的银行账户——请核对您的账号和银行信息，然后重新连接收款账户。",
+    "payoutFailureHint_otpRequired": "这是我们这边的临时问题——您无需采取任何操作，系统将自动重试。",
+    "payoutFailureHint_unknown": "请检查您的收款账户信息是否正确，如果问题持续出现，请联系客服。"
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "无法下载 CSV 文件",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "转账未成功",
     "transferDidHappen": "转账已成功",
     "reconciliationResolved": "打款核实已处理",
-    "couldNotResolve": "无法处理该笔打款"
+    "couldNotResolve": "无法处理该笔打款",
+    "clawbackNote": "已扣留 {amount} 以收回此前的退款",
+    "technicalDetail": "技术详情：{reason}",
+    "failureHint_missingBankDetails": "缺少或银行账户信息无效——请让商家使用有效的账号和银行重新连接其收款账户。",
+    "failureHint_insufficientBalance": "平台的付款余额不足以发送此次转账——这不是商家能解决的问题，需要为平台账户充值。",
+    "failureHint_invalidAccount": "无法验证所留的银行账户——请让商家核对账号和银行信息，然后重新连接收款账户。",
+    "failureHint_otpRequired": "支付服务商要求手动完成一次性验证码（OTP）确认——这是平台配置问题，无需商家处理。",
+    "failureHint_unknown": "请查看下方的技术详情，或前往支付服务商的后台查看更多信息。"
   },
   "AdminUsersTab": {
     "searchPlaceholder": "按姓名或邮箱搜索",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "已完成配送",
     "deliveryHistory": "配送历史",
     "payoutHistory": "打款记录",
-    "payoutHistoryDescription": "平台向你发放的每周打款，按最近到最早排序。"
+    "payoutHistoryDescription": "平台向你发放的每周打款，按最近到最早排序。",
+    "pendingReconciliation": "待人工审核",
+    "payoutFailureHint_missingBankDetails": "您的收款账户银行信息似乎不完整或不正确——请使用有效的银行账号重新连接您的收款账户。",
+    "payoutFailureHint_insufficientBalance": "这是我们这边的临时问题——您无需采取任何操作，系统将自动重试。",
+    "payoutFailureHint_invalidAccount": "我们无法验证所留的银行账户——请核对您的账号和银行信息，然后重新连接收款账户。",
+    "payoutFailureHint_otpRequired": "这是我们这边的临时问题——您无需采取任何操作，系统将自动重试。",
+    "payoutFailureHint_unknown": "请检查您的收款账户信息是否正确，如果问题持续出现，请联系客服。"
   },
   "RiderApplyPage": {
     "required": "必填",

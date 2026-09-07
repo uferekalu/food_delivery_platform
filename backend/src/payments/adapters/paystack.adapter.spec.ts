@@ -480,21 +480,22 @@ describe('PaystackAdapter', () => {
     });
   });
 
-  describe('transfer (docs/ROADMAP.md FDP-92)', () => {
+  describe('transfer (docs/ROADMAP.md FDP-105 — nuban recipient, fixing the FDP-92 subaccount bug)', () => {
     const originalFetch = global.fetch;
     afterEach(() => {
       global.fetch = originalFetch;
     });
 
     const params = {
-      subaccountReference: 'ACCT_test123',
+      bankCode: '044',
+      accountNumber: '0123456789',
       amount: 85,
       currency: 'NGN',
       reference: 'payout-1',
       reason: 'Weekly payout',
     };
 
-    it('creates a subaccount recipient then transfers to it, returning the transfer_code', async () => {
+    it('creates a nuban recipient from the raw bank details then transfers to it, returning the transfer_code', async () => {
       const fetchMock = jest
         .fn()
         .mockResolvedValueOnce({
@@ -525,9 +526,14 @@ describe('PaystackAdapter', () => {
         string,
         unknown
       >;
+      // docs/ROADMAP.md FDP-105: previously `{ type: 'subaccount', subaccount: ... }` — not a
+      // real Paystack recipient type, so every live transfer was rejected with "Either
+      // authorization_code or account_number must be passed."
       expect(recipientBody).toEqual({
-        type: 'subaccount',
-        subaccount: 'ACCT_test123',
+        type: 'nuban',
+        name: 'Weekly payout',
+        account_number: '0123456789',
+        bank_code: '044',
         currency: 'NGN',
       });
       const [, transferInit] = fetchMock.mock.calls[1] as [string, RequestInit];
