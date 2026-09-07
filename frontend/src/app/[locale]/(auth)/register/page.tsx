@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter as usePlainRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -22,6 +22,7 @@ import {
   useVerifyPhoneCodeMutation,
 } from "@/lib/redux/services/auth-api";
 import { getErrorMessage } from "@/lib/redux/error";
+import { useAppSelector } from "@/lib/redux/hooks";
 import type { SelfRegisterableRole } from "@/lib/constants/roles";
 import type { StoreType } from "@/lib/redux/restaurant-types";
 
@@ -189,6 +190,23 @@ function RegisterForm() {
   const { toast } = useToast();
   const [registerUser, { isLoading }] = useRegisterMutation();
   const [error, setError] = useState<string | null>(null);
+
+  // docs/ROADMAP.md FDP-105 — an already-authenticated visitor landing on the signup form (e.g.
+  // a stale "Register your business" CTA elsewhere, a bookmark, the back button) is always
+  // confusing, never useful: they already have an account. A restaurant_owner/admin (matches
+  // AuthStatus's own header-nav role check) goes to their actual restaurants dashboard instead;
+  // anyone else (customer/rider — no self-service role upgrade exists yet) goes home rather than
+  // to a business-specific page they have no access to.
+  const { user: authUser, status: authStatus } = useAppSelector((state) => state.auth);
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !authUser) return;
+    if (authUser.role === "restaurant_owner" || authUser.role === "admin") {
+      plainRouter.replace("/dashboard/restaurants");
+    } else {
+      router.replace("/");
+    }
+  }, [authStatus, authUser, router, plainRouter]);
+  const redirectingAwayFromSignup = authStatus === "authenticated" && !!authUser;
   // Lets a link preselect the right account type instead of dropping everyone into the generic
   // customer default: the footer/homepage's existing "Partner with us" links
   // (`/register?role=restaurant_owner`) still preselect "restaurant", while a newer `?type=`
@@ -258,6 +276,10 @@ function RegisterForm() {
       setError(getErrorMessage(err, t("couldNotCreateAccount")));
     }
   };
+
+  // Redirect is in flight (see the effect above) — never flash the actual signup form at an
+  // already-authenticated visitor while `router.replace` resolves.
+  if (redirectingAwayFromSignup) return <RegisterFormSkeleton />;
 
   return (
     <Card>

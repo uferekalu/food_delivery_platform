@@ -19,6 +19,7 @@ import { useGetMyStoresQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreEarningsQuery } from "@/lib/redux/services/orders-api";
 import { useListStorePayoutsQuery } from "@/lib/redux/services/payouts-api";
 import type { PayoutStatus } from "@/lib/redux/services/payouts-api";
+import { classifyPayoutFailure } from "@/lib/payout-failure-reason";
 import {
   useGetPaymentProvidersQuery,
   useListPaystackBanksQuery,
@@ -316,7 +317,7 @@ function PayoutHistory({ storeId }: { storeId: string }) {
         {data.items.map((payout) => (
           <div
             key={payout._id}
-            className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
+            className="flex flex-col gap-2 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium text-text">
@@ -325,6 +326,11 @@ function PayoutHistory({ storeId }: { storeId: string }) {
               <span className="text-xs text-text-muted">{payout.provider}</span>
               {payout.reconciliationRequired && (
                 <span className="text-xs text-warning">{t("pendingReconciliation")}</span>
+              )}
+              {payout.status === "failed" && payout.failureReason && (
+                <span className="text-xs text-danger">
+                  {t(`payoutFailureHint_${classifyPayoutFailure(payout.failureReason)}`)}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-3">

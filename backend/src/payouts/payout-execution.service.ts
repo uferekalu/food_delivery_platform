@@ -418,13 +418,20 @@ export class PayoutExecutionService {
     }
 
     if (payout.provider === 'paystack') {
-      if (!account.reference) {
+      // docs/ROADMAP.md FDP-105 — Paystack transfers need the raw bank_code/account_number, the
+      // same as Flutterwave below; `account.reference` (the subaccount_code) is not usable as a
+      // transfer-recipient identifier on its own (see PaystackAdapter.transfer's doc comment for
+      // the real bug this replaced).
+      if (!account.bankCode || !account.accountNumber) {
         return Promise.reject(
-          new Error('Paystack payout account has no subaccount reference'),
+          new Error(
+            'Paystack payout account is missing bank details — re-onboard to add them',
+          ),
         );
       }
       return this.paystackAdapter.transfer({
-        subaccountReference: account.reference,
+        bankCode: account.bankCode,
+        accountNumber: account.accountNumber,
         amount: payout.grossAmount,
         currency: payout.currency,
         reference,
@@ -574,7 +581,9 @@ export class PayoutExecutionService {
     status?: PayoutDocument['status'];
     vendorType?: PayoutVendorType;
     reconciliationRequired?: boolean;
-  }): Promise<PaginatedResult<PayoutDocument>> {
+  }): Promise<
+    PaginatedResult<Record<string, unknown> & { vendorName: string | null }>
+  > {
     const filter: Record<string, unknown> = {};
     if (query.status) filter.status = query.status;
     if (query.vendorType) filter.vendorType = query.vendorType;
@@ -591,12 +600,83 @@ export class PayoutExecutionService {
       this.payoutModel.countDocuments(filter).exec(),
     ]);
     return {
-      items,
+      items: await this.attachVendorNames(items),
       total,
       page: query.page,
       limit: query.limit,
       totalPages: Math.ceil(total / query.limit),
     };
+  }
+
+  /**
+   * The admin payout dashboard previously showed only `vendorType vendorId` (docs/ROADMAP.md
+   * FDP-105) — a raw ObjectId string, useless for an admin trying to identify which real
+   * restaurant/store/rider a failed payout belongs to. Resolves each payout's vendor to a
+   * display name in a handful of batched queries (never one query per row) — riders need an
+   * extra hop through `User.name` since `Rider` itself has no name field of its own. `null` for
+   * a vendor that's since been deleted, rather than throwing — a payout's own history should
+   * never become unviewable just because the vendor record it points to is gone.
+   */
+  private async attachVendorNames(
+    items: PayoutDocument[],
+  ): Promise<(Record<string, unknown> & { vendorName: string | null })[]> {
+    // A real Payout.vendorId is always a real document's `_id.toString()`, but querying
+    // Restaurant/Store/Rider's `_id` (a genuine Mongoose ObjectId field, unlike Payout's own
+    // plain-string id fields) with anything else throws a CastError — filtered out defensively
+    // so one malformed/legacy row can never break the whole admin payout list.
+    const idsFor = (vendorType: PayoutVendorType) => [
+      ...new Set(
+        items
+          .filter(
+            (item) =>
+              item.vendorType === vendorType &&
+              Types.ObjectId.isValid(item.vendorId),
+          )
+          .map((item) => item.vendorId),
+      ),
+    ];
+    const restaurantIds = idsFor('restaurant');
+    const storeIds = idsFor('store');
+    const riderIds = idsFor('rider');
+
+    // Deliberately no `.select(...)` projection here — Mongoose's TS types lose precise document
+    // typing through a chained `.select()` call on this version, widening the resolved array to
+    // `any[]` and defeating every safety check downstream. This method only ever runs over one
+    // admin-list page's worth of unique vendor ids (tens, not thousands), so fetching the full
+    // document instead of a projection costs nothing that matters here.
+    const restaurants: RestaurantDocument[] = restaurantIds.length
+      ? await this.restaurantModel.find({ _id: { $in: restaurantIds } }).exec()
+      : [];
+    const stores: StoreDocument[] = storeIds.length
+      ? await this.storeModel.find({ _id: { $in: storeIds } }).exec()
+      : [];
+    const riders: RiderDocument[] = riderIds.length
+      ? await this.riderModel.find({ _id: { $in: riderIds } }).exec()
+      : [];
+
+    const nameByRestaurant = new Map(
+      restaurants.map((r) => [r._id.toString(), r.name] as const),
+    );
+    const nameByStore = new Map(
+      stores.map((s) => [s._id.toString(), s.name] as const),
+    );
+    const riderNameEntries = await Promise.all(
+      riders.map(async (rider) => {
+        const user = await this.usersService.findById(rider.userId.toString());
+        return [rider._id.toString(), user?.name ?? null] as const;
+      }),
+    );
+    const nameByRider = new Map(riderNameEntries);
+
+    return items.map((item) => {
+      const vendorName =
+        item.vendorType === 'restaurant'
+          ? (nameByRestaurant.get(item.vendorId) ?? null)
+          : item.vendorType === 'store'
+            ? (nameByStore.get(item.vendorId) ?? null)
+            : (nameByRider.get(item.vendorId) ?? null);
+      return { ...item.toObject(), vendorName };
+    });
   }
 
   /**

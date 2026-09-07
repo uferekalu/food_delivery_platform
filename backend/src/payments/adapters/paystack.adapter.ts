@@ -357,12 +357,19 @@ export class PaystackAdapter implements PaymentAdapter {
   // --- Weekly payout execution (docs/ROADMAP.md FDP-92) ---
 
   /**
-   * Pays a restaurant/store's own subaccount directly (`type: 'subaccount'` recipient) — unlike
-   * Flutterwave, Paystack's Transfers API can target a subaccount without re-supplying bank
-   * details, so `PayoutAccount.bankCode`/`accountNumber` aren't needed here. A fresh recipient is
-   * created on every call rather than cached: Paystack accepts repeat recipient creation for the
-   * same subaccount without complaint (confirmed against its docs), and this only runs weekly, so
-   * there's no hot-path cost to avoid.
+   * Pays a restaurant/store's bank account directly via a `nuban`-type transfer recipient
+   * (docs/ROADMAP.md FDP-105). **Real bug fixed here**: this previously created the recipient with
+   * `type: 'subaccount', subaccount: <subaccount_code>` on the (incorrect) assumption that
+   * Paystack's Transfers API can target a subaccount reference without re-supplying bank details —
+   * confirmed live and against Paystack's own documented request shape that `subaccount` is not a
+   * valid recipient `type` at all; every real transfer attempt came back rejected with "Either
+   * authorization_code or account_number must be passed," which every vendor's weekly payout hit
+   * from day one. Fixed to match Flutterwave's own pattern: a standalone `nuban` recipient built
+   * from `PayoutAccount.bankCode`/`accountNumber` (already collected and persisted at onboarding
+   * time, see that schema's doc comment — no re-onboarding needed for accounts onboarded before
+   * this fix). A fresh recipient is still created on every call rather than cached: Paystack
+   * accepts repeat recipient creation without complaint (confirmed against its docs), and this
+   * only runs weekly, so there's no hot-path cost to avoid.
    *
    * Operational prerequisite, not something this code can satisfy: Paystack transfers require
    * either OTP finalization (`POST /transfer/finalize_transfer`, needs a human with a one-time
@@ -375,7 +382,8 @@ export class PaystackAdapter implements PaymentAdapter {
    * `Error`, which the caller would treat as a confirmed, safe-to-retry rejection.
    */
   async transfer(params: {
-    subaccountReference: string;
+    bankCode: string;
+    accountNumber: string;
     amount: number;
     currency: string;
     reference: string;
@@ -388,8 +396,10 @@ export class PaystackAdapter implements PaymentAdapter {
         {
           method: 'POST',
           body: JSON.stringify({
-            type: 'subaccount',
-            subaccount: params.subaccountReference,
+            type: 'nuban',
+            name: params.reason,
+            account_number: params.accountNumber,
+            bank_code: params.bankCode,
             currency: params.currency.toUpperCase(),
           }),
         },

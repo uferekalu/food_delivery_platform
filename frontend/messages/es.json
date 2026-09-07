@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "Puede que no exista, o que no tengas acceso a él.",
     "payoutHistory": "Historial de pagos",
     "payoutHistoryDescription": "Tus pagos semanales de la plataforma, del más reciente al más antiguo.",
-    "pendingReconciliation": "Pendiente de revisión manual"
+    "pendingReconciliation": "Pendiente de revisión manual",
+    "payoutFailureHint_missingBankDetails": "Los datos bancarios de tu cuenta de pago parecen incompletos o incorrectos — reconecta tu cuenta de pago con un número de cuenta bancaria válido.",
+    "payoutFailureHint_insufficientBalance": "Este es un problema temporal de nuestro lado — no necesitas hacer nada. Se reintentará automáticamente.",
+    "payoutFailureHint_invalidAccount": "No pudimos verificar la cuenta bancaria registrada — revisa tu número de cuenta y banco, y luego reconecta tu cuenta de pago.",
+    "payoutFailureHint_otpRequired": "Este es un problema temporal de nuestro lado — no necesitas hacer nada. Se reintentará automáticamente.",
+    "payoutFailureHint_unknown": "Verifica que los datos de tu cuenta de pago sean correctos, o contacta a soporte si esto sigue ocurriendo."
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "No se pudo descargar el CSV",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "NO se realizó",
     "transferDidHappen": "SÍ se realizó",
     "reconciliationResolved": "Revisión del pago resuelta",
-    "couldNotResolve": "No se pudo resolver este pago"
+    "couldNotResolve": "No se pudo resolver este pago",
+    "clawbackNote": "{amount} retenido para recuperar un reembolso anterior",
+    "technicalDetail": "Detalle técnico: {reason}",
+    "failureHint_missingBankDetails": "Datos bancarios faltantes o inválidos — pide al vendedor que reconecte su cuenta de pago con un número de cuenta y banco válidos.",
+    "failureHint_insufficientBalance": "El saldo de pagos de la plataforma es insuficiente para enviar esta transferencia — esto no lo puede solucionar el vendedor; la cuenta de la plataforma necesita recarga.",
+    "failureHint_invalidAccount": "No se pudo verificar la cuenta bancaria registrada — pide al vendedor que revise su número de cuenta y banco, y luego reconecte su cuenta de pago.",
+    "failureHint_otpRequired": "El proveedor de pagos solicita finalización manual con OTP — un problema de configuración de la plataforma, no algo que el vendedor deba corregir.",
+    "failureHint_unknown": "Consulta el detalle técnico abajo, o revisa el panel del proveedor de pagos para más información."
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Buscar por nombre o correo electrónico",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "Entregas completadas",
     "deliveryHistory": "Historial de entregas",
     "payoutHistory": "Historial de pagos",
-    "payoutHistoryDescription": "Tus pagos semanales de la plataforma, del más reciente al más antiguo."
+    "payoutHistoryDescription": "Tus pagos semanales de la plataforma, del más reciente al más antiguo.",
+    "pendingReconciliation": "Pendiente de revisión manual",
+    "payoutFailureHint_missingBankDetails": "Los datos bancarios de tu cuenta de pago parecen incompletos o incorrectos — reconecta tu cuenta de pago con un número de cuenta bancaria válido.",
+    "payoutFailureHint_insufficientBalance": "Este es un problema temporal de nuestro lado — no necesitas hacer nada. Se reintentará automáticamente.",
+    "payoutFailureHint_invalidAccount": "No pudimos verificar la cuenta bancaria registrada — revisa tu número de cuenta y banco, y luego reconecta tu cuenta de pago.",
+    "payoutFailureHint_otpRequired": "Este es un problema temporal de nuestro lado — no necesitas hacer nada. Se reintentará automáticamente.",
+    "payoutFailureHint_unknown": "Verifica que los datos de tu cuenta de pago sean correctos, o contacta a soporte si esto sigue ocurriendo."
   },
   "RiderApplyPage": {
     "required": "Obligatorio",

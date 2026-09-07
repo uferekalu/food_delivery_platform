@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
     "payoutHistory": "Auszahlungsverlauf",
     "payoutHistoryDescription": "Deine wöchentlichen Auszahlungen von der Plattform, neueste zuerst.",
-    "pendingReconciliation": "Wartet auf manuelle Prüfung"
+    "pendingReconciliation": "Wartet auf manuelle Prüfung",
+    "payoutFailureHint_missingBankDetails": "Die Bankdaten Ihres Auszahlungskontos scheinen unvollständig oder falsch zu sein — bitte verbinden Sie Ihr Auszahlungskonto mit einer gültigen Kontonummer neu.",
+    "payoutFailureHint_insufficientBalance": "Dies ist ein vorübergehendes Problem unsererseits — Sie müssen nichts tun. Es wird automatisch erneut versucht.",
+    "payoutFailureHint_invalidAccount": "Wir konnten das hinterlegte Bankkonto nicht verifizieren — bitte überprüfen Sie Kontonummer und Bank und verbinden Sie Ihr Auszahlungskonto neu.",
+    "payoutFailureHint_otpRequired": "Dies ist ein vorübergehendes Problem unsererseits — Sie müssen nichts tun. Es wird automatisch erneut versucht.",
+    "payoutFailureHint_unknown": "Bitte prüfen Sie, ob die Angaben Ihres Auszahlungskontos korrekt sind, oder kontaktieren Sie den Support, falls dies weiterhin auftritt."
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "CSV konnte nicht heruntergeladen werden",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "Sie ist NICHT erfolgt",
     "transferDidHappen": "Sie IST erfolgt",
     "reconciliationResolved": "Auszahlungsprüfung geklärt",
-    "couldNotResolve": "Diese Auszahlung konnte nicht geklärt werden"
+    "couldNotResolve": "Diese Auszahlung konnte nicht geklärt werden",
+    "clawbackNote": "{amount} einbehalten, um eine frühere Erstattung auszugleichen",
+    "technicalDetail": "Technisches Detail: {reason}",
+    "failureHint_missingBankDetails": "Fehlende oder ungültige Bankdaten hinterlegt — bitten Sie den Anbieter, sein Auszahlungskonto mit einer gültigen Kontonummer und Bank neu zu verbinden.",
+    "failureHint_insufficientBalance": "Das Auszahlungsguthaben der Plattform reicht für diese Überweisung nicht aus — das kann der Anbieter nicht beheben; das Plattformkonto muss aufgeladen werden.",
+    "failureHint_invalidAccount": "Das hinterlegte Bankkonto konnte nicht verifiziert werden — bitten Sie den Anbieter, Kontonummer und Bank zu überprüfen und das Auszahlungskonto neu zu verbinden.",
+    "failureHint_otpRequired": "Der Zahlungsanbieter verlangt eine manuelle OTP-Bestätigung — ein Konfigurationsproblem der Plattform, nichts, was der Anbieter beheben muss.",
+    "failureHint_unknown": "Siehe das technische Detail unten, oder prüfen Sie das Dashboard des Zahlungsanbieters für weitere Informationen."
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Nach Name oder E-Mail suchen",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "Abgeschlossene Lieferungen",
     "deliveryHistory": "Lieferverlauf",
     "payoutHistory": "Auszahlungsverlauf",
-    "payoutHistoryDescription": "Deine wöchentlichen Auszahlungen von der Plattform, neueste zuerst."
+    "payoutHistoryDescription": "Deine wöchentlichen Auszahlungen von der Plattform, neueste zuerst.",
+    "pendingReconciliation": "Manuelle Prüfung ausstehend",
+    "payoutFailureHint_missingBankDetails": "Die Bankdaten Ihres Auszahlungskontos scheinen unvollständig oder falsch zu sein — bitte verbinden Sie Ihr Auszahlungskonto mit einer gültigen Kontonummer neu.",
+    "payoutFailureHint_insufficientBalance": "Dies ist ein vorübergehendes Problem unsererseits — Sie müssen nichts tun. Es wird automatisch erneut versucht.",
+    "payoutFailureHint_invalidAccount": "Wir konnten das hinterlegte Bankkonto nicht verifizieren — bitte überprüfen Sie Kontonummer und Bank und verbinden Sie Ihr Auszahlungskonto neu.",
+    "payoutFailureHint_otpRequired": "Dies ist ein vorübergehendes Problem unsererseits — Sie müssen nichts tun. Es wird automatisch erneut versucht.",
+    "payoutFailureHint_unknown": "Bitte prüfen Sie, ob die Angaben Ihres Auszahlungskontos korrekt sind, oder kontaktieren Sie den Support, falls dies weiterhin auftritt."
   },
   "RiderApplyPage": {
     "required": "Erforderlich",

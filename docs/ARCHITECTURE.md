@@ -1255,3 +1255,67 @@ supporting it.
 **Explicitly out of scope**: partial refunds (the whole adapter interface and clawback design
 assume a full reversal — a real, larger change, not attempted here) and full chargeback/dispute
 lifecycle management (evidence submission stays a manual, out-of-app process).
+
+## 29. Live payout failure fixes: the real Paystack transfer bug, payout clarity, and a vendor-CTA routing bug (docs/ROADMAP.md FDP-105)
+
+Reported directly from production: the first real Monday payout batch against live vendor
+accounts came back rejected for every Paystack recipient, with an admin/vendor-facing message too
+technical to act on, an admin payout list showing raw vendor ids instead of names, and (a
+separate, unrelated report from the same session) an authenticated admin/vendor still being routed
+through the customer signup page from several homepage/footer CTAs.
+
+**The real bug — Paystack transfers were never actually possible.** `PaystackAdapter.transfer()`
+(since docs/ROADMAP.md FDP-92) created a transfer recipient with `type: 'subaccount', subaccount:
+<subaccount_code>`, on the assumption that Paystack's Transfers API could pay a subaccount
+reference directly without re-supplying bank details — confirmed, live and against Paystack's own
+documented request shape, that `subaccount` is not a valid recipient `type` at all (the only
+documented type for a bank-account payout is `nuban`, requiring `account_number`/`bank_code`).
+Every real transfer attempt came back rejected with "Either authorization_code or account_number
+must be passed" — every vendor's Paystack payout failed from the very first live Monday run, this
+wasn't a test-mode restriction. Fixed to match `FlutterwaveAdapter.transfer()`'s own pattern
+exactly: a standalone `nuban` recipient built from `PayoutAccount.bankCode`/`accountNumber`.
+Because onboarding (`PaystackPayoutsController.setup`/`setupStore`/`setupRider`, FDP-92) already
+persisted those two fields correctly all along — only the transfer call itself used the wrong
+mechanism — **no re-onboarding was needed for accounts that failed under the old code**; the fix
+alone makes the very next Monday run (or an admin "Run batch now") succeed for them.
+`PayoutExecutionService.callAdapterTransfer`'s Paystack branch now guards on
+`account.bankCode`/`accountNumber` being present (the same guard Flutterwave's branch already
+had) rather than `account.reference`.
+
+**Payout failure clarity.** A raw provider error string (`Payout.failureReason`) is accurate but
+too technical for either an admin trying to guide a vendor, or the vendor reading their own
+earnings page. New frontend-only classifier (`lib/payout-failure-reason.ts`,
+`classifyPayoutFailure`) recognizes a handful of common failure shapes (missing bank details,
+insufficient platform balance, an unverifiable account, a provider OTP requirement) from the raw
+string and maps each to a translated, plain-language explanation — shown *alongside* the raw
+reason, never replacing it, on the admin Payouts tab (admin-facing: what to tell the vendor) and
+on the restaurant/store earnings pages' and the rider deliveries page's own payout history
+(vendor-facing: what to do about it). Classification stays client-side and purely presentational
+(translatable copy for a 6-language app is a frontend concern, not something to bake as English
+sentences into the backend's `failureReason` field) — the backend keeps recording whatever the
+provider actually said.
+
+**Admin payout list showed raw ids, not names.** `PayoutExecutionService.listAll` (the admin
+dashboard's only view across every vendor) previously returned bare `Payout` documents —
+`vendorType`/`vendorId` only, no way to tell which real restaurant/store/rider a row was about
+without looking it up separately. New private `attachVendorNames` resolves each page's unique
+vendor ids to a display name in three batched queries (never one query per row), with an extra hop
+through `User.name` for riders (`Rider` itself has no name field). Ids that don't parse as a valid
+`ObjectId` (or that no longer resolve to a real document) get `vendorName: null` rather than
+throwing — defensive against a payout row's vendor record being deleted, or the batched query
+itself: Mongoose's `_id: { $in: [...] }` throws a cast error on a malformed id, not a graceful
+no-match, so ids are pre-filtered with `Types.ObjectId.isValid()` before ever reaching the query.
+`listForVendor` (a vendor's own payout history) doesn't need this — they already know who they are.
+
+**Vendor CTAs silently excluded admin accounts.** The homepage's `partnerCta`/`storeCta` (hero
+button + "Let's do it together" cards) and the footer's `restaurantLinks` all branched on
+`user.role === "restaurant_owner"` only, sending an authenticated **admin** through
+`/register?role=restaurant_owner` — the full customer-facing signup form — exactly like a
+logged-out visitor, even though `AuthStatus` (the header nav) has always shown that same admin
+their `/dashboard/restaurants`/`/dashboard/stores` links via `role === "restaurant_owner" ||
+role === "admin"`. All three now match that same check. Separately hardened `/register` itself:
+an already-authenticated visitor landing there by any other route (a stale bookmark, browser
+back/forward, an old cached link) is now redirected away in a `useEffect` — a restaurant_owner or
+admin goes to `/dashboard/restaurants`, anyone else (customer/rider — no self-service
+role-upgrade path exists) goes home, since showing a signed-in visitor someone else's signup form
+is confusing regardless of which specific link put them there.

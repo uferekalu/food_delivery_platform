@@ -52,11 +52,14 @@ export function Footer() {
         { href: "/login", label: t("logIn") },
       ];
 
-  // A restaurant owner already has both dashboards one click away (myRestaurants/myStores), so
-  // the explicit "sell groceries or pharmacy items" link below is only useful to someone who
-  // hasn't registered as either kind of owner yet.
+  // A restaurant owner (or an admin — matches AuthStatus's own header-nav check for these same
+  // two links, docs/ROADMAP.md FDP-105 fixed a real bug where this branch missing `admin` sent an
+  // authenticated admin through the customer-facing signup flow instead) already has both
+  // dashboards one click away (myRestaurants/myStores), so the explicit "sell groceries or
+  // pharmacy items" link below is only useful to someone who hasn't registered as either kind of
+  // owner yet.
   const restaurantLinks: FooterLink[] =
-    authenticated && user.role === "restaurant_owner"
+    authenticated && (user.role === "restaurant_owner" || user.role === "admin")
       ? [
           { href: "/dashboard/restaurants", label: t("myRestaurants") },
           { href: "/dashboard/stores", label: t("myStores") },

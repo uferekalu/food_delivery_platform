@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "Il se peut qu'il n'existe pas, ou que vous n'y ayez pas accès.",
     "payoutHistory": "Historique des paiements",
     "payoutHistoryDescription": "Vos paiements hebdomadaires de la plateforme, du plus récent au plus ancien.",
-    "pendingReconciliation": "En attente de vérification manuelle"
+    "pendingReconciliation": "En attente de vérification manuelle",
+    "payoutFailureHint_missingBankDetails": "Les coordonnées bancaires de votre compte de paiement semblent incomplètes ou incorrectes — veuillez reconnecter votre compte de paiement avec un numéro de compte bancaire valide.",
+    "payoutFailureHint_insufficientBalance": "Il s'agit d'un problème temporaire de notre côté — aucune action n'est requise de votre part. La tentative sera relancée automatiquement.",
+    "payoutFailureHint_invalidAccount": "Nous n'avons pas pu vérifier le compte bancaire enregistré — veuillez vérifier votre numéro de compte et votre banque, puis reconnecter votre compte de paiement.",
+    "payoutFailureHint_otpRequired": "Il s'agit d'un problème temporaire de notre côté — aucune action n'est requise de votre part. La tentative sera relancée automatiquement.",
+    "payoutFailureHint_unknown": "Veuillez vérifier que les informations de votre compte de paiement sont correctes, ou contactez le support si le problème persiste."
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "Impossible de télécharger le CSV",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "Il n'a PAS abouti",
     "transferDidHappen": "Il A abouti",
     "reconciliationResolved": "Vérification du paiement résolue",
-    "couldNotResolve": "Impossible de résoudre ce paiement"
+    "couldNotResolve": "Impossible de résoudre ce paiement",
+    "clawbackNote": "{amount} retenu pour récupérer un remboursement précédent",
+    "technicalDetail": "Détail technique : {reason}",
+    "failureHint_missingBankDetails": "Coordonnées bancaires manquantes ou invalides — demandez au vendeur de reconnecter son compte de paiement avec un numéro de compte et une banque valides.",
+    "failureHint_insufficientBalance": "Le solde de paiement de la plateforme est trop faible pour envoyer ce virement — le vendeur ne peut rien y faire ; le compte de la plateforme doit être rechargé.",
+    "failureHint_invalidAccount": "Le compte bancaire enregistré n'a pas pu être vérifié — demandez au vendeur de vérifier son numéro de compte et sa banque, puis de reconnecter son compte de paiement.",
+    "failureHint_otpRequired": "Le prestataire de paiement demande une validation manuelle par code OTP — un problème de configuration de la plateforme, pas quelque chose que le vendeur doit corriger.",
+    "failureHint_unknown": "Consultez le détail technique ci-dessous, ou vérifiez le tableau de bord du prestataire de paiement pour plus d'informations."
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Rechercher par nom ou e-mail",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "Livraisons terminées",
     "deliveryHistory": "Historique des livraisons",
     "payoutHistory": "Historique des paiements",
-    "payoutHistoryDescription": "Vos paiements hebdomadaires de la plateforme, du plus récent au plus ancien."
+    "payoutHistoryDescription": "Vos paiements hebdomadaires de la plateforme, du plus récent au plus ancien.",
+    "pendingReconciliation": "En attente de vérification manuelle",
+    "payoutFailureHint_missingBankDetails": "Les coordonnées bancaires de votre compte de paiement semblent incomplètes ou incorrectes — veuillez reconnecter votre compte de paiement avec un numéro de compte bancaire valide.",
+    "payoutFailureHint_insufficientBalance": "Il s'agit d'un problème temporaire de notre côté — aucune action n'est requise de votre part. La tentative sera relancée automatiquement.",
+    "payoutFailureHint_invalidAccount": "Nous n'avons pas pu vérifier le compte bancaire enregistré — veuillez vérifier votre numéro de compte et votre banque, puis reconnecter votre compte de paiement.",
+    "payoutFailureHint_otpRequired": "Il s'agit d'un problème temporaire de notre côté — aucune action n'est requise de votre part. La tentative sera relancée automatiquement.",
+    "payoutFailureHint_unknown": "Veuillez vérifier que les informations de votre compte de paiement sont correctes, ou contactez le support si le problème persiste."
   },
   "RiderApplyPage": {
     "required": "Requis",

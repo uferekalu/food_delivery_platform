@@ -11,8 +11,16 @@ export interface Payout {
   _id: string;
   vendorType: PayoutVendorType;
   vendorId: string;
+  /** Only populated on the admin `listAllPayouts` endpoint (docs/ROADMAP.md FDP-105) — `null`
+   * for a vendor whose record no longer resolves, absent (undefined) on the vendor's own
+   * `listRestaurantPayouts`/`listStorePayouts`/`listMyRiderPayouts` endpoints, which never
+   * needed it (a vendor viewing their own payout history already knows who they are). */
+  vendorName?: string | null;
   orderIds: string[];
   grossAmount: number;
+  /** How much of grossAmount's raw earnings were withheld to recover a prior refund clawback
+   * (docs/ROADMAP.md FDP-104) — 0 for the common case. */
+  clawbackDeducted: number;
   currency: string;
   provider: "stripe" | "paystack" | "flutterwave";
   payoutAccountReference: string;

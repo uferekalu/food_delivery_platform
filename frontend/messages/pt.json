@@ -990,7 +990,12 @@
     "mayNotExistOrNoAccess": "Ele pode não existir, ou você não tem acesso a ele.",
     "payoutHistory": "Histórico de pagamentos",
     "payoutHistoryDescription": "Seus pagamentos semanais da plataforma, do mais recente ao mais antigo.",
-    "pendingReconciliation": "Aguardando revisão manual"
+    "pendingReconciliation": "Aguardando revisão manual",
+    "payoutFailureHint_missingBankDetails": "Os dados bancários da sua conta de pagamento parecem incompletos ou incorretos — reconecte sua conta de pagamento com um número de conta bancária válido.",
+    "payoutFailureHint_insufficientBalance": "Este é um problema temporário do nosso lado — nenhuma ação é necessária da sua parte. Será repetido automaticamente.",
+    "payoutFailureHint_invalidAccount": "Não conseguimos verificar a conta bancária registrada — confira o número da conta e o banco, depois reconecte sua conta de pagamento.",
+    "payoutFailureHint_otpRequired": "Este é um problema temporário do nosso lado — nenhuma ação é necessária da sua parte. Será repetido automaticamente.",
+    "payoutFailureHint_unknown": "Verifique se os dados da sua conta de pagamento estão corretos, ou entre em contato com o suporte se isso continuar acontecendo."
   },
   "SalesReportPage": {
     "couldNotDownloadCsv": "Não foi possível baixar o CSV",
@@ -1079,7 +1084,14 @@
     "transferDidNotHappen": "NÃO foi realizada",
     "transferDidHappen": "FOI realizada",
     "reconciliationResolved": "Revisão do pagamento resolvida",
-    "couldNotResolve": "Não foi possível resolver este pagamento"
+    "couldNotResolve": "Não foi possível resolver este pagamento",
+    "clawbackNote": "{amount} retido para recuperar um reembolso anterior",
+    "technicalDetail": "Detalhe técnico: {reason}",
+    "failureHint_missingBankDetails": "Dados bancários ausentes ou inválidos — peça ao fornecedor para reconectar a conta de pagamento com um número de conta e banco válidos.",
+    "failureHint_insufficientBalance": "O saldo de pagamentos da plataforma é insuficiente para enviar esta transferência — isso não é algo que o fornecedor possa corrigir; a conta da plataforma precisa de recarga.",
+    "failureHint_invalidAccount": "Não foi possível verificar a conta bancária registrada — peça ao fornecedor para conferir o número da conta e o banco, depois reconectar a conta de pagamento.",
+    "failureHint_otpRequired": "O provedor de pagamento está solicitando finalização manual por OTP — um problema de configuração da plataforma, não algo que o fornecedor precise corrigir.",
+    "failureHint_unknown": "Veja o detalhe técnico abaixo, ou verifique o painel do provedor de pagamento para mais informações."
   },
   "AdminUsersTab": {
     "searchPlaceholder": "Buscar por nome ou e-mail",
@@ -1366,7 +1378,13 @@
     "completedDeliveries": "Entregas concluídas",
     "deliveryHistory": "Histórico de entregas",
     "payoutHistory": "Histórico de pagamentos",
-    "payoutHistoryDescription": "Seus pagamentos semanais da plataforma, do mais recente ao mais antigo."
+    "payoutHistoryDescription": "Seus pagamentos semanais da plataforma, do mais recente ao mais antigo.",
+    "pendingReconciliation": "Pendente de revisão manual",
+    "payoutFailureHint_missingBankDetails": "Os dados bancários da sua conta de pagamento parecem incompletos ou incorretos — reconecte sua conta de pagamento com um número de conta bancária válido.",
+    "payoutFailureHint_insufficientBalance": "Este é um problema temporário do nosso lado — nenhuma ação é necessária da sua parte. Será repetido automaticamente.",
+    "payoutFailureHint_invalidAccount": "Não conseguimos verificar a conta bancária registrada — confira o número da conta e o banco, depois reconecte sua conta de pagamento.",
+    "payoutFailureHint_otpRequired": "Este é um problema temporário do nosso lado — nenhuma ação é necessária da sua parte. Será repetido automaticamente.",
+    "payoutFailureHint_unknown": "Verifique se os dados da sua conta de pagamento estão corretos, ou entre em contato com o suporte se isso continuar acontecendo."
   },
   "RiderApplyPage": {
     "required": "Obrigatório",
