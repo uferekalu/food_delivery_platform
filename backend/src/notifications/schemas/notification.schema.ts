@@ -17,6 +17,7 @@ export const NOTIFICATION_TYPES = [
   'refund_reconciliation_needed',
   'order_refunded_externally',
   'order_dispute_flagged',
+  'support_ticket_created',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

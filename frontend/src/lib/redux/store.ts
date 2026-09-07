@@ -2,12 +2,14 @@ import { configureStore } from "@reduxjs/toolkit";
 import { api } from "./api";
 import themeReducer from "./slices/theme-slice";
 import authReducer from "./slices/auth-slice";
+import chatReducer from "./slices/chat-slice";
 
 export const makeStore = () =>
   configureStore({
     reducer: {
       theme: themeReducer,
       auth: authReducer,
+      chat: chatReducer,
       [api.reducerPath]: api.reducer,
     },
     middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(api.middleware),

@@ -13,6 +13,7 @@ import { PromoCodesTab } from "./promo-codes-tab";
 import { RefundsTab } from "./refunds-tab";
 import { UsersTab } from "./users-tab";
 import { PayoutsTab } from "./payouts-tab";
+import { SupportTicketsTab } from "./support-tickets-tab";
 
 function AdminDashboard() {
   const t = useTranslations("AdminPage");
@@ -29,6 +30,7 @@ function AdminDashboard() {
         <Tab value="promo-codes">{t("promoCodes")}</Tab>
         <Tab value="refunds">{t("refunds")}</Tab>
         <Tab value="payouts">{t("payouts")}</Tab>
+        <Tab value="support">{t("support")}</Tab>
       </TabList>
       <TabPanel value="overview">
         <OverviewTab />
@@ -53,6 +55,9 @@ function AdminDashboard() {
       </TabPanel>
       <TabPanel value="payouts">
         <PayoutsTab />
+      </TabPanel>
+      <TabPanel value="support">
+        <SupportTicketsTab />
       </TabPanel>
     </Tabs>
   );

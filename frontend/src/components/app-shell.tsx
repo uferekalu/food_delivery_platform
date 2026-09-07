@@ -6,6 +6,7 @@ import { AuthStatus } from "@/components/auth-status";
 import { MobileNav } from "@/components/mobile-nav";
 import { CartDrawer } from "@/components/cart-drawer";
 import { NotificationBell } from "@/components/notification-bell";
+import { ChatWidget } from "@/components/chat-widget";
 import { HeaderSearchSlot } from "@/components/header-search-slot";
 import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -62,6 +63,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="flex-1">{children}</div>
       <Footer />
+      {/* Support chat widget (docs/ROADMAP.md FDP-106) — mounted here, not per-page, so it
+          persists (and its Redux-backed conversation state survives) across every client-side
+          navigation. `AppShell` is genuinely shared across every layout (translated routes AND
+          admin/rider/design-system, per this file's own header comment) — same as
+          `CartDrawer`/`NotificationBell` above, no special-casing to exclude it anywhere. */}
+      <ChatWidget />
     </ToastProvider>
   );
 }

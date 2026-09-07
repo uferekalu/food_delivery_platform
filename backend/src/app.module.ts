@@ -23,6 +23,9 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { PayoutsModule } from './payouts/payouts.module';
+import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
+import { SupportTicketsModule } from './support-tickets/support-tickets.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -77,6 +80,9 @@ import { PayoutsModule } from './payouts/payouts.module';
     NotificationsModule,
     AdminModule,
     PayoutsModule,
+    KnowledgeBaseModule,
+    SupportTicketsModule,
+    ChatbotModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
