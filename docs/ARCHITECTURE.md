@@ -1319,3 +1319,71 @@ back/forward, an old cached link) is now redirected away in a `useEffect` — a 
 admin goes to `/dashboard/restaurants`, anyone else (customer/rider — no self-service
 role-upgrade path exists) goes home, since showing a signed-in visitor someone else's signup form
 is confusing regardless of which specific link put them there.
+
+## 30. Scoped support chat widget: knowledge base, support tickets, and a hard human fallback (docs/ROADMAP.md FDP-106)
+
+A floating support chat widget, bottom-right on every page, deliberately **not** a general AI
+assistant: it matches a visitor's message against an admin-curated knowledge base of Q&A entries
+using deterministic keyword/pattern scoring (no LLM call, no external AI provider), and on a
+low-confidence or no match, responds with a warm fallback and logs a support ticket for a human to
+follow up — the two failure modes ("confidently answers" / "honestly can't, escalates to a
+person") are the entire feature, on purpose.
+
+**Three new backend modules, one new guard.** `knowledge-base/` (admin-only CRUD for `{question,
+answer, keywords[], category, isActive}` entries) exposes `KnowledgeBaseService.match(message)`:
+normalizes the message (lowercase, strip punctuation via `/[^\p{L}\p{N}\s]/gu`, collapse
+whitespace), scores each active entry by keyword substring hits weighted by
+`keyword.split(' ').length` (a multi-word phrase like "cancel order" scores higher than a single
+word, since it's a more specific signal), and returns the top scorer plus an `aboveThreshold`
+boolean against an exported `MATCH_CONFIDENCE_THRESHOLD` constant (same "one tunable constant"
+convention as `PLATFORM_COMMISSION_RATE`) — the near-miss entry is kept even below threshold
+purely for admin context on the resulting ticket ("the bot almost matched this — maybe broaden its
+keywords"), never shown to the visitor. `support-tickets/` (admin-only list/resolve) is created
+automatically by the chatbot on a below-threshold match, fans out a `support_ticket_created`
+notification to every admin (same batched `usersService.listAll({role:'admin'})` +
+`Promise.all(...)`-in-try/catch pattern as every other admin fan-out in this codebase, non-fatal
+on failure), and stores exactly one of `userId`/`sessionId` — mirroring `Order`'s existing
+`restaurantId`/`storeId` either-or convention — via a small `ChatIdentity` type shared with the
+`chatbot/` module. `chatbot/` itself is thin by design: `POST /chatbot/ask` matches-or-tickets and
+always appends to a flat, append-only `chat-messages` log purely so `GET /chatbot/history` has
+something to replay; `FALLBACK_MESSAGE` is an exported constant so the honest "I don't know, but a
+person will follow up" copy lives in exactly one place.
+
+**Guests can use it too — the guard gap that forced a new pattern.** This app had no
+guest/anonymous identity concept anywhere before this ticket (cart, orders, everything requires a
+real `userId`). Supporting a logged-out visitor meant a route that's public but still reads
+`req.user` *if* a valid token was sent — and the existing `JwtAuthGuard` can't do that: when
+`@Public()` is set it returns `true` immediately, skipping Passport entirely, so `request.user` is
+never populated even with a valid Authorization header. New `OptionalJwtAuthGuard`
+(`auth/guards/optional-jwt-auth.guard.ts`) fixes this generically — extends `AuthGuard('jwt-
+access')`, overrides `handleRequest` to return `user ?? null` instead of throwing — applied via
+`@Public()` + `@UseGuards(OptionalJwtAuthGuard)` together on `/chatbot/ask` and `/chatbot/history`
+only. A guest's identity is a client-generated `sessionId` (UUID), persisted in `localStorage`
+(`lib/chat-session.ts` — the **first** use of `localStorage` in this codebase's frontend,
+deliberately narrow: just that one id, never the conversation itself) and sent as a body field or
+`?sessionId=` query param; the controller 400s if a request arrives with neither a real user nor a
+`sessionId`.
+
+**Frontend**: `ChatWidget` (`components/chat-widget.tsx`) is a fixed bottom-right `IconButton`
+(collapsed by default) that expands, via `Portal`, into a **non-modal** panel (`role="dialog"
+aria-modal="false"`, no backdrop) — deliberately not `Drawer`/`Modal`'s pattern, since a support
+widget shouldn't block reading the rest of the page while chatting. Below `sm` it becomes a
+full-screen sheet; above it, a fixed `32rem × 24rem` panel bottom-right, following
+`NotificationBell`'s own portal/click-outside/Escape pattern rather than `Drawer`'s. Conversation
+state lives in a new `chat` Redux slice (`messages`, `open`, `unread`, `historyChecked`) — survives
+client-side navigation for free, the same as `auth`/`theme` already do — and is seeded from `GET
+/chatbot/history` on mount (skipped until an identity — real auth state, or a client-generated
+guest session id — is actually available). The unread badge is deliberately simple: set once, only
+if the initial history fetch comes back genuinely empty and the panel has never been opened this
+session ("you haven't looked at this yet, and support exists"), cleared the instant the panel
+opens — a page-specific trigger (idle-on-checkout, pending-order timers) was considered and
+explicitly deferred as a distinct feature, not silently built. `ChatWidget` mounts once in
+`AppShell`, unconditionally — confirmed `AppShell` is genuinely shared across every layout
+(translated routes **and** admin/rider/design-system), so no exclusion logic was needed, unlike an
+earlier draft of this plan assumed.
+
+**Admin surface**: a new "Support" tab (`admin/support-tickets-tab.tsx`) on the existing admin
+dashboard (client-side tab state, no new route) combines a filterable, resolvable support-ticket
+list (mirrors `refunds-tab.tsx`/`payouts-tab.tsx` exactly) with knowledge-base management
+(react-hook-form + zod create form, per-entry active toggle, edit modal, delete with confirm —
+mirrors `promo-codes-tab.tsx`).
