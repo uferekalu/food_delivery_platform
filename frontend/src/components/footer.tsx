@@ -116,7 +116,15 @@ export function Footer() {
 
         <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-text-muted">{t("copyright", { year })}</p>
-          <p className="text-xs text-text-muted">{t("footerTagline")}</p>
+          <div className="flex items-center gap-4">
+            <SmartLink href="/terms" className="text-xs text-text-muted hover:text-text hover:underline">
+              {t("termsAndConditions")}
+            </SmartLink>
+            <SmartLink href="/privacy" className="text-xs text-text-muted hover:text-text hover:underline">
+              {t("privacyPolicy")}
+            </SmartLink>
+            <p className="text-xs text-text-muted">{t("footerTagline")}</p>
+          </div>
         </div>
       </Container>
     </footer>

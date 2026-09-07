@@ -1387,3 +1387,71 @@ dashboard (client-side tab state, no new route) combines a filterable, resolvabl
 list (mirrors `refunds-tab.tsx`/`payouts-tab.tsx` exactly) with knowledge-base management
 (react-hook-form + zod create form, per-entry active toggle, edit modal, delete with confirm —
 mirrors `promo-codes-tab.tsx`).
+
+## 31. Homepage FAQ, Terms & Conditions, and Privacy Policy (docs/ROADMAP.md FDP-107)
+
+Three pieces of user-facing content this app never had: a homepage FAQ section, and full Terms &
+Conditions / Privacy Policy pages linked from the footer — all written to reflect this platform's
+actual mechanics (real commission rate, real payout cadence, real payment providers, real refund
+policy) rather than generic boilerplate, alongside an honest notice that this is a template
+reflecting real technical behavior and should be reviewed by counsel before real-world business
+use — the platform is a demo/project, not a company with legal counsel of its own.
+
+**New `Accordion`/`AccordionItem` kit component** (`components/ui/accordion.tsx`) — the first
+disclosure/collapsible primitive in this design-token-driven UI kit. Each item manages its own
+open state independently (more than one can be open at once), matching common FAQ-page behavior
+rather than a single-open-at-a-time accordion; native `<button>` semantics mean keyboard
+activation (Enter/Space) and focus work for free, no custom key handling needed, unlike
+`DropdownMenu`'s arrow-key navigation. `aria-expanded`/`aria-controls`/`role="region"` wire the
+trigger to its panel per the standard disclosure pattern. New `accordion.test.tsx` covers
+collapsed-by-default, expand/collapse on click, keyboard toggling, and independent (not
+mutually-exclusive) open state, matching this codebase's bar for interactive-component tests.
+
+**Homepage FAQ**: a new section in `app/[locale]/page.tsx`, placed as the last section of the page
+body (`AppShell` renders `<Footer />` immediately after `{children}`, so "last section of the
+page" is exactly "directly before the footer"). Twelve platform-specific Q&A pairs — not generic
+SaaS boilerplate — covering: what's orderable (food/groceries/pharmacy), how delivery fees are
+actually calculated (per-zone/distance, not flat), which payment providers are used and how
+they're selected, live order tracking, the real refund policy, the real weekly payout cadence,
+becoming a vendor or rider, payment-data safety, getting support, and multi-language support.
+Rendered via the new `Accordion`, sourced from `HomePage.faq{1-12}Question`/`Answer` translation
+keys (a numbered-key pattern chosen so each Q&A pair translates as two short strings, not one
+large block).
+
+**Terms & Conditions** (`app/[locale]/terms/page.tsx`) and **Privacy Policy**
+(`app/[locale]/privacy/page.tsx`): same static-page shape as `careers/page.tsx` — server
+component, `getTranslations()` for all copy including `generateMetadata`, content rendered from a
+numbered `section{n}Title`/`section{n}Body` translation-key pattern (15 sections for Terms, 12 for
+Privacy) so each is its own short pair of translatable strings rather than one giant block. An
+`Alert variant="info"` at the top of each page carries the honest template/counsel-review notice
+described above, translated in every language rather than only shown in English.
+- **Terms** covers: acceptance and who it applies to; what the platform is (a three-party
+  marketplace — technology intermediary, not the seller of vendor goods nor employer of vendors/
+  riders); accounts and eligibility; how ordering/pricing/delivery fees actually work; how payments
+  are processed (Stripe/Paystack/Flutterwave, server-side-verified status only, matching this
+  repo's non-negotiable payment rule); the real 15% platform commission and weekly payout batch,
+  disclosed as a vendor-facing term; the real refund policy (delivered/cancelled + successful
+  payment, admin-reviewed); delivery estimates and scheduled-ordering behavior; vendor obligations
+  (accurate listings, KYC before going live, fulfillment, food-safety/licensing compliance); rider
+  obligations (KYC, safe/lawful delivery conduct, accurate availability); prohibited conduct;
+  reviews/content moderation; liability limitations (marketplace-operator framing, each vendor/
+  rider independently responsible for their own goods/services); suspension/termination; and
+  changes to the terms.
+- **Privacy** covers: what's actually collected (account info, addresses, payment *metadata* —
+  never raw card numbers, which the payment providers alone handle; KYC documents; location data;
+  chat messages/session id); how it's used; location-data use (delivery-fee calculation, live
+  tracking, "Near me" — always browser-permission-gated, never sold); cookies/local storage (the
+  existing theme preference plus this app's only other `localStorage` use, the FDP-106 guest chat
+  session id — both named explicitly, since this section audits every real use in the app rather
+  than a generic disclaimer); how data is shared (vendors/riders for fulfillment, payment/
+  communication providers, never sold); retention; user rights (access/update/delete via
+  `/account`, already-existing); children's privacy (not directed at under-16s); international
+  transfer; security (never storing raw card data, server-side-verified payment status — the same
+  real behavior cited in Terms, not a generic "we take security seriously" line); and changes to
+  the policy.
+
+**Footer links**: `components/footer.tsx` gained a small-print row next to the copyright line
+linking `Terms` (`/terms`) and `Privacy` (`/privacy`), visible regardless of auth state.
+
+All new copy (FAQ, both legal pages, footer labels) shipped in all 6 languages in the same change,
+per the standing translation rule — 92 new keys, key-parity verified (1474 keys total).

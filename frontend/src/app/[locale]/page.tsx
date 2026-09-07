@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Carousel } from "@/components/ui/carousel";
+import { Accordion } from "@/components/ui/accordion";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { StoreCard } from "@/components/store-card";
 import { HeaderSearch } from "@/components/header-search";
@@ -52,6 +53,11 @@ const PROGRESS_STEP_COLLAPSE: Partial<Record<OrderStatus, OrderStatus>> = {
   PICKED_UP: "OUT_FOR_DELIVERY",
 };
 const PROGRESS_STEPS: OrderStatus[] = ["PLACED", "ACCEPTED_BY_RESTAURANT", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"];
+
+// Homepage FAQ (docs/ROADMAP.md FDP-107) — indices into HomePage.faq{n}Question/Answer, kept as
+// a plain numbered list (rather than one combined key per entry) so each question/answer pair
+// translates as its own two short strings instead of one large block.
+const FAQ_ENTRY_COUNT = 12;
 
 function orderProgressFraction(status: OrderStatus): number {
   const key = PROGRESS_STEP_COLLAPSE[status] ?? status;
@@ -224,6 +230,10 @@ function TogetherItem({
 export default function Home() {
   const t = useTranslations("HomePage");
   const tStatus = useTranslations("OrderStatus");
+  const faqItems = Array.from({ length: FAQ_ENTRY_COUNT }, (_, i) => ({
+    question: t(`faq${i + 1}Question`),
+    answer: t(`faq${i + 1}Answer`),
+  }));
   const { user, status } = useAppSelector((state) => state.auth);
   const authenticated = status === "authenticated" && !!user;
 
@@ -649,6 +659,19 @@ export default function Home() {
               label={t("viewCareers")}
             />
           </div>
+        </Container>
+      </section>
+
+      {/* FAQ — last section of the page body, directly before AppShell renders <Footer /> (see
+          docs/ROADMAP.md FDP-107). Independent-toggle accordion, not single-open-at-a-time —
+          matches common FAQ-page behavior. */}
+      <section className="border-t border-border bg-surface">
+        <Container className="flex flex-col gap-6 py-16 lg:py-20">
+          <div className="mx-auto flex max-w-2xl flex-col gap-2 text-center">
+            <h2 className="text-2xl font-bold text-text">{t("faqTitle")}</h2>
+            <p className="text-text-muted">{t("faqDescription")}</p>
+          </div>
+          <Accordion items={faqItems} className="mx-auto w-full max-w-2xl" />
         </Container>
       </section>
     </div>
