@@ -1400,7 +1400,8 @@
     "noOrdersWaiting": "Keine wartenden Bestellungen",
     "newOrdersWillAppearHere": "Neue abholbereite Bestellungen erscheinen hier.",
     "riderDashboard": "Fahrer-Dashboard",
-    "deliveryHistory": "Lieferverlauf"
+    "deliveryHistory": "Lieferverlauf",
+    "deliverToAreaOnly": "Lieferung in die Gegend {city} (genaue Adresse nach Verifizierung sichtbar)"
   },
   "RiderDeliveriesPage": {
     "noDeliveriesYet": "Noch keine Lieferungen",

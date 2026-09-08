@@ -85,6 +85,11 @@ describe('PayoutsService', () => {
       platformFeeAmount: 15,
       restaurantPayoutAmount: 85,
       status: 'DELIVERED',
+      // Real `DELIVERED` orders always have this set — `getUnpaidRiderEarnings` filters on it
+      // rather than `status` (docs/ROADMAP.md FDP-109). The one test in this file that overrides
+      // `status` away from `DELIVERED` (`excludes orders that are not DELIVERED yet`) exercises
+      // `getUnpaidVendorEarnings`, not the rider path, so it's unaffected either way.
+      deliveredAt: new Date(),
       statusHistory: [
         { status: 'DELIVERED', at: new Date(), by: 'customer-id' },
       ],

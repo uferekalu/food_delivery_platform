@@ -62,6 +62,21 @@ export class Payout {
   @Prop({ type: Number, default: 0, min: 0 })
   clawbackDeducted: number;
 
+  /** Exactly which `PayoutClawback` documents (and how much of each) `clawbackDeducted` above
+   * is made up of — snapshotted at creation time so `PayoutExecutionService.resolveReconciliation`
+   * can still apply the real consumption later if an admin confirms an *ambiguous* transfer
+   * actually succeeded (the normal success path applies it immediately instead, via the same
+   * `applyClawbackConsumption`). Without this snapshot, a confirmed-successful reconciliation had
+   * no way to decrement the clawback at all — the vendor was later charged for the same refund a
+   * second time out of a future week's earnings. Left empty (not applied) for a payout that never
+   * needed clawback, or one whose ambiguous outcome was resolved as "did not actually happen".*/
+  @Prop({
+    type: [{ clawbackId: String, amountConsumed: Number }],
+    default: [],
+    _id: false,
+  })
+  clawbackConsumption: { clawbackId: string; amountConsumed: number }[];
+
   @Prop({ type: String, required: true, uppercase: true })
   currency: string;
 

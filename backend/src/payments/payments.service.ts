@@ -318,6 +318,7 @@ export class PaymentsService {
     let result: {
       reference: string;
       kind: 'refunded' | 'dispute_created';
+      amountRefunded?: number;
     } | null;
     try {
       if (providerName === 'stripe') {
@@ -327,7 +328,11 @@ export class PaymentsService {
             signature,
           );
         result = parsed
-          ? { reference: parsed.sessionReference, kind: parsed.kind }
+          ? {
+              reference: parsed.sessionReference,
+              kind: parsed.kind,
+              amountRefunded: parsed.amountRefunded,
+            }
           : null;
       } else if (providerName === 'paystack') {
         result = await this.paystackAdapter.parseRefundOrDisputeWebhookEvent(
@@ -340,7 +345,11 @@ export class PaymentsService {
           signature,
         );
         result = parsed
-          ? { reference: parsed.sessionReference, kind: 'refunded' }
+          ? {
+              reference: parsed.sessionReference,
+              kind: 'refunded',
+              amountRefunded: parsed.amountRefunded,
+            }
           : null;
       }
     } catch (error) {
@@ -368,6 +377,28 @@ export class PaymentsService {
     // delivery) — reuses the exact atomic claim/finalize pair the manual admin flow already uses,
     // so idempotency and concurrency safety come for free.
     if (order.status === 'REFUNDED') return;
+
+    // A PARTIAL refund (docs/ROADMAP.md FDP-109) — `charge.refunded`/`refund.processed`/
+    // `refund.completed` all fire for ANY refund amount, not just a full one, but this app's
+    // refund model is all-or-nothing (see OrdersService.notifyAdminsOfPartialRefund's doc
+    // comment). Only branches when the parsed amount is both present AND meaningfully less than
+    // the order's total (a small tolerance absorbs float/rounding noise) — if a provider's
+    // amount field is ever missing or mis-parsed, this falls through to the existing full-refund
+    // handling below exactly as it did before this check existed, never a regression.
+    if (
+      result.amountRefunded !== undefined &&
+      result.amountRefunded < order.total - 0.01
+    ) {
+      await this.ordersService.notifyAdminsOfPartialRefund(
+        order,
+        result.amountRefunded,
+      );
+      this.logger.warn(
+        `Order ${order._id.toString()} received a PARTIAL refund (${order.currency} ${result.amountRefunded.toFixed(2)} of ${order.total.toFixed(2)}) outside the app via ${providerName} — flagged for admins, no automatic status change.`,
+      );
+      return;
+    }
+
     const claimed = await this.ordersService.claimForRefund(
       order._id.toString(),
     );

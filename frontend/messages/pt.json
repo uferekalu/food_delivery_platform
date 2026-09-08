@@ -1400,7 +1400,8 @@
     "noOrdersWaiting": "Nenhum pedido em espera",
     "newOrdersWillAppearHere": "Novos pedidos prontos para retirada aparecerão aqui.",
     "riderDashboard": "Painel do entregador",
-    "deliveryHistory": "Histórico de entregas"
+    "deliveryHistory": "Histórico de entregas",
+    "deliverToAreaOnly": "Entrega na área de {city} (endereço exato exibido após a verificação)"
   },
   "RiderDeliveriesPage": {
     "noDeliveriesYet": "Ainda não há entregas",

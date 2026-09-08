@@ -174,6 +174,11 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       platformFeeAmount: 15,
       restaurantPayoutAmount: 85,
       status: 'DELIVERED',
+      // Real `DELIVERED` orders always have this set (`OrdersService` sets it exactly once, at
+      // the DELIVERED transition) — `getUnpaidRiderEarnings` filters on it rather than `status`
+      // (docs/ROADMAP.md FDP-109), so a fixture missing it doesn't match what production data
+      // actually looks like.
+      deliveredAt: new Date(),
       statusHistory: [
         { status: 'DELIVERED', at: new Date(), by: 'customer-id' },
       ],
@@ -613,6 +618,107 @@ describe('PayoutExecutionService (docs/ROADMAP.md FDP-92)', () => {
       expect(resolved.reconciledBy).toBe('admin-1');
       const reloadedOrder = await orderModel.findById(order._id).exec();
       expect(reloadedOrder?.vendorPayoutId).toBe(payout._id.toString());
+    });
+
+    it('resolveReconciliation(true) applies the payout’s snapshotted clawback consumption (docs/ROADMAP.md FDP-109)', async () => {
+      const order = await createDeliveredOrder({
+        restaurantId: 'restaurant-1',
+        vendorPayoutId: 'placeholder',
+      });
+      const clawback = await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order-id',
+        originalPayoutId: 'previous-payout-id',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 30,
+        remainingAmount: 30,
+        status: 'pending',
+      });
+      const payout = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [order._id],
+        grossAmount: 55,
+        clawbackDeducted: 30,
+        clawbackConsumption: [
+          { clawbackId: clawback._id.toString(), amountConsumed: 30 },
+        ],
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await orderModel
+        .updateOne(
+          { _id: order._id },
+          { vendorPayoutId: payout._id.toString() },
+        )
+        .exec();
+
+      await executionService.resolveReconciliation(
+        payout._id.toString(),
+        'admin-1',
+        true,
+      );
+
+      const reloadedClawback = await payoutClawbackModel
+        .findById(clawback._id)
+        .exec();
+      expect(reloadedClawback?.remainingAmount).toBe(0);
+      expect(reloadedClawback?.status).toBe('fully_applied');
+    });
+
+    it('resolveReconciliation(false) does not touch the clawback — nothing was actually recovered', async () => {
+      const order = await createDeliveredOrder({
+        restaurantId: 'restaurant-1',
+      });
+      const clawback = await payoutClawbackModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderId: 'refunded-order-id',
+        originalPayoutId: 'previous-payout-id',
+        provider: 'stripe',
+        currency: 'NGN',
+        amount: 30,
+        remainingAmount: 30,
+        status: 'pending',
+      });
+      const payout = await payoutModel.create({
+        vendorType: 'restaurant',
+        vendorId: 'restaurant-1',
+        orderIds: [order._id],
+        grossAmount: 55,
+        clawbackDeducted: 30,
+        clawbackConsumption: [
+          { clawbackId: clawback._id.toString(), amountConsumed: 30 },
+        ],
+        currency: 'NGN',
+        provider: 'stripe',
+        payoutAccountReference: 'acct_1',
+        status: 'failed',
+        reconciliationRequired: true,
+      });
+      await orderModel
+        .updateOne(
+          { _id: order._id },
+          { vendorPayoutId: payout._id.toString() },
+        )
+        .exec();
+
+      await executionService.resolveReconciliation(
+        payout._id.toString(),
+        'admin-1',
+        false,
+      );
+
+      const reloadedClawback = await payoutClawbackModel
+        .findById(clawback._id)
+        .exec();
+      expect(reloadedClawback?.remainingAmount).toBe(30);
+      expect(reloadedClawback?.status).toBe('pending');
     });
 
     it('resolveReconciliation(false) marks the payout failed and releases its claimed orders back to the unpaid pool', async () => {

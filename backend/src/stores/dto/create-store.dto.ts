@@ -35,6 +35,7 @@ export class CreateStoreDto {
   @IsArray()
   @ArrayMaxSize(10)
   @IsString({ each: true })
+  @MaxLength(50, { each: true })
   tags?: string[];
 
   @ApiPropertyOptional()

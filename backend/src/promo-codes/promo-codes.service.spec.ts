@@ -321,6 +321,70 @@ describe('PromoCodesService', () => {
     });
   });
 
+  it('redeem() is atomic under a concurrent race — usedCount can never exceed usageLimit (docs/ROADMAP.md FDP-109)', async () => {
+    const promo = await service.create({
+      code: 'RACE',
+      discountType: 'fixed',
+      discountValue: 5,
+      usageLimit: 1,
+    });
+
+    // Both requests already passed validate() while the code had exactly one redemption left
+    // (the actual race this codebase hit — validate() and redeem() aren't atomic with each
+    // other) — this asserts the increment itself, not the earlier read, is what's race-safe.
+    const [first, second] = await Promise.all([
+      service.redeem(promo._id.toString()),
+      service.redeem(promo._id.toString()),
+    ]);
+
+    expect([first, second].filter(Boolean)).toHaveLength(1);
+    const reloaded = await promoCodeModel.findById(promo._id).exec();
+    expect(reloaded?.usedCount).toBe(1);
+  });
+
+  it('redeem() returns true and increments when under the limit', async () => {
+    const promo = await service.create({
+      code: 'ROOM',
+      discountType: 'fixed',
+      discountValue: 5,
+      usageLimit: 2,
+    });
+
+    const redeemed = await service.redeem(promo._id.toString());
+
+    expect(redeemed).toBe(true);
+    const reloaded = await promoCodeModel.findById(promo._id).exec();
+    expect(reloaded?.usedCount).toBe(1);
+  });
+
+  it('redeem() returns false and does not increment once the limit is already reached', async () => {
+    const promo = await service.create({
+      code: 'FULL',
+      discountType: 'fixed',
+      discountValue: 5,
+      usageLimit: 1,
+    });
+    await service.redeem(promo._id.toString());
+
+    const redeemed = await service.redeem(promo._id.toString());
+
+    expect(redeemed).toBe(false);
+    const reloaded = await promoCodeModel.findById(promo._id).exec();
+    expect(reloaded?.usedCount).toBe(1);
+  });
+
+  it('redeem() has no limit (always returns true) for a promo code with usageLimit null', async () => {
+    const promo = await service.create({
+      code: 'UNLIMITED',
+      discountType: 'fixed',
+      discountValue: 5,
+    });
+
+    const redeemed = await service.redeem(promo._id.toString());
+
+    expect(redeemed).toBe(true);
+  });
+
   it('validate() alone does not increment usedCount', async () => {
     const promo = await service.create({
       code: 'READONLY',

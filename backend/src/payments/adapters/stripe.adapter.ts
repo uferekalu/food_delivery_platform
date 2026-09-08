@@ -150,6 +150,12 @@ export class StripeAdapter implements PaymentAdapter {
   ): Promise<{
     sessionReference: string;
     kind: 'refunded' | 'dispute_created';
+    /** Cumulative amount actually refunded on the Charge so far, in standard currency units
+     * (Stripe's own `amount_refunded` is in cents) — present only for `kind: 'refunded'`, so
+     * the caller can tell a PARTIAL refund (an admin refunding e.g. $3 of a $50 order directly
+     * in the Stripe dashboard) apart from a full one, rather than treating every `charge.refunded`
+     * event as "the whole order was refunded" regardless of the actual amount. */
+    amountRefunded?: number;
   } | null> {
     if (!signature) return null;
 
@@ -166,9 +172,14 @@ export class StripeAdapter implements PaymentAdapter {
 
     let kind: 'refunded' | 'dispute_created';
     let paymentIntent: string | Stripe.PaymentIntent | null;
+    let amountRefunded: number | undefined;
     if (event.type === 'charge.refunded') {
       kind = 'refunded';
       paymentIntent = event.data.object.payment_intent;
+      amountRefunded =
+        typeof event.data.object.amount_refunded === 'number'
+          ? event.data.object.amount_refunded / 100
+          : undefined;
     } else if (event.type === 'charge.dispute.created') {
       kind = 'dispute_created';
       paymentIntent = event.data.object.payment_intent;
@@ -186,7 +197,7 @@ export class StripeAdapter implements PaymentAdapter {
     const session = sessions.data[0];
     if (!session) return null;
 
-    return { sessionReference: session.id, kind };
+    return { sessionReference: session.id, kind, amountRefunded };
   }
 
   // --- Vendor payouts epic, part 4 of 4 (docs/ROADMAP.md FDP-54) ---

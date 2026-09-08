@@ -4,6 +4,15 @@ import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+// `JSON.stringify` never escapes `<`, so a restaurant `name`/`description` containing
+// `</script>` (self-registered vendors set both, with no content restrictions beyond a length
+// cap — see `create-restaurant.dto.ts`) would close this script tag early and let the rest of
+// its value execute as live HTML on every visitor's page. `<` is valid inside a JSON string
+// and identical once parsed, so this is a pure serialization-safety escape, not a data change.
+function safeJsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 // A plain server-side fetch (not RTK Query, which only runs client-side) — the page itself
 // (`page.tsx`) stays a client component for its interactive cart/review/favorite state, but
 // per-restaurant SEO metadata needs to exist before any client JS runs. Splitting it into this
@@ -67,7 +76,7 @@ export default async function RestaurantLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLd({
               "@context": "https://schema.org",
               "@type": "Restaurant",
               name: restaurant.name,

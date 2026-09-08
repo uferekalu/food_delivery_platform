@@ -43,6 +43,12 @@ interface PaystackRefundWebhookPayload {
   data?: {
     transaction_reference?: string;
     transaction?: { reference?: string };
+    // In kobo, like every other Paystack amount — same "confirmed only via third-party
+    // documentation" caveat as the reference fields above. Used only to tell a partial refund
+    // apart from a full one (see parseRefundOrDisputeWebhookEvent's amountRefunded doc comment);
+    // if this field turns out to be misnamed/absent in a real delivery, the caller's fallback is
+    // to treat the refund as full, same as before this existed — never worse than the status quo.
+    amount?: number;
   };
 }
 
@@ -221,6 +227,7 @@ export class PaystackAdapter implements PaymentAdapter {
   ): Promise<{
     reference: string;
     kind: 'refunded' | 'dispute_created';
+    amountRefunded?: number;
   } | null> {
     if (!signature) return Promise.resolve(null);
 
@@ -261,7 +268,11 @@ export class PaystackAdapter implements PaymentAdapter {
       payload.data?.transaction_reference ??
       payload.data?.transaction?.reference;
     if (!reference) return Promise.resolve(null);
-    return Promise.resolve({ reference, kind });
+    const amountRefunded =
+      kind === 'refunded' && typeof payload.data?.amount === 'number'
+        ? payload.data.amount / 100
+        : undefined;
+    return Promise.resolve({ reference, kind, amountRefunded });
   }
 
   // --- Vendor payouts epic, part 2 of 4 (docs/ROADMAP.md FDP-52) ---

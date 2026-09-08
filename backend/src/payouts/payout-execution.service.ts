@@ -263,6 +263,7 @@ export class PayoutExecutionService {
       orderIds: orderObjectIds,
       grossAmount: group.grossAmount,
       clawbackDeducted: group.clawbackDeducted ?? 0,
+      clawbackConsumption: group.clawbackConsumption ?? [],
       currency: group.currency,
       provider: group.provider,
       payoutAccountReference: account.reference ?? '',
@@ -709,6 +710,11 @@ export class PayoutExecutionService {
     payout.reconciledBy = adminUserId;
     if (transferActuallySucceeded) {
       payout.status = 'succeeded';
+      // The normal success path in `executePayout` applies this immediately — an ambiguous
+      // attempt skipped it (nothing was confirmed recovered yet), so it has to happen here once
+      // an admin confirms the transfer genuinely went through, or the underlying `PayoutClawback`
+      // never gets decremented and the vendor is charged for the same refund again next week.
+      await this.applyClawbackConsumption(payout.clawbackConsumption);
     } else {
       payout.status = 'failed';
       const claimField: ClaimField =

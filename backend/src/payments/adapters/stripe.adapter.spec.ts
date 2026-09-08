@@ -530,6 +530,37 @@ describe('StripeAdapter', () => {
       });
     });
 
+    it('converts amount_refunded from cents to standard units (docs/ROADMAP.md FDP-109)', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_test',
+        object: 'event',
+        type: 'charge.refunded',
+        data: {
+          object: {
+            id: 'ch_test',
+            payment_intent: 'pi_test_123',
+            amount_refunded: 300,
+          },
+        },
+      });
+      const header = Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: TEST_WEBHOOK_SECRET,
+      });
+      withSessionsList([{ id: 'cs_test_abc' }]);
+
+      const result = await adapter.parseRefundOrDisputeWebhookEvent(
+        Buffer.from(payload),
+        header,
+      );
+
+      expect(result).toEqual({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+        amountRefunded: 3,
+      });
+    });
+
     it('ignores an event type it does not act on', async () => {
       const payload = JSON.stringify({
         id: 'evt_test',

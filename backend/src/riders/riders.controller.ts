@@ -41,10 +41,27 @@ export class RidersController {
     return this.ordersService.findForRider(user.sub);
   }
 
+  // The queue is deliberately visible before verification (frontend/rider/page.tsx shows it
+  // with an "accept" button disabled — a rookie can see the opportunity exists before an admin
+  // signs off), but that doesn't mean an unverified account should be able to read every
+  // customer's exact street address and lat/lng just by applying — `apply()` grants the `rider`
+  // role immediately, verification is a separate admin step, and `assign` requires it precisely
+  // because acting on an order needs a real, checked identity. Redacting to city/state-only for
+  // an unverified caller keeps the "preview the opportunity" intent while closing the PII leak.
   @Roles('rider')
   @Get('queue')
-  queue() {
-    return this.ordersService.findUnassignedForRiders();
+  async queue(@CurrentUser() user: AccessTokenPayload) {
+    const rider = await this.ridersService.findMine(user.sub);
+    const orders = await this.ordersService.findUnassignedForRiders();
+    if (rider.isVerified) return orders;
+    return orders.map((order) => ({
+      ...order.toObject(),
+      customerId: undefined,
+      deliveryAddress: {
+        city: order.deliveryAddress.city,
+        state: order.deliveryAddress.state,
+      },
+    }));
   }
 
   @Roles('rider')

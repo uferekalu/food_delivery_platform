@@ -36,6 +36,7 @@ export class CreateRestaurantDto {
   @ArrayNotEmpty()
   @ArrayMaxSize(10)
   @IsString({ each: true })
+  @MaxLength(50, { each: true })
   cuisineTypes: string[];
 
   @ApiPropertyOptional({
