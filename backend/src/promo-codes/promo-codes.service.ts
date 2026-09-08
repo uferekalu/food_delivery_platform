@@ -137,9 +137,33 @@ export class PromoCodesService {
     return { valid: true, promoCodeId: promo._id.toString(), discountAmount };
   }
 
-  async redeem(promoCodeId: string): Promise<void> {
-    await this.promoCodeModel
-      .updateOne({ _id: promoCodeId }, { $inc: { usedCount: 1 } })
+  /**
+   * Atomic check-and-increment (docs/ROADMAP.md FDP-109) — `validate()` reading `usedCount <
+   * usageLimit` and this method's `$inc` happening later, non-atomically, meant two concurrent
+   * orders could both pass validation while the code had exactly one redemption left and both
+   * redeem it, pushing `usedCount` past `usageLimit`. The `$expr` condition folds the same check
+   * into the update itself, so only a request that's still genuinely under the limit at the
+   * moment it actually writes can increment it — `usedCount` can never exceed `usageLimit` in the
+   * database regardless of how many requests race here. Returns whether this specific call
+   * actually redeemed it (false = the limit was already reached by a concurrent request) — not
+   * currently acted on by the caller (the order this redemption belongs to is already created by
+   * the time this runs), logged so a real occurrence is at least visible.
+   */
+  async redeem(promoCodeId: string): Promise<boolean> {
+    const result = await this.promoCodeModel
+      .updateOne(
+        {
+          _id: promoCodeId,
+          $expr: {
+            $or: [
+              { $eq: ['$usageLimit', null] },
+              { $lt: ['$usedCount', '$usageLimit'] },
+            ],
+          },
+        },
+        { $inc: { usedCount: 1 } },
+      )
       .exec();
+    return result.modifiedCount > 0;
   }
 }

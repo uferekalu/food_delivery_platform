@@ -61,7 +61,11 @@ interface FlutterwaveRefundResponse {
 
 interface FlutterwaveRefundWebhookPayload {
   event: string;
-  data?: { charge_id: number | string };
+  // `amount_refunded` per Flutterwave's own published refund-webhook schema — already in
+  // standard currency units (not kobo/cents), unlike Stripe/Paystack. Used only to tell a
+  // partial refund apart from a full one; if this turns out to be misnamed/absent in a real
+  // delivery, the caller's fallback is to treat the refund as full, same as before this existed.
+  data?: { charge_id: number | string; amount_refunded?: number };
 }
 
 interface FlutterwaveVerifyByIdResponse {
@@ -244,7 +248,7 @@ export class FlutterwaveAdapter implements PaymentAdapter {
   async parseRefundWebhookEvent(
     rawBody: Buffer,
     signature: string | undefined,
-  ): Promise<{ sessionReference: string } | null> {
+  ): Promise<{ sessionReference: string; amountRefunded?: number } | null> {
     if (!signature) return null;
 
     const expectedBuf = Buffer.from(this.webhookHash, 'utf8');
@@ -274,7 +278,10 @@ export class FlutterwaveAdapter implements PaymentAdapter {
     if (verification.status !== 'success' || !verification.data?.tx_ref) {
       return null;
     }
-    return { sessionReference: verification.data.tx_ref };
+    return {
+      sessionReference: verification.data.tx_ref,
+      amountRefunded: payload.data.amount_refunded,
+    };
   }
 
   // --- Vendor payouts epic, part 3 of 4 (docs/ROADMAP.md FDP-53) ---

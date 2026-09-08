@@ -1400,7 +1400,8 @@
     "noOrdersWaiting": "暂无待接订单",
     "newOrdersWillAppearHere": "新的待取货订单将显示在这里。",
     "riderDashboard": "骑手仪表盘",
-    "deliveryHistory": "配送历史"
+    "deliveryHistory": "配送历史",
+    "deliverToAreaOnly": "配送至 {city} 附近（验证通过后显示确切地址）"
   },
   "RiderDeliveriesPage": {
     "noDeliveriesYet": "暂无配送记录",

@@ -57,8 +57,13 @@ function QueueCard({ order, verified }: { order: Order; verified: boolean }) {
           <Badge variant={STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
         </div>
         <p className="text-sm text-text">{itemsSummary}</p>
+        {/* Backend redacts to city/state-only for an unverified rider (riders.controller.ts's
+            `queue()`) — `line1` is only ever present once verified, so this branches on the
+            same `verified` prop rather than just checking for the field's presence. */}
         <p className="text-sm text-text-muted">
-          {t("deliverTo", { line1: order.deliveryAddress.line1, city: order.deliveryAddress.city })}
+          {verified
+            ? t("deliverTo", { line1: order.deliveryAddress.line1, city: order.deliveryAddress.city })
+            : t("deliverToAreaOnly", { city: order.deliveryAddress.city })}
         </p>
         <p className="text-sm font-medium text-text">
           {t("deliveryFeeAmount", { amount: formatMoney(order.deliveryFee, order.currency, locale) })}

@@ -30,6 +30,7 @@ describe('PaymentsService', () => {
       | 'flagAmbiguousRefund'
       | 'resolveRefundReconciliation'
       | 'flagDispute'
+      | 'notifyAdminsOfPartialRefund'
     >
   >;
   let restaurantsService: jest.Mocked<
@@ -95,6 +96,7 @@ describe('PaymentsService', () => {
       flagAmbiguousRefund: jest.fn(),
       resolveRefundReconciliation: jest.fn(),
       flagDispute: jest.fn(),
+      notifyAdminsOfPartialRefund: jest.fn(),
     };
     restaurantsService = {
       findByPayoutAccountReference: jest.fn(),
@@ -682,6 +684,85 @@ describe('PaymentsService', () => {
 
       expect(ordersService.claimForRefund).toHaveBeenCalledWith('order-1');
       expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+    });
+
+    it('flags a PARTIAL refund for manual review instead of treating it as a full refund (docs/ROADMAP.md FDP-109)', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+        amountRefunded: 3,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'stripe',
+        total: 50,
+        currency: 'USD',
+        orderNumber: 'ORD-1',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.claimForRefund).not.toHaveBeenCalled();
+      expect(ordersService.finalizeRefund).not.toHaveBeenCalled();
+      expect(ordersService.notifyAdminsOfPartialRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ orderNumber: 'ORD-1' }),
+        3,
+      );
+    });
+
+    it('still treats an amountRefunded within rounding tolerance of the total as a full refund', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+        amountRefunded: 49.999,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'stripe',
+        total: 50,
+        currency: 'USD',
+        orderNumber: 'ORD-1',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
+      ordersService.finalizeRefund.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+      expect(ordersService.notifyAdminsOfPartialRefund).not.toHaveBeenCalled();
+    });
+
+    it('falls back to full-refund handling when the adapter could not determine the refunded amount', async () => {
+      stripeAdapter.parseRefundOrDisputeWebhookEvent.mockResolvedValue({
+        sessionReference: 'cs_test_abc',
+        kind: 'refunded',
+        amountRefunded: undefined,
+      });
+      ordersService.findByPaymentRef.mockResolvedValue({
+        _id: { toString: () => 'order-1' },
+        status: 'DELIVERED',
+        paymentProvider: 'stripe',
+        total: 50,
+        currency: 'USD',
+        orderNumber: 'ORD-1',
+      } as never);
+      ordersService.claimForRefund.mockResolvedValue({
+        status: 'DELIVERED',
+      } as never);
+      ordersService.finalizeRefund.mockResolvedValue({
+        status: 'REFUNDED',
+      } as never);
+
+      await service.handleRefundWebhook('stripe', Buffer.from('{}'), 'sig');
+
+      expect(ordersService.finalizeRefund).toHaveBeenCalledWith('order-1');
+      expect(ordersService.notifyAdminsOfPartialRefund).not.toHaveBeenCalled();
     });
 
     it('is a safe no-op when the order is already REFUNDED (duplicate webhook delivery, or our own admin refund already ran)', async () => {

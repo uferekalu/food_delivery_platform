@@ -245,6 +245,61 @@ describe('RestaurantsService', () => {
     });
   });
 
+  describe('content edits re-require approval (docs/ROADMAP.md FDP-109)', () => {
+    it('resets isApproved to false when an already-approved restaurant edits its name', async () => {
+      const created = await service.create('owner-id', baseDto);
+      await restaurantModel
+        .updateOne({ _id: created._id }, { isApproved: true })
+        .exec();
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const updated = await service.update(created._id.toString(), requester, {
+        name: 'Different Name',
+      });
+
+      expect(updated.isApproved).toBe(false);
+    });
+
+    it('resets isApproved to false on a description/cuisineTypes/logoUrl/coverUrl edit too', async () => {
+      const created = await service.create('owner-id', baseDto);
+      await restaurantModel
+        .updateOne({ _id: created._id }, { isApproved: true })
+        .exec();
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const updated = await service.update(created._id.toString(), requester, {
+        description: 'A brand new description',
+      });
+
+      expect(updated.isApproved).toBe(false);
+    });
+
+    it('does NOT reset isApproved for an operational-only edit (opening hours, price level, address)', async () => {
+      const created = await service.create('owner-id', baseDto);
+      await restaurantModel
+        .updateOne({ _id: created._id }, { isApproved: true })
+        .exec();
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const updated = await service.update(created._id.toString(), requester, {
+        priceLevel: 3,
+      });
+
+      expect(updated.isApproved).toBe(true);
+    });
+
+    it('leaves isApproved false (not previously true) alone when editing content pre-approval', async () => {
+      const created = await service.create('owner-id', baseDto);
+      const requester = { ...owner, sub: 'owner-id' };
+
+      const updated = await service.update(created._id.toString(), requester, {
+        name: 'Still Pending',
+      });
+
+      expect(updated.isApproved).toBe(false);
+    });
+  });
+
   describe('toggleOpen', () => {
     it('flips isOpen each call', async () => {
       const created = await service.create('owner-id', baseDto);
@@ -603,11 +658,7 @@ describe('RestaurantsService', () => {
     // Roughly downtown Lagos — arbitrary, only the relative offsets below matter.
     const origin = { lat: 6.5, lng: 3.35 };
 
-    async function createApprovedAt(
-      name: string,
-      lat?: number,
-      lng?: number,
-    ) {
+    async function createApprovedAt(name: string, lat?: number, lng?: number) {
       const created = await service.create('507f1f77bcf86cd799439011', {
         ...baseDto,
         name,
@@ -633,7 +684,9 @@ describe('RestaurantsService', () => {
         'Just around the corner',
         'A short ride away',
       ]);
-      expect(result.items[0].distanceKm).toBeLessThan(result.items[1].distanceKm);
+      expect(result.items[0].distanceKm).toBeLessThan(
+        result.items[1].distanceKm,
+      );
       expect(result.items[0].distanceKm).toBeCloseTo(0.1, 1);
       expect(result.total).toBe(2);
     });

@@ -182,13 +182,21 @@ export class UsersService {
     user.suspendedReason = reason;
     await user.save();
 
-    // RefreshToken.userId stores as a plain string, not a real ObjectId instance, in this
-    // project's Mongoose 9 setup — querying with a raw ObjectId here silently matches nothing
-    // and modifies zero documents with no error (see backend/CLAUDE.md's Mongoose 9 ObjectId
-    // note). Caught here only because a live test asserted the actual revocation took effect.
+    // `RefreshToken.userId` is declared `type: Types.ObjectId`, which Mongoose 9 actually
+    // resolves to Mixed (no cast either direction — see backend/CLAUDE.md's Mongoose 9 ObjectId
+    // note) — so "the stored type" is just whatever the write site put there. `AuthService`'s
+    // `issueTokens` writes a real `ObjectId` (`userId: user._id`, never `.toString()`'d), and
+    // every other query against this field (`AuthService`'s refresh-reuse-detection and
+    // change-password revocation) matches that with a raw ObjectId too — this used to be the
+    // one call site that queried with a string instead, which silently revoked zero tokens
+    // (`updateMany` reports no error, just `modifiedCount: 0`) on every real suspension. A
+    // suspended user's still-live access token kept working normally until it naturally
+    // expired, and reactivating them left the never-revoked tokens intact — this was the only
+    // thing actually stopping a refresh in the meantime (see AuthService.refresh's
+    // `assertActive` check).
     await this.refreshTokenModel
       .updateMany(
-        { userId: user._id.toString(), revokedAt: null },
+        { userId: user._id, revokedAt: null },
         { revokedAt: new Date() },
       )
       .exec();

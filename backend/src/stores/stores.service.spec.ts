@@ -231,6 +231,40 @@ describe('StoresService', () => {
       expect(updated.name).toBe('Admin Renamed');
     });
 
+    it('resets isApproved to false when an already-approved store edits its name (docs/ROADMAP.md FDP-109)', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      const created = await service.create(owner.sub, baseDto);
+      await storeModel
+        .updateOne({ _id: created._id }, { isApproved: true })
+        .exec();
+
+      const updated = await service.update(created._id.toString(), owner, {
+        name: 'Different Name',
+      });
+
+      expect(updated.isApproved).toBe(false);
+    });
+
+    it('does NOT reset isApproved for an operational-only edit like address', async () => {
+      owner.sub = '507f1f77bcf86cd799439011';
+      const created = await service.create(owner.sub, baseDto);
+      await storeModel
+        .updateOne({ _id: created._id }, { isApproved: true })
+        .exec();
+
+      const updated = await service.update(created._id.toString(), owner, {
+        address: {
+          line1: '2 New St',
+          city: 'Lagos',
+          state: 'Lagos',
+          lat: 6.5,
+          lng: 3.4,
+        },
+      });
+
+      expect(updated.isApproved).toBe(true);
+    });
+
     it('toggles isOpen', async () => {
       owner.sub = '507f1f77bcf86cd799439011';
       const created = await service.create(owner.sub, baseDto);

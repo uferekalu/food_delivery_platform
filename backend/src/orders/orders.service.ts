@@ -466,8 +466,17 @@ export class OrdersService {
       promoCode: dto.promoCode ?? null,
     });
 
-    if (redeemedPromoCodeId)
-      await this.promoCodesService.redeem(redeemedPromoCodeId);
+    if (redeemedPromoCodeId) {
+      // `order` (with the discount already applied) is committed above regardless of this
+      // result — see `PromoCodesService.redeem`'s doc comment for why a `false` here (a
+      // concurrent order raced this one to the code's last redemption) isn't unwound.
+      const redeemed = await this.promoCodesService.redeem(redeemedPromoCodeId);
+      if (!redeemed) {
+        this.logger.warn(
+          `Promo code ${redeemedPromoCodeId} was already at its usage limit when order ${order._id.toString()} tried to redeem it (concurrent redemption race) — the order's discount was still applied.`,
+        );
+      }
+    }
     await this.cartService.clearCart(userId);
 
     return order;
@@ -616,8 +625,17 @@ export class OrdersService {
       promoCode: dto.promoCode ?? null,
     });
 
-    if (redeemedPromoCodeId)
-      await this.promoCodesService.redeem(redeemedPromoCodeId);
+    if (redeemedPromoCodeId) {
+      // `order` (with the discount already applied) is committed above regardless of this
+      // result — see `PromoCodesService.redeem`'s doc comment for why a `false` here (a
+      // concurrent order raced this one to the code's last redemption) isn't unwound.
+      const redeemed = await this.promoCodesService.redeem(redeemedPromoCodeId);
+      if (!redeemed) {
+        this.logger.warn(
+          `Promo code ${redeemedPromoCodeId} was already at its usage limit when order ${order._id.toString()} tried to redeem it (concurrent redemption race) — the order's discount was still applied.`,
+        );
+      }
+    }
     await this.cartService.clearCart(userId);
     return order;
   }
@@ -1211,6 +1229,28 @@ export class OrdersService {
   }
 
   /**
+   * A PARTIAL out-of-band refund (docs/ROADMAP.md FDP-109) — e.g. a support agent issuing a
+   * goodwill refund for less than the full order total directly in a provider's dashboard.
+   * Deliberately does NOT touch `status`/`paymentStatus`/trigger a vendor clawback: this
+   * codebase's refund model (like `handleRefundWebhook`'s full-refund path, and the documented
+   * "partial refunds are out of scope for issuing") assumes a refund is all-or-nothing, so
+   * automatically treating a partial one as a full REFUNDED order would overstate the refund and
+   * claw back the vendor's *entire* payout for an order they were only partially refunded on.
+   * Informational only, same posture as `flagDispute` — an admin decides what to actually do
+   * (adjust the vendor payout manually, etc.) outside this app.
+   */
+  async notifyAdminsOfPartialRefund(
+    order: OrderDocument,
+    amountRefunded: number,
+  ): Promise<void> {
+    await this.notifyAdminsOfRefundIssue(
+      'order_refunded_externally',
+      'Partial refund detected — needs manual review',
+      `Order ${order.orderNumber} (total ${order.currency} ${order.total.toFixed(2)}) was partially refunded outside the app via ${order.paymentProvider}: ${order.currency} ${amountRefunded.toFixed(2)} refunded so far. This platform's refund flow assumes all-or-nothing — no automatic clawback or status change was made. Review this order's vendor payout manually if one already went out.`,
+    );
+  }
+
+  /**
    * Admin visibility (docs/ROADMAP.md FDP-104) — every order that needs a human to look at its
    * refund status: a cancelled order whose payment was never reversed (nothing else in this
    * codebase prompts an admin to do this — cancellation and refunding are two independent manual
@@ -1301,7 +1341,8 @@ export class OrdersService {
     type:
       | 'refund_clawback_created'
       | 'refund_reconciliation_needed'
-      | 'order_dispute_flagged',
+      | 'order_dispute_flagged'
+      | 'order_refunded_externally',
     title: string,
     body: string,
   ): Promise<void> {

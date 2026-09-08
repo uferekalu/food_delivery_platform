@@ -1400,7 +1400,8 @@
     "noOrdersWaiting": "No orders waiting",
     "newOrdersWillAppearHere": "New ready-for-pickup orders will appear here.",
     "riderDashboard": "Rider dashboard",
-    "deliveryHistory": "Delivery history"
+    "deliveryHistory": "Delivery history",
+    "deliverToAreaOnly": "Delivery to {city} area (exact address shown once verified)"
   },
   "RiderDeliveriesPage": {
     "noDeliveriesYet": "No deliveries yet",

@@ -14,5 +14,6 @@ export class AskChatbotDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   sessionId?: string;
 }

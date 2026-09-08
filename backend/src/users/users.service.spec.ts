@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { UsersService } from './users.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import {
@@ -268,7 +268,11 @@ describe('UsersService', () => {
   });
 
   describe('suspend/reactivate', () => {
-    async function createRefreshTokenFor(userId: string) {
+    // Writes `userId` as a real `Types.ObjectId`, matching how `AuthService.issueTokens`
+    // actually writes it in production (`userId: user._id`, never `.toString()`'d) — a fixture
+    // that instead wrote a string here previously masked `suspend()` querying with the wrong
+    // type and silently revoking zero tokens (see the comment on `UsersService.suspend`).
+    async function createRefreshTokenFor(userId: Types.ObjectId) {
       return refreshTokenModel.create({
         userId,
         tokenHash: `hash-${Math.random()}`,
@@ -278,7 +282,7 @@ describe('UsersService', () => {
 
     it('suspends a user, records the reason, and revokes every outstanding refresh token', async () => {
       const user = await createUser();
-      const token = await createRefreshTokenFor(user._id.toString());
+      const token = await createRefreshTokenFor(user._id);
 
       const suspended = await usersService.suspend(
         user._id.toString(),

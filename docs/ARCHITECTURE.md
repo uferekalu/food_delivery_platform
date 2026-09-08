@@ -1527,3 +1527,129 @@ clean on both sides — the production `nest build` caught one thing plain `tsc 
 an explicit `import type`. 25 new translation keys across `AuthStatus`/`AdminPage`/
 `VendorMessagesPage`/`AdminMessagesTab`, shipped in all 6 languages, key-parity verified (1499
 keys).
+
+## 33. Security/correctness audit (docs/ROADMAP.md FDP-109)
+
+Requested directly by the user alongside FDP-108 ("audit the system thoroughly to fix any
+issues"). Run as 4 parallel focused agent passes — auth/authz, payments/money-safety, input
+validation/injection, and Mongoose `ObjectId` data-integrity — each independently searching and
+live-reproducing candidate bugs (via `mongodb-memory-server` repro scripts, not just static
+reading) rather than only flagging suspicious-looking code. Nine findings survived verification
+and were fixed in one branch, ordered here by severity.
+
+1. **Payout clawback consumption lost on a confirmed-ambiguous transfer.**
+   `PayoutExecutionService.executePayout()` computes `clawbackConsumption` (which
+   `PayoutClawback` rows this payout run is settling, and how much of each) only as an
+   in-memory value for that run — it was never persisted on the `Payout` document itself, only
+   the simpler `clawbackDeducted` total was. When a transfer comes back from a provider as
+   *ambiguous* (`reconciliationRequired: true` — the provider's API didn't clearly confirm
+   success or failure) and an admin later calls `resolveReconciliation(payoutId, true)` to
+   confirm it actually did succeed, the code had no record left of *which* clawbacks to apply —
+   the normal success path's `applyClawbackConsumption` call only runs during `executePayout`
+   itself, which an ambiguous outcome skips. Net effect: a vendor who was refunded once got
+   silently charged for that same refund a second time out of a later week's earnings, with no
+   error, log, or record anywhere that it happened twice. Fixed by adding a persisted
+   `clawbackConsumption: { clawbackId, amountConsumed }[]` field to the `Payout` schema (in
+   addition to `clawbackDeducted`) and replaying it via `applyClawbackConsumption` inside
+   `resolveReconciliation` when the confirmed outcome is success. 2 new tests assert the
+   snapshotted consumption is/isn't applied depending on the confirmed outcome.
+
+2. **`UsersService.suspend()` revoked zero refresh tokens.** `AuthService.issueTokens` writes
+   `RefreshToken.userId` as a real `ObjectId` (never stringified) — confirmed as the convention
+   at all 3 other query sites in `auth.service.ts`. `suspend()` was the one outlier, querying
+   `updateMany({ userId: user._id.toString(), revokedAt: null }, ...)` — per the Mongoose 9
+   `ObjectId`-cast gotcha already documented in `backend/CLAUDE.md`, a string can never match a
+   field genuinely stored as an `ObjectId`, so this silently matched and revoked **zero**
+   sessions on every real suspension (`modifiedCount: 0`, no error, no exception). A suspended
+   user's existing access tokens still expire normally, but every refresh token they held stayed
+   valid indefinitely — the suspension had no effect on session control at all. Fixed by dropping
+   the `.toString()`. The existing test's own fixture had been unknowingly written to match the
+   buggy query (storing the token with a stringified `userId` too), which is why it passed; the
+   fixture was corrected to write a real `ObjectId`, matching production behavior.
+
+3. **Stored XSS via a vendor's own restaurant name/description.** A restaurant owner's
+   self-supplied `name`/`description` (validated for length only, never content, by design —
+   arbitrary business names are legitimate input) is serialized directly into a
+   `<script type="application/ld+json">` block on `restaurants/[slug]/layout.tsx` via
+   `dangerouslySetInnerHTML={{ __html: JSON.stringify(...) }}`. `JSON.stringify` never escapes
+   `<`, so a name/description containing `</script><script>...` breaks out of the JSON-LD block
+   and executes as real script on every visitor's page — a stored, unauthenticated-reach XSS from
+   a self-registerable role. Fixed with a `safeJsonLd()` helper that replaces every `<` with its
+   `<` JSON-string escape (valid inside a JSON string, identical once parsed, but can no
+   longer prematurely close the surrounding `<script>` tag) before serializing.
+
+4. **Approved vendor content could be silently swapped post-approval.** `findBySlug` (the only
+   path a customer reaches a restaurant/store through) gates on `isApproved: true`, but
+   `RestaurantsService.update()`/`StoresService.update()` never touched that flag — an owner
+   could get `name`/`description`/`cuisineTypes`/`logoUrl`/`coverUrl` approved once by an admin,
+   then freely swap any of that public content afterward with no further review, while staying
+   visibly "approved." Fixed: both `update()` methods now reset `isApproved` to `false` whenever
+   any of that fixed content-field set changes, leaving operational-only edits (opening hours,
+   price level, address, `isOpen`) untouched so a vendor isn't forced through re-approval for
+   routine operations. 4 new tests per service cover the reset, the non-reset case, and the
+   already-pending case.
+
+5. **Unverified riders could read every customer's exact delivery address.** `RidersService.apply`
+   grants the `rider` role immediately on self-registration; verification is a separate, later
+   admin step. `RidersController.queue()` (`GET /riders/queue`) had no verification gate at all,
+   so a rider who had merely applied — not yet been verified — could see every unassigned order's
+   full `deliveryAddress` (including `line1`/`lat`/`lng`) and `customerId`. The queue being
+   visible pre-verification is a deliberate product choice (confirmed via
+   `RidersService.assertVerified`'s own doc comment and the frontend already rendering a disabled
+   Accept button, not a hidden queue, for unverified riders) — so the fix redacts rather than
+   blocks: an unverified rider's response now reduces `deliveryAddress` to `{city, state}` and
+   sets `customerId` to `undefined`, while a verified rider gets the unmodified order. New
+   `riders.controller.spec.ts` (first controller-level spec in this module) covers both cases.
+
+6. **Promo code redemption had a race condition.** `PromoCodesService.redeem()` did an
+   unconditional `$inc` on `usedCount` with no atomic guard against `usageLimit` — the earlier
+   `validate()` read-then-later-`redeem()`-write gap meant two concurrent orders could both pass
+   validation and both redeem a code's last remaining slot, pushing `usedCount` past
+   `usageLimit`. Rewritten as a single atomic `updateOne` whose filter includes an `$expr`
+   comparing `usedCount` against `usageLimit` on the same document, so the increment only commits
+   if a slot was still genuinely available at write time; `redeem()` now returns a boolean the
+   caller can act on. A new concurrency test runs two `redeem()` calls via `Promise.all` against a
+   `usageLimit: 1` code and asserts exactly one succeeds.
+
+7. **A delivered-then-refunded order silently lost the rider's earned fee.** Per `OrdersService`'s
+   own existing doc comment, a rider who genuinely completed a delivery keeps their fee
+   regardless of what later happens to the customer's payment — but
+   `PayoutsService.getUnpaidRiderEarnings()` filtered orders by `status: 'DELIVERED'`, and a later
+   refund flips `status` to `'REFUNDED'`, permanently dropping that order out of the query with no
+   record. Fixed by filtering on `deliveredAt: { $ne: null }` instead — set exactly once at the
+   real delivery transition and never cleared afterward (confirmed via grep: no code path ever
+   nulls it back out), so it survives a later status change and reflects what actually happened.
+
+8. **A partial refund was silently treated as a full one.** `PaymentsService.handleRefundWebhook`
+   finalized any refund event as if the order's entire total had been refunded, releasing it from
+   further payout holds — but a partial refund (a real, provider-supported case) leaves part of
+   the order's value still legitimately owed to the vendor/rider. None of the 3 adapters
+   previously parsed the refunded amount at all. Added `amountRefunded` parsing to all 3
+   (`stripe.adapter.ts`: `amount_refunded` cents; `paystack.adapter.ts`: `data.amount` kobo,
+   confirmed only via third-party documentation — Paystack's own reference docs return 403 in
+   this environment; `flutterwave.adapter.ts`: `data.amount_refunded`, already in standard units
+   per its fetched OpenAPI schema). `handleRefundWebhook` now compares the parsed amount against
+   the order's own trusted `order.total` (a single provider-agnostic comparison, rather than 3
+   different "is this partial" implementations) and, when it's genuinely less (past a float-
+   rounding tolerance), flags every admin for manual review instead of auto-finalizing — new
+   `OrdersService.notifyAdminsOfPartialRefund`, reusing the existing admin-fan-out notification
+   pattern, deliberately informational-only (no automatic status change or clawback, same posture
+   as the existing dispute-flagging path). Any parse failure or missing field degrades gracefully
+   back to the pre-existing full-refund behavior rather than erroring.
+
+9. **Several inputs had no upper bound.** `chatbot`'s `sessionId` (both the `ask` DTO and, via a
+   raw `@Query('sessionId')` primitive on `history()` that bypassed the global `ValidationPipe`
+   entirely — moved onto a proper `GetChatHistoryDto`), `knowledge-base`'s
+   `question`/`answer`/`keywords`/`category`, and `cuisineTypes`/`tags` array items on
+   restaurant/store creation all previously had no `@MaxLength`/`@ArrayMaxSize` ceiling — any
+   authenticated (or, for the chatbot, unauthenticated) caller could submit an arbitrarily large
+   payload. All given explicit caps.
+
+Full backend suite (566 tests, 19 new — the clawback/suspend/promo-code/refund/redaction/
+approval-reset tests listed above) and frontend suite (119 tests, unchanged — the XSS and rider-
+redaction fixes needed no new frontend tests, only a translation key for the redacted-address
+copy) pass; `tsc --noEmit`, `eslint --fix` (diff re-scoped to just these files afterward — the
+`--fix` pass also reformatted several unrelated files' line-wrapping, reverted to keep this PR's
+diff to only its intended changes), and production `build` clean on both sides. One new
+translation key (`RiderDashboardPage.deliverToAreaOnly`) shipped in all 6 languages, key-parity
+verified.

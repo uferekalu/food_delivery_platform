@@ -15,6 +15,7 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { ChatbotService } from './chatbot.service';
 import { AskChatbotDto } from './dto/ask-chatbot.dto';
+import { GetChatHistoryDto } from './dto/get-chat-history.dto';
 import type { ChatIdentity } from '../support-tickets/chat-identity';
 
 /** Support chat widget (docs/ROADMAP.md FDP-106) — the only two routes a visitor (logged in or
@@ -37,7 +38,10 @@ export class ChatbotController {
     @CurrentUserOptional() user: AccessTokenPayload | null,
     @Body() dto: AskChatbotDto,
   ) {
-    return this.chatbotService.ask(this.resolveIdentity(user, dto.sessionId), dto);
+    return this.chatbotService.ask(
+      this.resolveIdentity(user, dto.sessionId),
+      dto,
+    );
   }
 
   @Public()
@@ -45,9 +49,11 @@ export class ChatbotController {
   @Get('history')
   history(
     @CurrentUserOptional() user: AccessTokenPayload | null,
-    @Query('sessionId') sessionId?: string,
+    @Query() query: GetChatHistoryDto,
   ) {
-    return this.chatbotService.history(this.resolveIdentity(user, sessionId));
+    return this.chatbotService.history(
+      this.resolveIdentity(user, query.sessionId),
+    );
   }
 
   private resolveIdentity(
@@ -56,8 +62,6 @@ export class ChatbotController {
   ): ChatIdentity {
     if (user) return { userId: user.sub, sessionId: null };
     if (sessionId) return { userId: null, sessionId };
-    throw new BadRequestException(
-      'sessionId is required when not logged in',
-    );
+    throw new BadRequestException('sessionId is required when not logged in');
   }
 }

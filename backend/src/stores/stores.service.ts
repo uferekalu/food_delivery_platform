@@ -190,6 +190,22 @@ export class StoresService {
   ): Promise<StoreDocument> {
     const store = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(store, requester);
+    // Same reasoning as RestaurantsService.update: editing publicly-rendered content
+    // re-requires admin approval, so an already-approved store can't silently swap in different
+    // content afterward and stay live unreviewed.
+    const CONTENT_FIELDS = [
+      'name',
+      'description',
+      'tags',
+      'logoUrl',
+      'coverUrl',
+    ] as const;
+    if (
+      store.isApproved &&
+      CONTENT_FIELDS.some((field) => dto[field] !== undefined)
+    ) {
+      store.isApproved = false;
+    }
     Object.assign(store, dto);
     // "Near me" (docs/ROADMAP.md FDP-96) — same reasoning as RestaurantsService.update.
     if (dto.address) {

@@ -146,12 +146,22 @@ export class PayoutsService {
 
   /** Same idea as `getUnpaidVendorEarnings`, but for a rider's own delivery-fee earnings — riders
    * keep 100% of `deliveryFee` (no platform commission on the rider side, see
-   * `docs/ARCHITECTURE.md` §14). */
+   * `docs/ARCHITECTURE.md` §14) — "regardless" (`OrdersService`'s own doc comment on refund
+   * clawbacks) meaning regardless of what later happens to the customer's payment. Filters on
+   * `deliveredAt` (docs/ROADMAP.md FDP-109), a timestamp set exactly once at the moment of actual
+   * delivery and never cleared afterward — not `status`, which a later refund flips to `REFUNDED`.
+   * Filtering on `status: 'DELIVERED'` used to silently drop a delivered-then-refunded order out
+   * of this query forever: the rider had genuinely completed the delivery, but a refund issued
+   * before the next weekly batch made their earned fee vanish with no record of the loss. */
   async getUnpaidRiderEarnings(
     riderUserId: string,
   ): Promise<UnpaidEarningsGroup[]> {
     const orders = await this.orderModel
-      .find({ riderId: riderUserId, status: 'DELIVERED', riderPayoutId: null })
+      .find({
+        riderId: riderUserId,
+        deliveredAt: { $ne: null },
+        riderPayoutId: null,
+      })
       .select('_id currency paymentProvider deliveryFee')
       .exec();
 

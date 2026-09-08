@@ -238,12 +238,34 @@ export class RestaurantsService {
   ): Promise<RestaurantDocument> {
     const restaurant = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(restaurant, requester);
+    // Editing any publicly-rendered content field re-requires admin approval — `approve()` is
+    // the only gate on what actually goes live (`findBySlug` only serves `isApproved: true`
+    // restaurants), but nothing previously stopped an already-approved owner from silently
+    // swapping in different name/description/images afterward and staying live with unreviewed
+    // content. Only these content-bearing fields reset it; operational edits (hours, price
+    // level, delivery estimate, address) don't need a human to look at them again.
+    const CONTENT_FIELDS = [
+      'name',
+      'description',
+      'cuisineTypes',
+      'logoUrl',
+      'coverUrl',
+    ] as const;
+    if (
+      restaurant.isApproved &&
+      CONTENT_FIELDS.some((field) => dto[field] !== undefined)
+    ) {
+      restaurant.isApproved = false;
+    }
     Object.assign(restaurant, dto);
     // "Near me" (docs/ROADMAP.md FDP-96) — re-derived whenever the address itself changes (an
     // owner correcting a typo'd coordinate must also correct where the geospatial index thinks
     // they are), left untouched otherwise since `dto.address` is optional on a partial update.
     if (dto.address) {
-      restaurant.address.location = toGeoPoint(dto.address.lat, dto.address.lng);
+      restaurant.address.location = toGeoPoint(
+        dto.address.lat,
+        dto.address.lng,
+      );
     }
     return restaurant.save();
   }

@@ -10,7 +10,10 @@ describe('ChatbotController — identity resolution (docs/ROADMAP.md FDP-106)', 
   beforeEach(() => {
     ask = jest.fn().mockResolvedValue({ answer: 'ok', matched: true });
     history = jest.fn().mockResolvedValue([]);
-    controller = new ChatbotController({ ask, history } as unknown as ChatbotService);
+    controller = new ChatbotController({
+      ask,
+      history,
+    } as unknown as ChatbotService);
   });
 
   it('identifies a logged-in visitor by their own account, ignoring any sessionId sent alongside', async () => {
@@ -44,14 +47,15 @@ describe('ChatbotController — identity resolution (docs/ROADMAP.md FDP-106)', 
   });
 
   it('history resolves identity the same way as ask', async () => {
-    await controller.history({ sub: 'user-1', email: 'a@example.com', role: 'customer' }, 'ignored');
+    await controller.history(
+      { sub: 'user-1', email: 'a@example.com', role: 'customer' },
+      { sessionId: 'ignored' },
+    );
 
     expect(history).toHaveBeenCalledWith({ userId: 'user-1', sessionId: null });
   });
 
   it('history rejects a guest request with no sessionId', () => {
-    expect(() => controller.history(null, undefined)).toThrow(
-      BadRequestException,
-    );
+    expect(() => controller.history(null, {})).toThrow(BadRequestException);
   });
 });
