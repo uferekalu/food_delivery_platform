@@ -18,6 +18,8 @@ export const NOTIFICATION_TYPES = [
   'order_refunded_externally',
   'order_dispute_flagged',
   'support_ticket_created',
+  'new_vendor_message',
+  'new_admin_message',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

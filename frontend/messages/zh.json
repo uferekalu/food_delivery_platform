@@ -79,7 +79,8 @@
     "unverified": "（未验证）",
     "logOut": "退出登录",
     "logIn": "登录",
-    "signUp": "注册"
+    "signUp": "注册",
+    "messages": "消息"
   },
   "NotificationBell": {
     "justNow": "刚刚",
@@ -1086,7 +1087,8 @@
     "refunds": "退款",
     "payouts": "打款",
     "adminDashboard": "管理员仪表盘",
-    "support": "支持"
+    "support": "支持",
+    "messages": "消息"
   },
   "AdminPayoutsTab": {
     "weeklyBatch": "每周打款批次",
@@ -1628,5 +1630,32 @@
     "section11Body": "我们采取合理的技术和组织措施来保护你的信息，包括我们自身从不存储原始支付卡信息，并始终直接向支付服务商核实每一个支付状态，而不是仅凭客户端上报的结果。任何传输或存储方式都无法做到绝对安全，我们也无法保证绝对的安全性。",
     "section12Title": "本政策的变更与联系方式",
     "section12Body": "我们可能会不时更新本政策；本页顶部的日期反映了最近一次修订的时间。如你对本政策或你的信息处理方式有任何疑问，可通过每个页面均提供的客服聊天或通过你的账户与我们联系。"
+  },
+  "VendorMessagesPage": {
+    "title": "消息",
+    "description": "就订单、退款、结算或其他任何问题给我们的客服团队发消息。",
+    "you": "你",
+    "support": "客服",
+    "placeholder": "输入你的消息…",
+    "send": "发送",
+    "noMessagesYet": "暂无消息",
+    "noMessagesYetDescription": "在下方发送一条消息，我们的客服团队会尽快回复你。"
+  },
+  "AdminMessagesTab": {
+    "description": "就订单、退款、结算或其他任何问题直接给商家发消息。",
+    "newMessage": "新消息",
+    "vendor": "商家",
+    "selectVendor": "选择商家",
+    "message": "消息",
+    "messagePlaceholder": "输入你的消息…",
+    "send": "发送",
+    "unknownVendor": "未知商家",
+    "noConversationsYet": "暂无对话",
+    "noConversationsYetDescription": "发起一条新消息以联系商家。",
+    "selectAConversation": "选择一个对话以在此查看",
+    "noMessagesYet": "暂无消息",
+    "replyPlaceholder": "输入回复…",
+    "couldNotSendMessage": "无法发送消息",
+    "supportTeam": "客服"
   }
 }

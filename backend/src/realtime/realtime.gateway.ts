@@ -38,6 +38,10 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
+function vendorConversationRoom(vendorId: string): string {
+  return `vendor-conversation:${vendorId}`;
+}
+
 /**
  * Reads the connected user off the socket rather than the request — `@nestjs/websockets`
  * doesn't run the HTTP `JwtAuthGuard`, so auth happens once at `handleConnection` instead (see
@@ -183,6 +187,31 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   /**
+   * Admin<->vendor messaging (docs/ROADMAP.md FDP-108) — unlike `restaurant:subscribe`/
+   * `store:subscribe`, ownership needs no DB lookup: `vendorId` here *is* the vendor's own user
+   * id (the conversation's partition key), not a separate resource with an `ownerId` field to
+   * look up. Any admin can join any vendor's room, mirroring how a support ticket is worked by
+   * "admin" as a role rather than one specific admin.
+   */
+  @SubscribeMessage('vendor-conversation:subscribe')
+  async handleVendorConversationSubscribe(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() body: { vendorId?: string },
+  ): Promise<void> {
+    const user = client.data.user;
+    const vendorId = body?.vendorId;
+    if (!user || !vendorId) return;
+    if (user.sub !== vendorId && user.role !== 'admin') {
+      this.logger.warn(
+        `User ${user.sub} tried to subscribe to vendor conversation ${vendorId} they don't own`,
+      );
+      return;
+    }
+
+    await client.join(vendorConversationRoom(vendorId));
+  }
+
+  /**
    * A rider's live GPS ping (docs/ROADMAP.md FDP-17), now also persisted onto
    * `Rider.currentLocation` (docs/ROADMAP.md FDP-98) so nearest-rider dispatch has something
    * fresh to query — previously relayed only, never stored. Persisted unconditionally (an
@@ -252,5 +281,15 @@ export class RealtimeGateway implements OnGatewayConnection {
    * next `listNotifications`/`unreadCount` poll. */
   emitNotification(userId: string, notification: unknown): void {
     this.server.to(userRoom(userId)).emit('notification:new', notification);
+  }
+
+  /** Called by `VendorMessagesService` after persisting a new admin<->vendor message
+   * (docs/ROADMAP.md FDP-108) — live-updates an open thread for whichever side (vendor and/or an
+   * admin) currently has it open, on top of the separate `NotificationsService.notify()` fan-out
+   * that covers the case where neither side is actively looking at the thread. */
+  emitVendorMessage(vendorId: string, message: unknown): void {
+    this.server
+      .to(vendorConversationRoom(vendorId))
+      .emit('vendor-message:new', message);
   }
 }

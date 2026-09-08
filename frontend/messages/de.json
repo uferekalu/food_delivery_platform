@@ -79,7 +79,8 @@
     "unverified": "(nicht bestätigt)",
     "logOut": "Abmelden",
     "logIn": "Anmelden",
-    "signUp": "Registrieren"
+    "signUp": "Registrieren",
+    "messages": "Nachrichten"
   },
   "NotificationBell": {
     "justNow": "gerade eben",
@@ -1086,7 +1087,8 @@
     "refunds": "Rückerstattungen",
     "payouts": "Auszahlungen",
     "adminDashboard": "Admin-Dashboard",
-    "support": "Support"
+    "support": "Support",
+    "messages": "Nachrichten"
   },
   "AdminPayoutsTab": {
     "weeklyBatch": "Wöchentlicher Auszahlungslauf",
@@ -1628,5 +1630,32 @@
     "section11Body": "Wir setzen angemessene technische und organisatorische Maßnahmen ein, um deine Informationen zu schützen, einschließlich der Tatsache, dass wir niemals unverschlüsselte Zahlungskartendaten selbst speichern und jeden Zahlungsstatus direkt mit dem Zahlungsanbieter überprüfen, statt einer Meldung des Geräts zu vertrauen. Keine Übertragungs- oder Speichermethode ist vollständig sicher, und wir können absolute Sicherheit nicht garantieren.",
     "section12Title": "Änderungen dieser Richtlinie und Kontakt",
     "section12Body": "Wir können diese Richtlinie von Zeit zu Zeit aktualisieren; das Datum oben auf dieser Seite spiegelt die letzte Überarbeitung wider. Bei Fragen zu dieser Richtlinie oder zum Umgang mit deinen Informationen erreichst du uns über den auf jeder Seite verfügbaren Support-Chat oder über dein Konto."
+  },
+  "VendorMessagesPage": {
+    "title": "Nachrichten",
+    "description": "Schreibe unserem Support-Team zu Bestellungen, Rückerstattungen, Auszahlungen oder anderen Themen.",
+    "you": "Du",
+    "support": "Support",
+    "placeholder": "Nachricht eingeben…",
+    "send": "Senden",
+    "noMessagesYet": "Noch keine Nachrichten",
+    "noMessagesYetDescription": "Schreibe unten eine Nachricht, und unser Support-Team meldet sich bei dir."
+  },
+  "AdminMessagesTab": {
+    "description": "Schreibe einem Anbieter direkt zu einer Bestellung, Rückerstattung, Auszahlung oder anderen Themen.",
+    "newMessage": "Neue Nachricht",
+    "vendor": "Anbieter",
+    "selectVendor": "Anbieter auswählen",
+    "message": "Nachricht",
+    "messagePlaceholder": "Nachricht eingeben…",
+    "send": "Senden",
+    "unknownVendor": "Unbekannter Anbieter",
+    "noConversationsYet": "Noch keine Unterhaltungen",
+    "noConversationsYetDescription": "Starte eine neue Nachricht, um einen Anbieter zu kontaktieren.",
+    "selectAConversation": "Wähle eine Unterhaltung aus, um sie hier anzuzeigen",
+    "noMessagesYet": "Noch keine Nachrichten",
+    "replyPlaceholder": "Antwort eingeben…",
+    "couldNotSendMessage": "Nachricht konnte nicht gesendet werden",
+    "supportTeam": "Support"
   }
 }

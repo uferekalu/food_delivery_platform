@@ -47,6 +47,18 @@ export function AuthStatus({ variant = "inline", onNavigate }: AuthStatusProps) 
             {t("myStores")}
           </SmartLink>
         )}
+        {/* Not shown to admin, unlike the two links above — this is the vendor's own
+            conversation with "admin" as a role; an admin has their own dedicated inbox (the
+            "Messages" tab in /admin) instead of a single vendor-shaped thread of their own. */}
+        {user.role === "restaurant_owner" && (
+          <SmartLink
+            href="/dashboard/messages"
+            onClick={onNavigate}
+            className={cn("text-sm text-primary hover:underline", stacked && "py-1")}
+          >
+            {t("messages")}
+          </SmartLink>
+        )}
         {user.role === "rider" && (
           <SmartLink
             href="/rider"
