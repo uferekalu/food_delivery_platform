@@ -62,4 +62,10 @@ export const envValidationSchema = Joi.object({
   VAPID_PUBLIC_KEY: Joi.string().optional(),
   VAPID_PRIVATE_KEY: Joi.string().optional(),
   VAPID_SUBJECT: Joi.string().optional(),
+
+  // Anthropic (docs/ROADMAP.md FDP-110) — powers the support chat widget's LLM-backed answers.
+  // Optional, same graceful-degradation pattern as Termii above: LlmChatService falls back to
+  // the original deterministic keyword matcher when unset.
+  ANTHROPIC_API_KEY: Joi.string().optional(),
+  ANTHROPIC_MODEL: Joi.string().optional(),
 });

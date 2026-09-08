@@ -244,7 +244,7 @@ export function Select({
         <Portal>
           <div
             ref={containerRef}
-            style={{ position: "absolute", top: rect.top, left: rect.left, width: rect.width, zIndex: "var(--z-dropdown)" }}
+            style={{ position: "absolute", top: rect.top, left: rect.left, width: rect.width, zIndex: "var(--z-popover)" }}
             className="overflow-hidden rounded-md border border-border bg-surface-raised shadow-lg"
           >
             {searchable && (

@@ -98,7 +98,16 @@ function ConversationThread({ vendorId }: { vendorId: string }) {
   const t = useTranslations("AdminMessagesTab");
   const { toast } = useToast();
   const socket = useSocket();
-  const { data: messages, isLoading, refetch } = useGetVendorConversationMessagesQuery(vendorId);
+  // Socket push (below) delivers a new message instantly when the connection is healthy;
+  // polling is a guaranteed-eventually-consistent fallback for when it isn't (docs/ROADMAP.md
+  // FDP-110) — a real prior bug where the other party never saw a new message without a manual
+  // page refresh, traced to the socket not reliably delivering in this app's production
+  // deployment. 4s keeps this feeling like a live chat without hammering the API.
+  const {
+    data: messages,
+    isLoading,
+    refetch,
+  } = useGetVendorConversationMessagesQuery(vendorId, { pollingInterval: 4000 });
   const [sendMessage, { isLoading: sending }] = useSendAdminVendorMessageMutation();
   const [markRead] = useMarkVendorConversationReadMutation();
   const [draft, setDraft] = useState("");
@@ -240,7 +249,12 @@ export function MessagesTab() {
   const [page, setPage] = useState(1);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
-  const { data, isLoading } = useListVendorConversationsQuery({ page, limit: 20 });
+  // Same guaranteed-fallback reasoning as ConversationThread's message polling above — keeps
+  // unread dots/last-message previews current in the list even if the socket never connects.
+  const { data, isLoading } = useListVendorConversationsQuery(
+    { page, limit: 20 },
+    { pollingInterval: 8000 },
+  );
 
   return (
     <div className="flex flex-col gap-4">

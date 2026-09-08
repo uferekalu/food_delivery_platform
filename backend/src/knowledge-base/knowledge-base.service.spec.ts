@@ -127,9 +127,32 @@ describe('KnowledgeBaseService (docs/ROADMAP.md FDP-106)', () => {
         category: 'strong-match',
       });
 
-      const result = await service.match('how much is delivery, and what is the delivery fee?');
+      const result = await service.match(
+        'how much is delivery, and what is the delivery fee?',
+      );
 
       expect(result?.entry.category).toBe('strong-match');
+    });
+  });
+
+  describe('findActiveForGrounding (docs/ROADMAP.md FDP-110)', () => {
+    it('returns every active entry as a plain question/answer/category projection, excluding inactive ones', async () => {
+      await createEntry({
+        question: 'Active Q',
+        answer: 'Active A',
+        category: 'active-cat',
+      });
+      await createEntry({
+        question: 'Inactive Q',
+        answer: 'Inactive A',
+        isActive: false,
+      });
+
+      const grounding = await service.findActiveForGrounding();
+
+      expect(grounding).toEqual([
+        { question: 'Active Q', answer: 'Active A', category: 'active-cat' },
+      ]);
     });
   });
 
@@ -143,7 +166,9 @@ describe('KnowledgeBaseService (docs/ROADMAP.md FDP-106)', () => {
       });
 
       const all = await service.findAll();
-      expect(all.map((e) => e._id.toString())).toContain(created._id.toString());
+      expect(all.map((e) => e._id.toString())).toContain(
+        created._id.toString(),
+      );
 
       const updated = await service.update(created._id.toString(), {
         answer: 'Yes, 7 days a week.',
@@ -165,9 +190,9 @@ describe('KnowledgeBaseService (docs/ROADMAP.md FDP-106)', () => {
     });
 
     it('remove throws NotFoundException for an unknown id', async () => {
-      await expect(
-        service.remove('507f1f77bcf86cd799439011'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.remove('507f1f77bcf86cd799439011')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

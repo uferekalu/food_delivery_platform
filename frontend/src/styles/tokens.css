@@ -264,6 +264,14 @@
   --z-sticky: 1100;
   --z-modal-backdrop: 1200;
   --z-modal: 1300;
+  /* For a portal-based overlay (docs/ROADMAP.md FDP-110) that has to render correctly whether
+   * it's opened at the page level or nested inside a Modal/Drawer — `Select`'s open option list
+   * is the first case of this. Because it portals to `document.body`, it's a sibling of Modal's
+   * own z-1300 portal, not a descendant painted above it — DOM/mount order doesn't help here
+   * (see frontend/CLAUDE.md "Never nest a DropdownMenu-based control inside Modal/Drawer" for
+   * the same stacking-context gotcha). `Select` can't know at authoring time whether a given
+   * instance sits inside a Modal, so it always uses this tier rather than `--z-dropdown`. */
+  --z-popover: 1350;
   --z-toast: 1400;
   --z-tooltip: 1500;
 
