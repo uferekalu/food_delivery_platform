@@ -1653,3 +1653,71 @@ copy) pass; `tsc --noEmit`, `eslint --fix` (diff re-scoped to just these files a
 diff to only its intended changes), and production `build` clean on both sides. One new
 translation key (`RiderDashboardPage.deliverToAreaOnly`) shipped in all 6 languages, key-parity
 verified.
+
+## 34. Vendor-messaging UX fixes and an LLM-backed chatbot (docs/ROADMAP.md FDP-110)
+
+Three issues reported directly by the user after using the live admin↔vendor messaging (FDP-108)
+and support chatbot (FDP-106) features in production.
+
+**1. `Select` opened from inside a `Modal` was invisible/unclickable.** The admin "New message"
+modal's vendor picker (`admin/messages-tab.tsx`'s `NewConversationModal`) is the first place in
+this codebase a `Select` is nested inside a `Modal`. Both portal to `document.body` as siblings —
+`Select`'s open option list used `--z-dropdown` (1000), `Modal`'s wrapper (backdrop + panel
+together) uses `--z-modal` (1300), so the modal painted over the dropdown regardless of DOM/mount
+order, exactly the stacking-context gotcha `frontend/CLAUDE.md` already documents for
+`DropdownMenu`-in-`Modal` (fixed there in FDP-8 by going inline instead). `Select` can't know at
+authoring time whether a given instance sits inside a `Modal`, and — unlike `DropdownMenu` — is a
+generic, frequently-portal-necessary form control used all over the app, so the fix is a new tier
+between them rather than an inline alternative: `--z-popover: 1350` (`tokens.css`, `tokens.ts`),
+which `Select`'s portal now uses unconditionally. New regression test in `select.test.tsx`
+asserts the portal's z-index directly.
+
+**2. Vendor↔admin messages needed a manual refresh to appear for the other party.** The sender
+already saw their own message immediately — `sendVendorMessage`/`sendAdminVendorMessage`'s
+`invalidatesTags` already triggered a refetch on success — so the actual gap was one-directional:
+whichever side *didn't* send the message relied entirely on `RealtimeGateway`'s socket push
+(`vendor-message:new`) to know to refetch, and that push was not reliably reaching the browser in
+this app's live deployment. The gateway/service code itself (room join, ownership check,
+`emitVendorMessage` call) was verified correct by re-reading it end to end; the socket
+infrastructure could not be directly diagnosed from this environment (Vercel env vars pull as
+redacted, no Railway CLI access here) to confirm the exact root cause. Rather than ship an
+unverifiable guess, both message queries (`useGetVendorMessagesQuery` on the vendor's own thread,
+`useGetVendorConversationMessagesQuery` on the admin's open thread, `useListVendorConversationsQuery`
+on the admin's conversation list) now also poll (4s for an open thread, 8s for the list) —
+socket push still delivers instantly when the connection is healthy, polling is a guaranteed
+eventually-consistent fallback when it isn't, so the feature can no longer depend entirely on
+infrastructure this session couldn't verify. `lib/socket.ts` also now logs `connect_error` to the
+browser console, so a future recurrence has an actual diagnostic trail instead of silent failure.
+
+**3. The chatbot's keyword-only matching read as unintelligent.** A plain "hi" scored zero against
+every knowledge-base entry's keywords (docs/ROADMAP.md FDP-106's deterministic matcher has no
+concept of small talk) and fell through to the canned human-escalation message — technically
+correct per the original design, but a poor first impression for something styled as a chat
+widget. New `LlmChatService` (`backend/src/chatbot/llm-chat.service.ts`) calls Anthropic's
+Messages API (Claude Haiku by default) with the *entire active knowledge base* as grounding
+context and a system prompt that explicitly keeps it scoped: answer platform questions using only
+the supplied knowledge base as source of truth, handle greetings/small talk warmly, and — the
+one property this ticket was careful to preserve from FDP-106's original design intent — honestly
+signal low confidence (rather than guess) for anything unrelated or under-informed, still
+triggering the exact same human-escalation support-ticket fallback as before. Confidence is
+returned as a real structured field, not parsed from free text: the call forces Anthropic's
+tool-use feature (`tool_choice: { type: 'tool', name: 'submit_answer' }`) so the response is a
+parsed `{ answer, confident }` object, not a hope that the model's prose happens to be valid JSON.
+`ChatbotService.ask()` is now a three-tier fallback chain — LLM (when `ANTHROPIC_API_KEY` is
+configured) → deterministic keyword matcher → the original canned fallback message — so an
+unconfigured key, a failed API call, or an unexpected response shape all degrade gracefully to
+the pre-existing FDP-106 behavior rather than breaking the widget outright, exactly mirroring
+`SmsService`'s established `isConfigured`/graceful-degradation pattern for an optional
+third-party integration (`backend/CLAUDE.md`). Implemented as a plain `fetch` call against
+Anthropic's REST API rather than adding the `@anthropic-ai/sdk` dependency, same reasoning as
+`SmsService`'s Termii integration — one endpoint doesn't need a full SDK. `ANTHROPIC_API_KEY`/
+`ANTHROPIC_MODEL` are both optional env vars (`.env.example`, `env.validation.ts`); no real key
+was available in this session, so the LLM path is implemented and unit-tested (mocking `fetch`,
+never calling the real API) but not live-verified against Anthropic end to end — that's the one
+piece of this ticket the user still needs to do: add a real `ANTHROPIC_API_KEY` to
+`backend/.env` locally and to Railway's production env vars.
+
+Full backend suite passes (33 tests across the touched `chatbot`/`knowledge-base` specs, several
+new — `llm-chat.service.spec.ts` mocks `fetch` exactly like `sms.service.spec.ts` does for
+Termii); `tsc --noEmit` clean on both sides. No new translation keys — none of the three fixes
+change user-visible copy.

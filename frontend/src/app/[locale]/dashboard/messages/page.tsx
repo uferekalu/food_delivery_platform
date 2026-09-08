@@ -44,7 +44,14 @@ function MessagesThread() {
   const t = useTranslations("VendorMessagesPage");
   const { user } = useAppSelector((state) => state.auth);
   const socket = useSocket();
-  const { data: messages, isLoading, refetch } = useGetVendorMessagesQuery();
+  // Socket push (below) delivers a new message instantly when the connection is healthy;
+  // polling is a guaranteed-eventually-consistent fallback for when it isn't (docs/ROADMAP.md
+  // FDP-110) — a real prior bug where the other party never saw a new message without a manual
+  // page refresh, traced to the socket not reliably delivering in this app's production
+  // deployment. 4s keeps this feeling like a live chat without hammering the API.
+  const { data: messages, isLoading, refetch } = useGetVendorMessagesQuery(undefined, {
+    pollingInterval: 4000,
+  });
   const [sendMessage, { isLoading: sending }] = useSendVendorMessageMutation();
   const [markRead] = useMarkVendorMessagesReadMutation();
   const [draft, setDraft] = useState("");

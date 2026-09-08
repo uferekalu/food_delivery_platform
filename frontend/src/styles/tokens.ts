@@ -89,6 +89,7 @@ export const zIndex = {
   sticky: "var(--z-sticky)",
   modalBackdrop: "var(--z-modal-backdrop)",
   modal: "var(--z-modal)",
+  popover: "var(--z-popover)",
   toast: "var(--z-toast)",
   tooltip: "var(--z-tooltip)",
 } as const;

@@ -55,6 +55,22 @@ export class KnowledgeBaseService {
     return this.entryModel.find({ isActive: true }).exec();
   }
 
+  /** The LLM chatbot's grounding context (docs/ROADMAP.md FDP-110) — unlike `match()`'s single
+   * best-scoring entry, the model gets the whole active knowledge base on every call so it can
+   * synthesize an answer drawing on more than one entry, phrased naturally rather than returned
+   * verbatim. Stays a plain question/answer/category projection, not the full Mongoose document
+   * — this crosses into an LLM prompt, not another part of this codebase. */
+  async findActiveForGrounding(): Promise<
+    { question: string; answer: string; category: string }[]
+  > {
+    const entries = await this.findActive();
+    return entries.map((e) => ({
+      question: e.question,
+      answer: e.answer,
+      category: e.category,
+    }));
+  }
+
   async update(
     id: string,
     dto: UpdateKnowledgeBaseEntryDto,
@@ -99,7 +115,11 @@ export class KnowledgeBaseService {
         }
       }
       if (score > 0 && (!best || score > best.score)) {
-        best = { entry, score, aboveThreshold: score >= MATCH_CONFIDENCE_THRESHOLD };
+        best = {
+          entry,
+          score,
+          aboveThreshold: score >= MATCH_CONFIDENCE_THRESHOLD,
+        };
       }
     }
 

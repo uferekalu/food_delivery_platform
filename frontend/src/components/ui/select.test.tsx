@@ -78,6 +78,20 @@ describe("Select", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("renders its open list above a Modal's backdrop (docs/ROADMAP.md FDP-110)", async () => {
+    // Both Select's option list and Modal's backdrop portal to document.body as siblings — DOM
+    // order can't establish stacking between them, only z-index can (frontend/CLAUDE.md "Never
+    // nest a DropdownMenu-based control inside Modal/Drawer"). Select must always render above
+    // --z-modal (1300), not just --z-dropdown (1000), or it's invisible/unclickable when opened
+    // from inside a Modal.
+    const user = userEvent.setup();
+    render(<Harness options={FRUIT_OPTIONS} />);
+    await user.click(screen.getByRole("button", { name: "Fruit" }));
+
+    const list = screen.getByRole("listbox").parentElement as HTMLElement;
+    expect(list.style.zIndex).toBe("var(--z-popover)");
+  });
+
   describe("searchable", () => {
     it("does not render a search box when not searchable", async () => {
       const user = userEvent.setup();

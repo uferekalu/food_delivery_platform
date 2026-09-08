@@ -33,6 +33,13 @@ export function ensureSocket(accessToken: string | null): void {
     auth: { token: accessToken },
     withCredentials: true,
   });
+  // Real-time features (docs/ROADMAP.md FDP-110) degrade to a polling fallback rather than
+  // silently doing nothing when the socket can't connect (a misconfigured origin, a proxy that
+  // doesn't support the websocket upgrade, etc.) — this at least surfaces *why* in the browser
+  // console instead of leaving "messages need a refresh" with zero diagnostic trail.
+  socket.on("connect_error", (err) => {
+    console.warn("[socket] connect_error — falling back to polling where available:", err.message);
+  });
   notify();
 }
 
