@@ -74,6 +74,13 @@ export class UsersService {
     return this.userModel.findById(id).exec();
   }
 
+  /** Bulk lookup for a set of ids (e.g. resolving vendor display names for an admin list) —
+   * silently drops ids that no longer resolve to a user rather than throwing, mirroring
+   * `RestaurantsService.findByIds`. */
+  findByIds(ids: string[]): Promise<UserDocument[]> {
+    return this.userModel.find({ _id: { $in: ids } }).exec();
+  }
+
   /** Includes `passwordHash` — used by change-password to verify the current one. */
   findByIdWithPassword(id: string): Promise<UserDocument | null> {
     return this.userModel.findById(id).select('+passwordHash').exec();

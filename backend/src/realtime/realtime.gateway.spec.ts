@@ -297,6 +297,62 @@ describe('RealtimeGateway', () => {
     });
   });
 
+  describe('handleVendorConversationSubscribe', () => {
+    it('lets the vendor join their own conversation room', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'vendor-1', role: 'restaurant_owner' };
+
+      await gateway.handleVendorConversationSubscribe(client as never, {
+        vendorId: 'vendor-1',
+      });
+      expect(client.join).toHaveBeenCalledWith('vendor-conversation:vendor-1');
+    });
+
+    it('lets an admin join any vendor conversation room', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'admin-1', role: 'admin' };
+
+      await gateway.handleVendorConversationSubscribe(client as never, {
+        vendorId: 'vendor-1',
+      });
+      expect(client.join).toHaveBeenCalledWith('vendor-conversation:vendor-1');
+    });
+
+    it('does not let a different vendor join', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'vendor-2', role: 'restaurant_owner' };
+
+      await gateway.handleVendorConversationSubscribe(client as never, {
+        vendorId: 'vendor-1',
+      });
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when vendorId is missing', async () => {
+      const client = fakeSocket();
+      client.data.user = { sub: 'vendor-1', role: 'restaurant_owner' };
+
+      await gateway.handleVendorConversationSubscribe(client as never, {});
+      expect(client.join).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('emitVendorMessage', () => {
+    it('emits to the vendor conversation room', () => {
+      const message = { body: 'hi', senderRole: 'admin' };
+
+      gateway.emitVendorMessage('vendor-1', message);
+
+      expect(gateway.server.to).toHaveBeenCalledWith(
+        'vendor-conversation:vendor-1',
+      );
+      expect(gateway.server.emit).toHaveBeenCalledWith(
+        'vendor-message:new',
+        message,
+      );
+    });
+  });
+
   describe('emitOrderStatusChanged', () => {
     it('emits to both the order room and the restaurant room for a restaurant order', () => {
       const order = {

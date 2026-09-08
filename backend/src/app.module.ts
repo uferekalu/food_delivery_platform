@@ -26,6 +26,7 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
 import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { ChatbotModule } from './chatbot/chatbot.module';
+import { VendorMessagesModule } from './vendor-messages/vendor-messages.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { ChatbotModule } from './chatbot/chatbot.module';
     KnowledgeBaseModule,
     SupportTicketsModule,
     ChatbotModule,
+    VendorMessagesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

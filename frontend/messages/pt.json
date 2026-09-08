@@ -79,7 +79,8 @@
     "unverified": "(não verificado)",
     "logOut": "Sair",
     "logIn": "Entrar",
-    "signUp": "Cadastrar-se"
+    "signUp": "Cadastrar-se",
+    "messages": "Mensagens"
   },
   "NotificationBell": {
     "justNow": "agora mesmo",
@@ -1086,7 +1087,8 @@
     "refunds": "Reembolsos",
     "payouts": "Pagamentos",
     "adminDashboard": "Painel de administração",
-    "support": "Suporte"
+    "support": "Suporte",
+    "messages": "Mensagens"
   },
   "AdminPayoutsTab": {
     "weeklyBatch": "Lote de pagamentos semanal",
@@ -1628,5 +1630,32 @@
     "section11Body": "Usamos medidas técnicas e organizacionais razoáveis para proteger suas informações, incluindo nunca armazenar nós mesmos os dados brutos de cartões de pagamento e verificar cada status de pagamento diretamente com o provedor de pagamento em vez de confiar em um resultado informado pelo cliente. Nenhum método de transmissão ou armazenamento é completamente seguro, e não podemos garantir segurança absoluta.",
     "section12Title": "Alterações a esta política e contato",
     "section12Body": "Podemos atualizar esta política periodicamente; a data no topo desta página reflete a revisão mais recente. Se você tiver dúvidas sobre esta política ou sobre como suas informações são tratadas, pode nos contatar pelo chat de suporte disponível em toda página, ou pela sua conta."
+  },
+  "VendorMessagesPage": {
+    "title": "Mensagens",
+    "description": "Envie uma mensagem à nossa equipe de suporte sobre pedidos, reembolsos, repasses ou outro assunto.",
+    "you": "Você",
+    "support": "Suporte",
+    "placeholder": "Digite sua mensagem…",
+    "send": "Enviar",
+    "noMessagesYet": "Ainda não há mensagens",
+    "noMessagesYetDescription": "Envie uma mensagem abaixo e nossa equipe de suporte responderá."
+  },
+  "AdminMessagesTab": {
+    "description": "Envie uma mensagem diretamente a um vendedor sobre um pedido, reembolso, repasse ou outro assunto.",
+    "newMessage": "Nova mensagem",
+    "vendor": "Vendedor",
+    "selectVendor": "Selecione um vendedor",
+    "message": "Mensagem",
+    "messagePlaceholder": "Digite sua mensagem…",
+    "send": "Enviar",
+    "unknownVendor": "Vendedor desconhecido",
+    "noConversationsYet": "Ainda não há conversas",
+    "noConversationsYetDescription": "Inicie uma nova mensagem para contatar um vendedor.",
+    "selectAConversation": "Selecione uma conversa para visualizá-la aqui",
+    "noMessagesYet": "Ainda não há mensagens",
+    "replyPlaceholder": "Digite uma resposta…",
+    "couldNotSendMessage": "Não foi possível enviar a mensagem",
+    "supportTeam": "Suporte"
   }
 }

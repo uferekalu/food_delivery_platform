@@ -79,7 +79,8 @@
     "unverified": "(non vérifié)",
     "logOut": "Se déconnecter",
     "logIn": "Se connecter",
-    "signUp": "S'inscrire"
+    "signUp": "S'inscrire",
+    "messages": "Messages"
   },
   "NotificationBell": {
     "justNow": "à l'instant",
@@ -1086,7 +1087,8 @@
     "refunds": "Remboursements",
     "payouts": "Paiements",
     "adminDashboard": "Tableau de bord administrateur",
-    "support": "Assistance"
+    "support": "Assistance",
+    "messages": "Messages"
   },
   "AdminPayoutsTab": {
     "weeklyBatch": "Lot de paiements hebdomadaire",
@@ -1628,5 +1630,32 @@
     "section11Body": "Nous mettons en œuvre des mesures techniques et organisationnelles raisonnables pour protéger vos informations, notamment en ne stockant jamais nous-mêmes les détails bruts des cartes de paiement et en vérifiant chaque statut de paiement directement auprès du prestataire de paiement plutôt que de faire confiance à un résultat rapporté par le client. Aucune méthode de transmission ou de stockage n'est totalement sécurisée, et nous ne pouvons garantir une sécurité absolue.",
     "section12Title": "Modifications de la présente politique et contact",
     "section12Body": "Nous pouvons mettre à jour cette politique de temps à autre ; la date en haut de cette page reflète la révision la plus récente. Pour toute question sur cette politique ou sur la manière dont vos informations sont traitées, vous pouvez nous contacter via le chat d'assistance disponible sur chaque page, ou depuis votre compte."
+  },
+  "VendorMessagesPage": {
+    "title": "Messages",
+    "description": "Écrivez à notre équipe d'assistance à propos des commandes, remboursements, versements ou autre chose.",
+    "you": "Vous",
+    "support": "Assistance",
+    "placeholder": "Tapez votre message…",
+    "send": "Envoyer",
+    "noMessagesYet": "Aucun message pour l'instant",
+    "noMessagesYetDescription": "Envoyez un message ci-dessous et notre équipe d'assistance vous répondra."
+  },
+  "AdminMessagesTab": {
+    "description": "Écrivez directement à un vendeur à propos d'une commande, d'un remboursement, d'un versement ou d'autre chose.",
+    "newMessage": "Nouveau message",
+    "vendor": "Vendeur",
+    "selectVendor": "Sélectionner un vendeur",
+    "message": "Message",
+    "messagePlaceholder": "Tapez votre message…",
+    "send": "Envoyer",
+    "unknownVendor": "Vendeur inconnu",
+    "noConversationsYet": "Aucune conversation pour l'instant",
+    "noConversationsYetDescription": "Envoyez un nouveau message pour contacter un vendeur.",
+    "selectAConversation": "Sélectionnez une conversation pour l'afficher ici",
+    "noMessagesYet": "Aucun message pour l'instant",
+    "replyPlaceholder": "Tapez une réponse…",
+    "couldNotSendMessage": "Impossible d'envoyer le message",
+    "supportTeam": "Assistance"
   }
 }

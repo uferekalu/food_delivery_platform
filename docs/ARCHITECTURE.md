@@ -1455,3 +1455,75 @@ linking `Terms` (`/terms`) and `Privacy` (`/privacy`), visible regardless of aut
 
 All new copy (FAQ, both legal pages, footer labels) shipped in all 6 languages in the same change,
 per the standing translation rule — 92 new keys, key-parity verified (1474 keys total).
+
+## 32. Real-time admin<->vendor messaging (docs/ROADMAP.md FDP-108)
+
+A genuine two-way, real-time conversation thread between an admin and a restaurant/store owner
+("vendor") — for issues spanning ordering, refunds, payouts, or anything else that doesn't fit a
+support ticket's one-shot Q&A shape. This is the first real conversation/thread model in this
+codebase: the two earlier "chat" features (support-tickets/chatbot, FDP-106) are either a single
+escalated question with no reply field, or a flat non-threaded Q&A log — neither supports a
+back-and-forth exchange.
+
+**Backend — `vendor-messages/` module**: one thread per vendor user (`VendorMessage.vendorId`),
+not per admin — any admin can view and reply to any vendor's thread, mirroring how support
+tickets are worked by "admin" as a role rather than one specific admin. Two schemas: `VendorMessage`
+(the flat, timestamped message log itself) and `VendorConversation` (one inbox-row summary per
+vendor — `lastMessageAt`/`lastMessagePreview`/`lastSenderRole`/`unreadByAdmin`/`unreadByVendor`),
+upserted alongside every message write rather than aggregated on every list request — the same
+"summary row updated on write" shape used elsewhere for read-heavy admin lists. The upsert's
+`$inc`/`$setOnInsert` had to be split carefully: Mongo rejects an update that targets the *same*
+field with both operators in one call, so only the unread counter *not* being incremented this
+call gets an explicit `$setOnInsert` default — `$inc` on a fresh document already initializes its
+own field to the increment amount. Two controllers share the module: `VendorMessagesController`
+(`/vendor-messages`, `@Roles('restaurant_owner')`, own-thread-only — `vendorId` is always the
+caller's own id) and `AdminVendorConversationsController` (`/admin/vendor-conversations`,
+`@Roles('admin')`, any vendor). Vendor name resolution for the admin conversation list reuses
+`PayoutExecutionService.attachVendorNames`'s exact batched-lookup pattern (new
+`UsersService.findByIds`, mirroring `RestaurantsService.findByIds`) rather than a query per row.
+
+**Real-time**: extends the existing `RealtimeGateway` (docs/ARCHITECTURE.md §9) rather than
+standing up a second socket layer — new `vendor-conversation:subscribe` event joins a
+`vendor-conversation:<vendorId>` room (ownership check needs no DB lookup here, unlike
+`restaurant:subscribe`/`store:subscribe`: `vendorId` *is* the vendor's own user id, the
+conversation's partition key, not a separate resource with its own `ownerId` field — any admin
+may also join). `VendorMessagesService` calls a new `emitVendorMessage(vendorId, message)` after
+every persisted message, live-updating an open thread for whichever side currently has it open —
+the exact dual fan-out `OrdersService` already uses after a status transition (persist, push live
+via the gateway, then also call `NotificationsService.notify()` — two new types,
+`new_vendor_message`/`new_admin_message` — so the recipient sees it in their bell/email/push even
+when the thread isn't open).
+
+**Frontend**: `dashboard/messages/page.tsx` — the vendor's own thread, a full page (not a floating
+widget like the customer-facing `ChatWidget`, since this is an account-level page a vendor
+navigates to deliberately, not an ambient always-available helper) reachable from a new
+`AuthStatus` link shown only for `restaurant_owner` (deliberately not `admin`, unlike the
+`myRestaurants`/`myStores` links beside it — an admin visiting this route would see an empty
+thread under their own account id, not the inbox they actually want, which is the admin-side tab
+below). Joins its room via `socket.emit("vendor-conversation:subscribe", { vendorId: user.id })`
+and refetches on `vendor-message:new`, mirroring `orders/[id]/page.tsx`'s own
+join-then-refetch-on-event pattern. `admin/messages-tab.tsx` (10th admin dashboard tab) is a
+master-detail layout — a conversation list (vendor name, preview, unread dot) plus a thread panel
+for whichever conversation is selected, and a "New message" modal (vendor picked via the existing
+admin `useListUsersQuery({ role: "restaurant_owner" })`, reusing the users list already built for
+the admin Users tab rather than adding a new backend endpoint just for this picker) so an admin
+can proactively start a conversation with a vendor who hasn't written in yet.
+
+New `dashboard/messages/page.test.tsx` (5 tests: empty state, rendering/alignment of both
+senders, sending, error-recovery, mark-read-on-mount) is the first component test in this
+codebase to render anything wrapped in `RequireRole` — doing so pulls in `next-intl/navigation`'s
+`createNavigation`, which internally imports `next/navigation`, a module Vite/Vitest can't
+resolve outside an actual Next.js build; both `next/navigation` and `@/i18n/navigation` are
+mocked in the test for this reason. No dedicated test for `admin/messages-tab.tsx`, matching this
+codebase's existing convention — no admin dashboard tab has its own component test.
+
+Live-verified end-to-end against the real running backend/database (not just unit tests): a test
+vendor account sent a message, the admin conversation list correctly showed the resolved vendor
+name/preview/unread count, an admin reply appeared in the vendor's own thread, and both directions
+correctly fired the right notification type to the right recipient. Full backend (566 tests,
+13 new) and frontend (119 tests, 5 new) suites pass; `tsc --noEmit`/`eslint`/production `build`
+clean on both sides — the production `nest build` caught one thing plain `tsc --noEmit` didn't:
+`isolatedModules` requires `VendorConversation`'s cross-schema `VendorMessageSenderRole` import be
+an explicit `import type`. 25 new translation keys across `AuthStatus`/`AdminPage`/
+`VendorMessagesPage`/`AdminMessagesTab`, shipped in all 6 languages, key-parity verified (1499
+keys).

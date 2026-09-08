@@ -127,6 +127,8 @@ export const api = createApi({
     "Payout",
     "KnowledgeBaseEntry",
     "SupportTicket",
+    "VendorMessage",
+    "VendorConversation",
   ],
   endpoints: () => ({}),
 });

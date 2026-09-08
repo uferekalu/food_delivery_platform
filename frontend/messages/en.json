@@ -79,7 +79,8 @@
     "unverified": "(unverified)",
     "logOut": "Log out",
     "logIn": "Log in",
-    "signUp": "Sign up"
+    "signUp": "Sign up",
+    "messages": "Messages"
   },
   "NotificationBell": {
     "justNow": "just now",
@@ -1086,7 +1087,8 @@
     "refunds": "Refunds",
     "payouts": "Payouts",
     "adminDashboard": "Admin dashboard",
-    "support": "Support"
+    "support": "Support",
+    "messages": "Messages"
   },
   "AdminPayoutsTab": {
     "weeklyBatch": "Weekly payout batch",
@@ -1628,5 +1630,32 @@
     "section11Body": "We use reasonable technical and organizational measures to protect your information, including never storing raw payment card details ourselves and verifying every payment status directly with the payment provider rather than trusting a client-reported result. No method of transmission or storage is completely secure, and we can't guarantee absolute security.",
     "section12Title": "Changes to this policy and contact",
     "section12Body": "We may update this policy from time to time; the date at the top of this page reflects the most recent revision. If you have questions about this policy or how your information is handled, you can reach us through the support chat available on every page, or from your account."
+  },
+  "VendorMessagesPage": {
+    "title": "Messages",
+    "description": "Message our support team about orders, refunds, payouts, or anything else.",
+    "you": "You",
+    "support": "Support",
+    "placeholder": "Type your message…",
+    "send": "Send",
+    "noMessagesYet": "No messages yet",
+    "noMessagesYetDescription": "Send a message below and our support team will get back to you."
+  },
+  "AdminMessagesTab": {
+    "description": "Message a vendor directly about an order, refund, payout, or anything else.",
+    "newMessage": "New message",
+    "vendor": "Vendor",
+    "selectVendor": "Select a vendor",
+    "message": "Message",
+    "messagePlaceholder": "Type your message…",
+    "send": "Send",
+    "unknownVendor": "Unknown vendor",
+    "noConversationsYet": "No conversations yet",
+    "noConversationsYetDescription": "Start a new message to reach out to a vendor.",
+    "selectAConversation": "Select a conversation to view it here",
+    "noMessagesYet": "No messages yet",
+    "replyPlaceholder": "Type a reply…",
+    "couldNotSendMessage": "Couldn't send message",
+    "supportTeam": "Support"
   }
 }
