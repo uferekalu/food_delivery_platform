@@ -29,6 +29,13 @@ export class MenuItem {
   @Prop({ type: Number, required: true, min: 0 })
   price: number;
 
+  // Set only while a promo is active on this item — powers the "-X%" badge + struck-through
+  // original price (docs/ROADMAP.md FDP-111), mirroring Product.discountedPrice (stores) exactly.
+  // Always < price when set; validated in MenuService, not here (Mongoose validators don't see
+  // sibling fields easily).
+  @Prop({ type: Number, min: 0, default: null })
+  discountedPrice: number | null;
+
   // Owner-only cost-to-make (ingredients etc.), never shown to customers — feeds the sales
   // report's cost-of-goods-sold/margin figures (docs/ROADMAP.md FDP-64). Nullable rather than
   // required: existing items predate this field, and a newly-created item may not have one set

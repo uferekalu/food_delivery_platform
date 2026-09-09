@@ -86,6 +86,12 @@ function MyRestaurantsList() {
                   {t("deliveryZones")}
                 </Link>
                 <Link
+                  href={`/dashboard/restaurants/${restaurant._id}/promo-codes`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  {t("promoCodes")}
+                </Link>
+                <Link
                   href={`/dashboard/restaurants/${restaurant._id}/earnings`}
                   className={buttonVariants({ variant: "outline", size: "sm" })}
                 >

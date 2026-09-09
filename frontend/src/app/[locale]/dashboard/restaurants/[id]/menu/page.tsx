@@ -79,6 +79,7 @@ interface ItemFormInput {
   name: string;
   description?: string;
   price: unknown;
+  discountedPrice?: unknown;
   costPrice?: unknown;
   modifierGroups?: ModifierGroupInput[];
 }
@@ -194,21 +195,33 @@ function ItemFormModal({
       options: z.array(modifierOptionSchema).min(1, t("addAtLeastOneOption")).max(20),
     })
     .refine((group) => group.max >= group.min, { message: t("maxMustBeAtLeastMin"), path: ["max"] });
-  const itemSchema = z.object({
-    name: z.string().min(1, t("required")).max(100),
-    description: z.string().max(1000).optional(),
-    price: z.coerce.number().min(0, t("mustBe0OrMore")),
-    // A blank field submits "" (not undefined) through an uncontrolled `register()` input —
-    // z.coerce.number() would otherwise turn that into 0, indistinguishable from "this item costs
-    // nothing to make". preprocess maps blank to undefined first so "left blank" and "explicitly
-    // 0" stay distinguishable (docs/ROADMAP.md FDP-64 relies on this: a null costPrice on the
-    // backend means "unknown", not "free").
-    costPrice: z.preprocess(
-      (val) => (val === "" || val === undefined ? undefined : val),
-      z.coerce.number().min(0, t("mustBe0OrMore")).optional(),
-    ),
-    modifierGroups: z.array(modifierGroupSchema).max(10).optional(),
-  });
+  const itemSchema = z
+    .object({
+      name: z.string().min(1, t("required")).max(100),
+      description: z.string().max(1000).optional(),
+      price: z.coerce.number().min(0, t("mustBe0OrMore")),
+      // Same blank-to-undefined preprocessing as costPrice below — "left blank" and "explicitly
+      // 0" need to stay distinguishable (docs/ROADMAP.md FDP-111, mirroring CatalogManagerPage's
+      // discountedPrice for store products).
+      discountedPrice: z.preprocess(
+        (val) => (val === "" || val === undefined ? undefined : val),
+        z.coerce.number().min(0, t("mustBe0OrMore")).optional(),
+      ),
+      // A blank field submits "" (not undefined) through an uncontrolled `register()` input —
+      // z.coerce.number() would otherwise turn that into 0, indistinguishable from "this item costs
+      // nothing to make". preprocess maps blank to undefined first so "left blank" and "explicitly
+      // 0" stay distinguishable (docs/ROADMAP.md FDP-64 relies on this: a null costPrice on the
+      // backend means "unknown", not "free").
+      costPrice: z.preprocess(
+        (val) => (val === "" || val === undefined ? undefined : val),
+        z.coerce.number().min(0, t("mustBe0OrMore")).optional(),
+      ),
+      modifierGroups: z.array(modifierGroupSchema).max(10).optional(),
+    })
+    .refine((v) => v.discountedPrice === undefined || v.discountedPrice < v.price, {
+      message: t("discountedPriceMustBeLower"),
+      path: ["discountedPrice"],
+    });
   type ItemFormValues = z.output<typeof itemSchema>;
 
   // z.coerce.number() means the form's *input* shape (numeric fields: unknown, before
@@ -228,10 +241,18 @@ function ItemFormModal({
           name: item.name,
           description: item.description,
           price: item.price,
+          discountedPrice: item.discountedPrice ?? undefined,
           costPrice: item.costPrice ?? undefined,
           modifierGroups: item.modifierGroups,
         }
-      : { name: "", description: "", price: 0, costPrice: undefined, modifierGroups: [] },
+      : {
+          name: "",
+          description: "",
+          price: 0,
+          discountedPrice: undefined,
+          costPrice: undefined,
+          modifierGroups: [],
+        },
   });
   const {
     fields: groupFields,
@@ -304,6 +325,23 @@ function ItemFormModal({
               )}
             />
           </FormField>
+          <FormField label={t("discountedPrice")} error={errors.discountedPrice?.message} hint={t("discountedPriceHint")}>
+            <Controller
+              control={control}
+              name="discountedPrice"
+              render={({ field }) => (
+                <MoneyInput
+                  value={field.value as number | undefined}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  currencyCode={currency}
+                  locale={locale}
+                />
+              )}
+            />
+          </FormField>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label={t("costPrice")} error={errors.costPrice?.message} hint={t("costPriceHint")}>
             <Controller
               control={control}
@@ -441,7 +479,18 @@ function MenuManager({ restaurantId }: { restaurantId: string }) {
                       )}
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-text">{item.name}</span>
-                        <span className="text-sm text-text-muted">{formatMoney(item.price, restaurant.currency, locale)}</span>
+                        <span className="text-sm text-text-muted">
+                          {item.discountedPrice != null ? (
+                            <>
+                              <span className="line-through">{formatMoney(item.price, restaurant.currency, locale)}</span>{" "}
+                              <span className="text-text">
+                                {formatMoney(item.discountedPrice, restaurant.currency, locale)}
+                              </span>
+                            </>
+                          ) : (
+                            formatMoney(item.price, restaurant.currency, locale)
+                          )}
+                        </span>
                         <div className="flex flex-wrap gap-1">
                           {item.modifierGroups.length > 0 && (
                             <Badge variant="neutral" className="w-fit">

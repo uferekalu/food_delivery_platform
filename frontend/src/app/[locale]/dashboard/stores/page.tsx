@@ -85,6 +85,12 @@ function MyStoresList() {
                   {t("deliveryZones")}
                 </Link>
                 <Link
+                  href={`/dashboard/stores/${store._id}/promo-codes`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  {t("promoCodes")}
+                </Link>
+                <Link
                   href={`/dashboard/stores/${store._id}/earnings`}
                   className={buttonVariants({ variant: "outline", size: "sm" })}
                 >

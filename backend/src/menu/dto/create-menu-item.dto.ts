@@ -40,6 +40,16 @@ export class CreateMenuItemDto {
 
   @ApiPropertyOptional({
     description:
+      'Set only while a promo is active on this item — must be lower than price. Powers the ' +
+      '"-X%" badge shown to customers',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountedPrice?: number;
+
+  @ApiPropertyOptional({
+    description:
       'Owner-only cost to make this item (ingredients etc.), used for sales-report COGS/margin figures — never shown to customers',
   })
   @IsOptional()

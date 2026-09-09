@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { PromoCodesService } from './promo-codes.service';
@@ -9,6 +13,19 @@ import {
   PromoCodeDocument,
   PromoCodeSchema,
 } from './schemas/promo-code.schema';
+import { RestaurantsService } from '../restaurants/restaurants.service';
+import {
+  Restaurant,
+  RestaurantDocument,
+  RestaurantSchema,
+} from '../restaurants/schemas/restaurant.schema';
+import { StoresService } from '../stores/stores.service';
+import {
+  Store,
+  StoreDocument,
+  StoreSchema,
+} from '../stores/schemas/store.schema';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 jest.setTimeout(30_000);
 
@@ -16,7 +33,17 @@ describe('PromoCodesService', () => {
   let mongod: MongoMemoryServer;
   let moduleRef: TestingModule;
   let service: PromoCodesService;
+  let restaurantsService: RestaurantsService;
+  let storesService: StoresService;
   let promoCodeModel: Model<PromoCodeDocument>;
+  let restaurantModel: Model<RestaurantDocument>;
+  let storeModel: Model<StoreDocument>;
+
+  const admin: AccessTokenPayload = {
+    sub: 'admin-id',
+    email: 'admin@example.com',
+    role: 'admin',
+  };
 
   beforeAll(async () => {
     // See backend/CLAUDE.md ("Testing") for why launchTimeout is set explicitly.
@@ -29,17 +56,27 @@ describe('PromoCodesService', () => {
         MongooseModule.forRoot(mongod.getUri()),
         MongooseModule.forFeature([
           { name: PromoCode.name, schema: PromoCodeSchema },
+          { name: Restaurant.name, schema: RestaurantSchema },
+          { name: Store.name, schema: StoreSchema },
         ]),
       ],
-      providers: [PromoCodesService],
+      providers: [PromoCodesService, RestaurantsService, StoresService],
     }).compile();
 
     service = moduleRef.get(PromoCodesService);
+    restaurantsService = moduleRef.get(RestaurantsService);
+    storesService = moduleRef.get(StoresService);
     promoCodeModel = moduleRef.get(getModelToken(PromoCode.name));
+    restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
   }, 60_000);
 
   afterEach(async () => {
-    await promoCodeModel.deleteMany({}).exec();
+    await Promise.all([
+      promoCodeModel.deleteMany({}).exec(),
+      restaurantModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
+    ]);
   });
 
   afterAll(async () => {
@@ -60,11 +97,14 @@ describe('PromoCodesService', () => {
   });
 
   it('normalizes case when looking up a code', async () => {
-    await service.create({
-      code: 'welcome10',
-      discountType: 'percentage',
-      discountValue: 10,
-    });
+    await service.create(
+      {
+        code: 'welcome10',
+        discountType: 'percentage',
+        discountValue: 10,
+      },
+      admin,
+    );
     const result = await service.validate(
       'Welcome10',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -74,12 +114,15 @@ describe('PromoCodesService', () => {
   });
 
   it('caps a percentage discount at maxDiscountAmount', async () => {
-    await service.create({
-      code: 'BIG50',
-      discountType: 'percentage',
-      discountValue: 50,
-      maxDiscountAmount: 10,
-    });
+    await service.create(
+      {
+        code: 'BIG50',
+        discountType: 'percentage',
+        discountValue: 50,
+        maxDiscountAmount: 10,
+      },
+      admin,
+    );
     const result = await service.validate(
       'BIG50',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -89,11 +132,14 @@ describe('PromoCodesService', () => {
   });
 
   it('applies a fixed discount, capped at the subtotal', async () => {
-    await service.create({
-      code: 'FLAT20',
-      discountType: 'fixed',
-      discountValue: 20,
-    });
+    await service.create(
+      {
+        code: 'FLAT20',
+        discountType: 'fixed',
+        discountValue: 20,
+      },
+      admin,
+    );
     const smallOrder = await service.validate(
       'FLAT20',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -110,12 +156,15 @@ describe('PromoCodesService', () => {
   });
 
   it('rejects an order below minOrderAmount', async () => {
-    await service.create({
-      code: 'MIN30',
-      discountType: 'fixed',
-      discountValue: 5,
-      minOrderAmount: 30,
-    });
+    await service.create(
+      {
+        code: 'MIN30',
+        discountType: 'fixed',
+        discountValue: 5,
+        minOrderAmount: 30,
+      },
+      admin,
+    );
     const result = await service.validate(
       'MIN30',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -125,12 +174,15 @@ describe('PromoCodesService', () => {
   });
 
   it('rejects a code scoped to a different restaurant', async () => {
-    await service.create({
-      code: 'SCOPED',
-      discountType: 'fixed',
-      discountValue: 5,
-      restaurantId: otherRestaurantId,
-    });
+    await service.create(
+      {
+        code: 'SCOPED',
+        discountType: 'fixed',
+        discountValue: 5,
+        restaurantId: otherRestaurantId,
+      },
+      admin,
+    );
     const result = await service.validate(
       'SCOPED',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -143,12 +195,15 @@ describe('PromoCodesService', () => {
   });
 
   it('accepts a restaurant-scoped code for the matching restaurant', async () => {
-    await service.create({
-      code: 'SCOPED2',
-      discountType: 'fixed',
-      discountValue: 5,
-      restaurantId,
-    });
+    await service.create(
+      {
+        code: 'SCOPED2',
+        discountType: 'fixed',
+        discountValue: 5,
+        restaurantId,
+      },
+      admin,
+    );
     const result = await service.validate(
       'SCOPED2',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -162,12 +217,15 @@ describe('PromoCodesService', () => {
     const otherStoreId = '507f1f77bcf86cd799439022';
 
     it('rejects a store-scoped code for a restaurant cart', async () => {
-      await service.create({
-        code: 'STORESCOPED',
-        discountType: 'fixed',
-        discountValue: 5,
-        storeId,
-      });
+      await service.create(
+        {
+          code: 'STORESCOPED',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId,
+        },
+        admin,
+      );
       const result = await service.validate(
         'STORESCOPED',
         {
@@ -183,12 +241,15 @@ describe('PromoCodesService', () => {
     });
 
     it('rejects a store-scoped code for a different store', async () => {
-      await service.create({
-        code: 'STORESCOPED2',
-        discountType: 'fixed',
-        discountValue: 5,
-        storeId,
-      });
+      await service.create(
+        {
+          code: 'STORESCOPED2',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId,
+        },
+        admin,
+      );
       const result = await service.validate(
         'STORESCOPED2',
         {
@@ -204,12 +265,15 @@ describe('PromoCodesService', () => {
     });
 
     it('accepts a store-scoped code for the matching store', async () => {
-      await service.create({
-        code: 'STORESCOPED3',
-        discountType: 'fixed',
-        discountValue: 5,
-        storeId,
-      });
+      await service.create(
+        {
+          code: 'STORESCOPED3',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId,
+        },
+        admin,
+      );
       const result = await service.validate(
         'STORESCOPED3',
         {
@@ -222,11 +286,14 @@ describe('PromoCodesService', () => {
     });
 
     it('accepts a platform-wide code (neither restaurantId nor storeId) for a store cart', async () => {
-      await service.create({
-        code: 'PLATFORMWIDE',
-        discountType: 'fixed',
-        discountValue: 5,
-      });
+      await service.create(
+        {
+          code: 'PLATFORMWIDE',
+          discountType: 'fixed',
+          discountValue: 5,
+        },
+        admin,
+      );
       const result = await service.validate(
         'PLATFORMWIDE',
         {
@@ -240,36 +307,45 @@ describe('PromoCodesService', () => {
 
     it('refuses to create a code scoped to both a restaurant and a store', async () => {
       await expect(
-        service.create({
-          code: 'BOTHSCOPED',
-          discountType: 'fixed',
-          discountValue: 5,
-          restaurantId,
-          storeId,
-        }),
+        service.create(
+          {
+            code: 'BOTHSCOPED',
+            discountType: 'fixed',
+            discountValue: 5,
+            restaurantId,
+            storeId,
+          },
+          admin,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('refuses to update a restaurant-scoped code to also set storeId', async () => {
-      const promo = await service.create({
-        code: 'RESCOPEME',
-        discountType: 'fixed',
-        discountValue: 5,
-        restaurantId,
-      });
+      const promo = await service.create(
+        {
+          code: 'RESCOPEME',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId,
+        },
+        admin,
+      );
       await expect(
-        service.update(promo._id.toString(), { storeId }),
+        service.update(promo._id.toString(), { storeId }, admin),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
   it('rejects an inactive code', async () => {
-    await service.create({
-      code: 'OFF',
-      discountType: 'fixed',
-      discountValue: 5,
-      isActive: false,
-    });
+    await service.create(
+      {
+        code: 'OFF',
+        discountType: 'fixed',
+        discountValue: 5,
+        isActive: false,
+      },
+      admin,
+    );
     const result = await service.validate(
       'OFF',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -279,12 +355,15 @@ describe('PromoCodesService', () => {
   });
 
   it('rejects an expired code', async () => {
-    await service.create({
-      code: 'EXPIRED',
-      discountType: 'fixed',
-      discountValue: 5,
-      expiresAt: new Date(Date.now() - 1000).toISOString(),
-    });
+    await service.create(
+      {
+        code: 'EXPIRED',
+        discountType: 'fixed',
+        discountValue: 5,
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
+      },
+      admin,
+    );
     const result = await service.validate(
       'EXPIRED',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -294,12 +373,15 @@ describe('PromoCodesService', () => {
   });
 
   it('rejects once usageLimit is reached, without redeem() being called', async () => {
-    const promo = await service.create({
-      code: 'ONCE',
-      discountType: 'fixed',
-      discountValue: 5,
-      usageLimit: 1,
-    });
+    const promo = await service.create(
+      {
+        code: 'ONCE',
+        discountType: 'fixed',
+        discountValue: 5,
+        usageLimit: 1,
+      },
+      admin,
+    );
 
     const beforeRedeem = await service.validate(
       'ONCE',
@@ -322,12 +404,15 @@ describe('PromoCodesService', () => {
   });
 
   it('redeem() is atomic under a concurrent race — usedCount can never exceed usageLimit (docs/ROADMAP.md FDP-109)', async () => {
-    const promo = await service.create({
-      code: 'RACE',
-      discountType: 'fixed',
-      discountValue: 5,
-      usageLimit: 1,
-    });
+    const promo = await service.create(
+      {
+        code: 'RACE',
+        discountType: 'fixed',
+        discountValue: 5,
+        usageLimit: 1,
+      },
+      admin,
+    );
 
     // Both requests already passed validate() while the code had exactly one redemption left
     // (the actual race this codebase hit — validate() and redeem() aren't atomic with each
@@ -343,12 +428,15 @@ describe('PromoCodesService', () => {
   });
 
   it('redeem() returns true and increments when under the limit', async () => {
-    const promo = await service.create({
-      code: 'ROOM',
-      discountType: 'fixed',
-      discountValue: 5,
-      usageLimit: 2,
-    });
+    const promo = await service.create(
+      {
+        code: 'ROOM',
+        discountType: 'fixed',
+        discountValue: 5,
+        usageLimit: 2,
+      },
+      admin,
+    );
 
     const redeemed = await service.redeem(promo._id.toString());
 
@@ -358,12 +446,15 @@ describe('PromoCodesService', () => {
   });
 
   it('redeem() returns false and does not increment once the limit is already reached', async () => {
-    const promo = await service.create({
-      code: 'FULL',
-      discountType: 'fixed',
-      discountValue: 5,
-      usageLimit: 1,
-    });
+    const promo = await service.create(
+      {
+        code: 'FULL',
+        discountType: 'fixed',
+        discountValue: 5,
+        usageLimit: 1,
+      },
+      admin,
+    );
     await service.redeem(promo._id.toString());
 
     const redeemed = await service.redeem(promo._id.toString());
@@ -374,11 +465,14 @@ describe('PromoCodesService', () => {
   });
 
   it('redeem() has no limit (always returns true) for a promo code with usageLimit null', async () => {
-    const promo = await service.create({
-      code: 'UNLIMITED',
-      discountType: 'fixed',
-      discountValue: 5,
-    });
+    const promo = await service.create(
+      {
+        code: 'UNLIMITED',
+        discountType: 'fixed',
+        discountValue: 5,
+      },
+      admin,
+    );
 
     const redeemed = await service.redeem(promo._id.toString());
 
@@ -386,11 +480,14 @@ describe('PromoCodesService', () => {
   });
 
   it('validate() alone does not increment usedCount', async () => {
-    const promo = await service.create({
-      code: 'READONLY',
-      discountType: 'fixed',
-      discountValue: 5,
-    });
+    const promo = await service.create(
+      {
+        code: 'READONLY',
+        discountType: 'fixed',
+        discountValue: 5,
+      },
+      admin,
+    );
     await service.validate(
       'READONLY',
       { sellerType: 'restaurant', sellerId: restaurantId },
@@ -407,15 +504,20 @@ describe('PromoCodesService', () => {
 
   describe('update', () => {
     it('deactivates a code — a since-deactivated code then fails validate()', async () => {
-      const promo = await service.create({
-        code: 'DEACTIVATE',
-        discountType: 'fixed',
-        discountValue: 5,
-      });
+      const promo = await service.create(
+        {
+          code: 'DEACTIVATE',
+          discountType: 'fixed',
+          discountValue: 5,
+        },
+        admin,
+      );
 
-      const updated = await service.update(promo._id.toString(), {
-        isActive: false,
-      });
+      const updated = await service.update(
+        promo._id.toString(),
+        { isActive: false },
+        admin,
+      );
       expect(updated.isActive).toBe(false);
 
       const result = await service.validate(
@@ -430,24 +532,270 @@ describe('PromoCodesService', () => {
     });
 
     it('leaves fields not present in the DTO untouched', async () => {
-      const promo = await service.create({
-        code: 'PARTIAL',
-        discountType: 'fixed',
-        discountValue: 5,
-        usageLimit: 10,
-      });
+      const promo = await service.create(
+        {
+          code: 'PARTIAL',
+          discountType: 'fixed',
+          discountValue: 5,
+          usageLimit: 10,
+        },
+        admin,
+      );
 
-      const updated = await service.update(promo._id.toString(), {
-        discountValue: 8,
-      });
+      const updated = await service.update(
+        promo._id.toString(),
+        { discountValue: 8 },
+        admin,
+      );
       expect(updated.discountValue).toBe(8);
       expect(updated.usageLimit).toBe(10);
     });
 
     it('throws NotFoundException for an unknown id', async () => {
       await expect(
-        service.update('507f1f77bcf86cd799439099', { isActive: false }),
+        service.update('507f1f77bcf86cd799439099', { isActive: false }, admin),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('vendor-created promo codes (docs/ROADMAP.md FDP-111)', () => {
+    async function createOwnedRestaurant(ownerId: string) {
+      const restaurant = await restaurantsService.create(ownerId, {
+        name: 'Burgundy Kitchen',
+        cuisineTypes: ['Nigerian'],
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return restaurantsService.approve(restaurant._id.toString());
+    }
+
+    async function createOwnedStore(ownerId: string) {
+      const store = await storesService.create(ownerId, {
+        name: 'Market Square Supermarket',
+        type: 'groceries',
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return storesService.approve(store._id.toString());
+    }
+
+    it('lets a vendor create a code scoped to their own restaurant', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-1',
+        email: 'owner1@example.com',
+        role: 'restaurant_owner',
+      };
+      const restaurant = await createOwnedRestaurant(owner.sub);
+
+      const promo = await service.create(
+        {
+          code: 'MYCODE',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: restaurant._id.toString(),
+        },
+        owner,
+      );
+
+      expect(promo.restaurantId?.toString()).toBe(restaurant._id.toString());
+    });
+
+    it('lets a vendor create a code scoped to their own store', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-2',
+        email: 'owner2@example.com',
+        role: 'restaurant_owner',
+      };
+      const store = await createOwnedStore(owner.sub);
+
+      const promo = await service.create(
+        {
+          code: 'MYSTORECODE',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId: store._id.toString(),
+        },
+        owner,
+      );
+
+      expect(promo.storeId?.toString()).toBe(store._id.toString());
+    });
+
+    it('rejects a vendor creating a platform-wide code (neither restaurantId nor storeId)', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-3',
+        email: 'owner3@example.com',
+        role: 'restaurant_owner',
+      };
+
+      await expect(
+        service.create(
+          { code: 'NOSCOPE', discountType: 'fixed', discountValue: 5 },
+          owner,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it("rejects a vendor creating a code scoped to a restaurant they don't own", async () => {
+      const someoneElse: AccessTokenPayload = {
+        sub: 'owner-4',
+        email: 'owner4@example.com',
+        role: 'restaurant_owner',
+      };
+      const stranger: AccessTokenPayload = {
+        sub: 'stranger-1',
+        email: 'stranger1@example.com',
+        role: 'restaurant_owner',
+      };
+      const restaurant = await createOwnedRestaurant(someoneElse.sub);
+
+      await expect(
+        service.create(
+          {
+            code: 'NOTMINE',
+            discountType: 'fixed',
+            discountValue: 5,
+            restaurantId: restaurant._id.toString(),
+          },
+          stranger,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('findMine returns only codes scoped to restaurants/stores this vendor owns', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-5',
+        email: 'owner5@example.com',
+        role: 'restaurant_owner',
+      };
+      const someoneElse: AccessTokenPayload = {
+        sub: 'owner-6',
+        email: 'owner6@example.com',
+        role: 'restaurant_owner',
+      };
+      const myRestaurant = await createOwnedRestaurant(owner.sub);
+      const myStore = await createOwnedStore(owner.sub);
+      const theirRestaurant = await createOwnedRestaurant(someoneElse.sub);
+
+      await service.create(
+        {
+          code: 'MINE1',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: myRestaurant._id.toString(),
+        },
+        owner,
+      );
+      await service.create(
+        {
+          code: 'MINE2',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId: myStore._id.toString(),
+        },
+        owner,
+      );
+      await service.create(
+        {
+          code: 'THEIRS',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: theirRestaurant._id.toString(),
+        },
+        someoneElse,
+      );
+      await service.create(
+        { code: 'PLATFORMONE', discountType: 'fixed', discountValue: 5 },
+        admin,
+      );
+
+      const mine = await service.findMine(owner);
+
+      expect(mine.map((p) => p.code).sort()).toEqual(['MINE1', 'MINE2']);
+    });
+
+    it('lets a vendor update (e.g. deactivate) their own code', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-7',
+        email: 'owner7@example.com',
+        role: 'restaurant_owner',
+      };
+      const restaurant = await createOwnedRestaurant(owner.sub);
+      const promo = await service.create(
+        {
+          code: 'VENDORDEACTIVATE',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: restaurant._id.toString(),
+        },
+        owner,
+      );
+
+      const updated = await service.update(
+        promo._id.toString(),
+        { isActive: false },
+        owner,
+      );
+
+      expect(updated.isActive).toBe(false);
+    });
+
+    it("rejects a vendor updating another vendor's code", async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-8',
+        email: 'owner8@example.com',
+        role: 'restaurant_owner',
+      };
+      const stranger: AccessTokenPayload = {
+        sub: 'stranger-2',
+        email: 'stranger2@example.com',
+        role: 'restaurant_owner',
+      };
+      const restaurant = await createOwnedRestaurant(owner.sub);
+      const promo = await service.create(
+        {
+          code: 'NOTYOURS',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: restaurant._id.toString(),
+        },
+        owner,
+      );
+
+      await expect(
+        service.update(promo._id.toString(), { isActive: false }, stranger),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects a vendor trying to reassign a code to a different restaurant', async () => {
+      const owner: AccessTokenPayload = {
+        sub: 'owner-9',
+        email: 'owner9@example.com',
+        role: 'restaurant_owner',
+      };
+      const restaurant = await createOwnedRestaurant(owner.sub);
+      const otherRestaurant = await createOwnedRestaurant(owner.sub);
+      const promo = await service.create(
+        {
+          code: 'NOREASSIGN',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: restaurant._id.toString(),
+        },
+        owner,
+      );
+
+      await expect(
+        service.update(
+          promo._id.toString(),
+          { restaurantId: otherRestaurant._id.toString() },
+          owner,
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

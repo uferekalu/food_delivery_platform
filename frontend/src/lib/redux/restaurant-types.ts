@@ -174,6 +174,9 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
+  /** Set only while a promo is active on this item — powers the strikethrough original price
+   * (docs/ROADMAP.md FDP-111), mirroring Product.discountedPrice (stores). Null when not set. */
+  discountedPrice: number | null;
   /** Owner-only cost to make this item, feeds the sales report's COGS/margin figures — never
    * shown to customers. Null when not set. */
   costPrice: number | null;
@@ -352,6 +355,7 @@ export interface PromoCode {
   minOrderAmount: number;
   maxDiscountAmount: number | null;
   restaurantId: string | null;
+  storeId: string | null;
   expiresAt: string | null;
   isActive: boolean;
   usageLimit: number | null;

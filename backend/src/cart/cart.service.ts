@@ -148,7 +148,9 @@ export class CartService {
       cart.items.push({
         menuItemId: menuItem._id,
         name: menuItem.name,
-        price: menuItem.price,
+        // Price snapshotted at add-to-cart time — a discountedPrice, if active, is what's
+        // actually charged (docs/ROADMAP.md FDP-111, mirroring addStoreItem below).
+        price: menuItem.discountedPrice ?? menuItem.price,
         imageUrl: menuItem.imageUrl,
         qty,
         selectedModifiers: resolvedModifiers,
@@ -321,7 +323,7 @@ export class CartService {
         cart.items.push({
           menuItemId: menuItem._id,
           name: menuItem.name,
-          price: menuItem.price,
+          price: menuItem.discountedPrice ?? menuItem.price,
           imageUrl: menuItem.imageUrl,
           qty: line.qty,
           selectedModifiers: resolvedModifiers,

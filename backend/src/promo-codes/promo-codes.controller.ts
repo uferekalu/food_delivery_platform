@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PromoCodesService } from './promo-codes.service';
 import type { PromoCodeSeller } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
@@ -42,21 +44,37 @@ export class PromoCodesController {
     throw new BadRequestException('Provide either restaurantId or storeId');
   }
 
-  @Roles('admin')
+  // A vendor may also create a code, scoped to their own restaurant/store only — enforced in
+  // PromoCodesService.create (docs/ROADMAP.md FDP-111).
+  @Roles('admin', 'restaurant_owner')
   @Post()
-  create(@Body() dto: CreatePromoCodeDto) {
-    return this.promoCodesService.create(dto);
+  create(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: CreatePromoCodeDto,
+  ) {
+    return this.promoCodesService.create(dto, user);
   }
 
+  // Full platform-wide list — admin only. A vendor uses GET /promo-codes/mine instead.
   @Roles('admin')
   @Get()
   findAll() {
     return this.promoCodesService.findAll();
   }
 
-  @Roles('admin')
+  @Roles('restaurant_owner')
+  @Get('mine')
+  findMine(@CurrentUser() user: AccessTokenPayload) {
+    return this.promoCodesService.findMine(user);
+  }
+
+  @Roles('admin', 'restaurant_owner')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePromoCodeDto) {
-    return this.promoCodesService.update(id, dto);
+  update(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdatePromoCodeDto,
+  ) {
+    return this.promoCodesService.update(id, dto, user);
   }
 }

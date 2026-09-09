@@ -159,6 +159,7 @@ describe('CartService', () => {
     overrides: Partial<{
       name: string;
       price: number;
+      discountedPrice: number;
       isAvailable: boolean;
       modifierGroups: TestModifierGroup[];
     }> = {},
@@ -168,6 +169,7 @@ describe('CartService', () => {
       categoryId: restaurantId, // not exercised by CartService; any ObjectId-shaped value works
       name: overrides.name ?? 'Jollof Rice',
       price: overrides.price ?? 12,
+      discountedPrice: overrides.discountedPrice ?? null,
       isAvailable: overrides.isAvailable ?? true,
       modifierGroups: overrides.modifierGroups ?? [],
     });
@@ -193,6 +195,22 @@ describe('CartService', () => {
     expect(cart.items).toHaveLength(1);
     expect(cart.items[0].qty).toBe(2);
     expect(cart.subtotal).toBe(24);
+  });
+
+  it('prefers discountedPrice over price when set (docs/ROADMAP.md FDP-111)', async () => {
+    const restaurant = await createApprovedRestaurant();
+    const item = await createItem(restaurant._id.toString(), {
+      price: 1500,
+      discountedPrice: 1400,
+    });
+
+    const cart = await cartService.addItem(userId, {
+      menuItemId: item._id.toString(),
+      qty: 2,
+    });
+
+    expect(cart.items[0].price).toBe(1400);
+    expect(cart.subtotal).toBe(2800);
   });
 
   it('merges an identical add (same item, same modifiers, same notes) into the existing line', async () => {
