@@ -105,17 +105,24 @@ export class PromoCodesService {
       .sort({ createdAt: -1 })
       .exec();
 
+    // `!= null` (loose), not `!== null` — a real production bug (docs/ROADMAP.md FDP-114):
+    // a promo code predating this field (or written directly, bypassing the schema's
+    // `default: null`) reads back with `restaurantId`/`storeId` genuinely `undefined`, not
+    // `null`. `undefined !== null` is `true` in JS, so the strict check wrongly treated that
+    // code as restaurant-scoped, then crashed calling `.toString()` on `undefined` — surfaced
+    // to the admin as a hard page-crash ("Cannot read properties of undefined (reading
+    // 'type')"), since the whole request failed before any `scope` could be attached.
     const restaurantIds = [
       ...new Set(
         promos
-          .filter((p) => p.restaurantId !== null)
+          .filter((p) => p.restaurantId != null)
           .map((p) => p.restaurantId!.toString()),
       ),
     ];
     const storeIds = [
       ...new Set(
         promos
-          .filter((p) => p.storeId !== null)
+          .filter((p) => p.storeId != null)
           .map((p) => p.storeId!.toString()),
       ),
     ];
@@ -136,14 +143,14 @@ export class PromoCodesService {
 
     return promos.map((promo) => {
       let scope: PromoCodeScope;
-      if (promo.restaurantId !== null) {
+      if (promo.restaurantId != null) {
         const id = promo.restaurantId.toString();
         scope = {
           type: 'restaurant',
           id,
           name: restaurantNameById.get(id) ?? 'Unknown restaurant',
         };
-      } else if (promo.storeId !== null) {
+      } else if (promo.storeId != null) {
         const id = promo.storeId.toString();
         scope = {
           type: 'store',
@@ -298,7 +305,10 @@ export class PromoCodesService {
     if (promo.expiresAt && promo.expiresAt.getTime() < Date.now()) {
       return { valid: false, reason: 'This promo code has expired' };
     }
-    if (promo.restaurantId !== null) {
+    // `!= null` (loose) here too — same reasoning as `findAll()` above: a legacy code with
+    // `restaurantId`/`storeId` genuinely `undefined` (not `null`) must be treated as
+    // platform-wide, not crash on `.toString()`.
+    if (promo.restaurantId != null) {
       const validForThisCart =
         seller.sellerType === 'restaurant' &&
         promo.restaurantId.toString() === seller.sellerId;
@@ -309,7 +319,7 @@ export class PromoCodesService {
         };
       }
     }
-    if (promo.storeId !== null) {
+    if (promo.storeId != null) {
       const validForThisCart =
         seller.sellerType === 'store' &&
         promo.storeId.toString() === seller.sellerId;

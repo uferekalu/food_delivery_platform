@@ -884,6 +884,59 @@ describe('PromoCodesService', () => {
         name: 'Market Square Supermarket',
       });
     });
+
+    it('reports scope: platform (not a crash) for a legacy code whose restaurantId/storeId is genuinely undefined, not null (docs/ROADMAP.md FDP-114) — a real production bug', async () => {
+      // Bypasses the DTO/service entirely to simulate a promo code predating these fields (or
+      // written directly), same "legacy data" reasoning as the rider/restaurant/store payout
+      // fixture bugs above. `undefined !== null` is `true` in JS — the old `!== null` check
+      // wrongly treated this as restaurant-scoped and crashed calling `.toString()` on
+      // `undefined`, surfacing to the admin UI as "Cannot read properties of undefined
+      // (reading 'type')" once the whole request failed.
+      await promoCodeModel.collection.insertOne({
+        code: 'LEGACY1',
+        discountType: 'fixed',
+        discountValue: 5,
+        minOrderAmount: 0,
+        maxDiscountAmount: null,
+        expiresAt: null,
+        isActive: true,
+        usageLimit: null,
+        usedCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // restaurantId/storeId deliberately absent — never written at all.
+      });
+
+      const all = await service.findAll();
+
+      expect(all.find((p) => p.code === 'LEGACY1')?.scope).toEqual({
+        type: 'platform',
+      });
+    });
+
+    it('validate() also treats the same legacy code as platform-wide instead of crashing (docs/ROADMAP.md FDP-114)', async () => {
+      await promoCodeModel.collection.insertOne({
+        code: 'LEGACY2',
+        discountType: 'fixed',
+        discountValue: 5,
+        minOrderAmount: 0,
+        maxDiscountAmount: null,
+        expiresAt: null,
+        isActive: true,
+        usageLimit: null,
+        usedCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await service.validate(
+        'LEGACY2',
+        { sellerType: 'restaurant', sellerId: restaurantId },
+        50,
+      );
+
+      expect(result.valid).toBe(true);
+    });
   });
 
   describe('findActiveForSeller (docs/ROADMAP.md FDP-112)', () => {

@@ -260,7 +260,9 @@ function PromoRow({ promo }: { promo: AdminPromoCode }) {
             <span className="font-mono text-sm font-semibold text-text">{promo.code}</span>
             <Badge variant={promo.isActive ? "success" : "neutral"}>{promo.isActive ? t("active") : t("inactive")}</Badge>
             <Badge variant="neutral">
-              {promo.scope.type === "platform"
+              {/* Defensive against a data shape the backend didn't send correctly for some
+                  code (docs/ROADMAP.md FDP-114) — never let one bad row crash the whole tab. */}
+              {!promo.scope || promo.scope.type === "platform"
                 ? t("platformWide")
                 : promo.scope.type === "restaurant"
                   ? t("restaurantScopeLabel", { name: promo.scope.name })
