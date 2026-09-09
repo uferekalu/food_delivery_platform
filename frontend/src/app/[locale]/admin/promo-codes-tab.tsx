@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,9 +21,11 @@ import {
   useListPromoCodesQuery,
   useUpdatePromoCodeMutation,
 } from "@/lib/redux/services/admin-api";
+import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
+import { useListStoresQuery } from "@/lib/redux/services/stores-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatNumber } from "@/lib/currency";
-import { DISCOUNT_TYPES, type PromoCode } from "@/lib/redux/restaurant-types";
+import { DISCOUNT_TYPES, type AdminPromoCode } from "@/lib/redux/restaurant-types";
 
 // An empty number input submits as "" — coerced to 0 by z.coerce.number() rather than treated
 // as "not provided", which would wrongly fail usageLimit's min(1) whenever it's left blank (the
@@ -30,11 +33,41 @@ import { DISCOUNT_TYPES, type PromoCode } from "@/lib/redux/restaurant-types";
 // `.optional()` actually take effect.
 const blankToUndefined = (v: unknown) => (v === "" ? undefined : v);
 
+const SCOPE_TYPES = ["platform", "restaurant", "store"] as const;
+type ScopeType = (typeof SCOPE_TYPES)[number];
+
 function CreatePromoForm() {
   const t = useTranslations("AdminPromoCodesTab");
   const locale = useLocale();
   const { toast } = useToast();
   const [createPromo, { isLoading }] = useCreatePromoCodeMutation();
+  const [scopeType, setScopeType] = useState<ScopeType>("platform");
+  const [scopeId, setScopeId] = useState("");
+
+  const SCOPE_TYPE_OPTIONS = SCOPE_TYPES.map((value) => ({
+    value,
+    label:
+      value === "platform" ? t("platformWide") : value === "restaurant" ? t("restaurant") : t("store"),
+  }));
+
+  // Fetched only once actually needed — same skip-until-open reasoning as
+  // AdminMessagesTab's vendor picker (docs/ROADMAP.md FDP-108).
+  const { data: restaurants, isLoading: loadingRestaurants } = useListRestaurantsQuery(
+    { limit: 100 },
+    { skip: scopeType !== "restaurant" },
+  );
+  const { data: stores, isLoading: loadingStores } = useListStoresQuery(
+    { limit: 100 },
+    { skip: scopeType !== "store" },
+  );
+  const restaurantOptions = useMemo(
+    () => (restaurants?.items ?? []).map((r) => ({ value: r._id, label: r.name })),
+    [restaurants],
+  );
+  const storeOptions = useMemo(
+    () => (stores?.items ?? []).map((s) => ({ value: s._id, label: s.name })),
+    [stores],
+  );
 
   const DISCOUNT_TYPE_OPTIONS = DISCOUNT_TYPES.map((value) => ({
     value,
@@ -63,16 +96,25 @@ function CreatePromoForm() {
   });
   const discountType = useWatch({ control, name: "discountType" });
 
+  function resetScope() {
+    setScopeType("platform");
+    setScopeId("");
+  }
+
   async function submit(values: PromoValues) {
+    if (scopeType !== "platform" && !scopeId) return;
     try {
       await createPromo({
         code: values.code,
         discountType: values.discountType,
         discountValue: values.discountValue,
+        ...(scopeType === "restaurant" ? { restaurantId: scopeId } : {}),
+        ...(scopeType === "store" ? { storeId: scopeId } : {}),
         ...(values.minOrderAmount ? { minOrderAmount: values.minOrderAmount } : {}),
         ...(values.usageLimit ? { usageLimit: values.usageLimit } : {}),
       }).unwrap();
       reset({ discountType: values.discountType, code: "", discountValue: 0 });
+      resetScope();
       toast({ title: t("promoCodeCreated"), variant: "success" });
     } catch (err) {
       toast({ title: t("couldNotCreatePromoCode"), description: getErrorMessage(err), variant: "danger" });
@@ -134,10 +176,55 @@ function CreatePromoForm() {
               )}
             />
           </FormField>
+          <FormField label={t("appliesTo")} required>
+            <Select
+              options={SCOPE_TYPE_OPTIONS}
+              value={scopeType}
+              onChange={(v) => {
+                setScopeType(v as ScopeType);
+                setScopeId("");
+              }}
+            />
+          </FormField>
+          {scopeType === "restaurant" && (
+            <FormField label={t("restaurant")} required className="sm:col-span-2">
+              {loadingRestaurants ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select
+                  options={restaurantOptions}
+                  value={scopeId}
+                  onChange={setScopeId}
+                  searchable
+                  placeholder={t("selectRestaurant")}
+                />
+              )}
+            </FormField>
+          )}
+          {scopeType === "store" && (
+            <FormField label={t("store")} required className="sm:col-span-2">
+              {loadingStores ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select
+                  options={storeOptions}
+                  value={scopeId}
+                  onChange={setScopeId}
+                  searchable
+                  placeholder={t("selectStore")}
+                />
+              )}
+            </FormField>
+          )}
           <FormField label={t("usageLimit")} hint={t("optionalUnlimited")} className="sm:col-span-2">
             <Input type="number" min="1" {...register("usageLimit")} />
           </FormField>
-          <Button type="submit" isLoading={isLoading} className="self-end">
+          <Button
+            type="submit"
+            isLoading={isLoading}
+            disabled={scopeType !== "platform" && !scopeId}
+            className="self-end"
+          >
             {t("createPromoCode")}
           </Button>
         </form>
@@ -146,7 +233,7 @@ function CreatePromoForm() {
   );
 }
 
-function PromoRow({ promo }: { promo: PromoCode }) {
+function PromoRow({ promo }: { promo: AdminPromoCode }) {
   const t = useTranslations("AdminPromoCodesTab");
   const locale = useLocale();
   const { toast } = useToast();
@@ -159,6 +246,13 @@ function PromoRow({ promo }: { promo: PromoCode }) {
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-semibold text-text">{promo.code}</span>
             <Badge variant={promo.isActive ? "success" : "neutral"}>{promo.isActive ? t("active") : t("inactive")}</Badge>
+            <Badge variant="neutral">
+              {promo.scope.type === "platform"
+                ? t("platformWide")
+                : promo.scope.type === "restaurant"
+                  ? t("restaurantScopeLabel", { name: promo.scope.name })
+                  : t("storeScopeLabel", { name: promo.scope.name })}
+            </Badge>
           </div>
           <span className="text-sm text-text-muted">
             {promo.discountType === "percentage"

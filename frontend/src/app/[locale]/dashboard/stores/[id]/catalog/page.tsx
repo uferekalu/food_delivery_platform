@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { RequireRole } from "@/components/require-role";
@@ -151,6 +151,16 @@ function ProductFormModal({
       : { name: "", description: "", price: 0 },
   });
 
+  // "Sale price" is the actual price customers pay, not the amount taken off — the savings
+  // line below exists precisely so a vendor never has to do that subtraction themselves.
+  const [watchedPrice, watchedSalePrice] = useWatch({ control, name: ["price", "discountedPrice"] });
+  const priceNum = Number(watchedPrice);
+  const salePriceNum = Number(watchedSalePrice);
+  const savings =
+    watchedSalePrice !== undefined && watchedSalePrice !== "" && !Number.isNaN(salePriceNum) && !Number.isNaN(priceNum) && salePriceNum < priceNum
+      ? priceNum - salePriceNum
+      : null;
+
   const submit = async (values: ProductFormValues) => {
     try {
       if (isEditing && product) {
@@ -210,7 +220,11 @@ function ProductFormModal({
               )}
             />
           </FormField>
-          <FormField label={t("discountedPrice")} error={errors.discountedPrice?.message} hint={t("discountedPriceHint")}>
+          <FormField
+            label={t("discountedPrice")}
+            error={errors.discountedPrice?.message}
+            hint={savings != null ? t("youSave", { amount: formatMoney(savings, currency, locale) }) : t("discountedPriceHint")}
+          >
             <Controller
               control={control}
               name="discountedPrice"

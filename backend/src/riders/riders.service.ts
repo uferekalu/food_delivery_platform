@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { FilterQuery, Model } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Rider, RiderDocument } from './schemas/rider.schema';
@@ -116,9 +116,8 @@ export class RidersService {
     reference: string,
     bankDetails?: { bankCode: string; accountNumber: string },
   ): Promise<RiderDocument> {
-    const rider = await this.findMine(userId);
     return this.applyPayoutAccountUpdate(
-      rider,
+      { userId },
       provider,
       status,
       reference,
@@ -134,10 +133,8 @@ export class RidersService {
     status: PayoutAccountStatus,
     reference: string,
   ): Promise<RiderDocument> {
-    const rider = await this.riderModel.findById(id).exec();
-    if (!rider) throw new NotFoundException('Rider not found');
     return this.applyPayoutAccountUpdate(
-      rider,
+      { _id: id },
       provider,
       status,
       reference,
@@ -154,8 +151,28 @@ export class RidersService {
       .exec();
   }
 
-  private applyPayoutAccountUpdate(
-    rider: RiderDocument,
+  /**
+   * Atomic, targeted update (`findOneAndUpdate` with `$set`/`$push` on just the
+   * `payoutAccounts` path) rather than load-mutate-`.save()` — a real production bug: `.save()`
+   * revalidates the *entire* document against every KYC field the schema requires, so a rider
+   * whose pre-existing record had any unrelated data issue (legacy data, a field added after
+   * they applied, etc.) got an opaque 500 trying to do something as narrow as connecting a
+   * payout account, which touches none of those other fields. `filter` identifies the rider
+   * either by `userId` (`setPayoutAccount`, the normal self-service path) or `_id`
+   * (`setPayoutAccountFromWebhook`, which only has the rider's own id). Two sequential
+   * `findOneAndUpdate` calls, not one — MongoDB rejects `$set`/`$push` targeting overlapping
+   * array paths in a single update, the same class of "path conflict" `VendorMessagesService`
+   * already hit for `$inc`/`$setOnInsert` — so the "does an entry for this provider already
+   * exist" branch has to be two round trips, acceptable here since this is a low-frequency,
+   * self-service, non-concurrent write. The second query's "no existing entry for this
+   * provider" filter is `payoutAccounts: { $not: { $elemMatch: { provider } } }`, not the more
+   * obvious `'payoutAccounts.provider': { $ne: provider }` — confirmed live that the dotted-path
+   * form does *not* reliably match a rider whose `payoutAccounts` array is empty (the realistic
+   * case for a rider connecting their first payout account ever), which silently threw the same
+   * `NotFoundException` this whole rewrite exists to avoid.
+   */
+  private async applyPayoutAccountUpdate(
+    filter: FilterQuery<RiderDocument>,
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,
@@ -163,24 +180,42 @@ export class RidersService {
   ): Promise<RiderDocument> {
     const bankCode = bankDetails?.bankCode ?? null;
     const accountNumber = bankDetails?.accountNumber ?? null;
-    const existing = rider.payoutAccounts.find(
-      (account) => account.provider === provider,
-    );
-    if (existing) {
-      existing.status = status;
-      existing.reference = reference;
-      existing.bankCode = bankCode;
-      existing.accountNumber = accountNumber;
-    } else {
-      rider.payoutAccounts.push({
-        provider,
-        status,
-        reference,
-        bankCode,
-        accountNumber,
-      });
-    }
-    return rider.save();
+
+    const updatedExisting = await this.riderModel
+      .findOneAndUpdate(
+        { ...filter, 'payoutAccounts.provider': provider },
+        {
+          $set: {
+            'payoutAccounts.$.status': status,
+            'payoutAccounts.$.reference': reference,
+            'payoutAccounts.$.bankCode': bankCode,
+            'payoutAccounts.$.accountNumber': accountNumber,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (updatedExisting) return updatedExisting;
+
+    const withNewEntry = await this.riderModel
+      .findOneAndUpdate(
+        { ...filter, payoutAccounts: { $not: { $elemMatch: { provider } } } },
+        {
+          $push: {
+            payoutAccounts: {
+              provider,
+              status,
+              reference,
+              bankCode,
+              accountNumber,
+            },
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!withNewEntry) throw new NotFoundException('Rider not found');
+    return withNewEntry;
   }
 
   /** Admin-only listing, so there's something to work from before verifying a rider — mirrors

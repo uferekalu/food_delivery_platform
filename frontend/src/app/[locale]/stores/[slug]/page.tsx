@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { PromoBanner } from "@/components/promo-banner";
 import { useGetStoreBySlugQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreCatalogQuery } from "@/lib/redux/services/store-catalog-api";
 import { useAddStoreItemMutation } from "@/lib/redux/services/cart-api";
@@ -207,6 +208,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
           {t("notAcceptingOrders")}
         </Alert>
       )}
+
+      <PromoBanner storeId={store._id} currency={store.currency} />
 
       <div className="flex flex-col gap-8">
         <h2 className="text-xl font-semibold text-text">{t("catalog")}</h2>

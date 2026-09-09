@@ -108,7 +108,7 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
   }
 
   const unitPrice =
-    item.price +
+    (item.discountedPrice ?? item.price) +
     item.modifierGroups.reduce((sum, group) => {
       const picks = selections[group.name] ?? [];
       return (
@@ -178,6 +178,14 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.imageUrl} alt="" className="-mt-1 h-40 w-full rounded-md object-cover" />
         )}
+
+        {item.discountedPrice != null && (
+          <p className="text-sm">
+            <span className="text-text-muted line-through">{formatMoney(item.price, currency, locale)}</span>{" "}
+            <span className="font-semibold text-danger">{formatMoney(item.discountedPrice, currency, locale)}</span>
+          </p>
+        )}
+
         {item.modifierGroups.map((group) => (
           <ModifierGroupFields
             key={group.name}

@@ -357,6 +357,40 @@ describe('RidersService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('succeeds even when the rider document has an unrelated data issue (docs/ROADMAP.md FDP-112) — a real production bug', async () => {
+      const customer = await createCustomer();
+      // Bypasses ApplyRiderDto/schema validation the same way "verify rejects a rider missing
+      // required KYC information" (above) does, to simulate a real rider whose document has
+      // some unrelated issue predating this field or this validation rule. Load-mutate-`.save()`
+      // (the old implementation) revalidates the *entire* document and would throw here; the
+      // atomic `findOneAndUpdate` fix touches only `payoutAccounts` and must succeed regardless.
+      // `userId: customer._id.toString()`, not the raw ObjectId — `apply()` always assigns
+      // `requester.sub` (a string) to this field, and per the Mongoose `@Prop()`-Mixed-type
+      // quirk (backend/CLAUDE.md), a raw ObjectId here would actually be *stored* as an
+      // ObjectId, silently failing to match `setPayoutAccount`'s string-based `userId` query —
+      // the exact fixture mistake that cost real time in `payout-execution.service.spec.ts`
+      // (docs/ROADMAP.md FDP-92).
+      const incompleteRider = new riderModel({
+        userId: customer._id.toString(),
+        vehicleType: 'motorcycle',
+      });
+      await incompleteRider.save({ validateBeforeSave: false });
+
+      const updated = await ridersService.setPayoutAccount(
+        customer._id.toString(),
+        'paystack',
+        'active',
+        'ACCT_resilient',
+        { bankCode: '058', accountNumber: '0123456789' },
+      );
+
+      expect(updated.payoutAccounts[0]).toMatchObject({
+        provider: 'paystack',
+        status: 'active',
+        reference: 'ACCT_resilient',
+      });
+    });
+
     it('setPayoutAccountFromWebhook upserts by rider id, and findByPayoutAccountReference finds it back', async () => {
       const customer = await createCustomer();
       const rider = await ridersService.apply(requesterFor(customer), {

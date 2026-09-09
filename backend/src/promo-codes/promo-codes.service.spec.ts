@@ -798,4 +798,216 @@ describe('PromoCodesService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('findAll — admin scope enrichment (docs/ROADMAP.md FDP-112)', () => {
+    async function createOwnedRestaurant(ownerId: string, name: string) {
+      const restaurant = await restaurantsService.create(ownerId, {
+        name,
+        cuisineTypes: ['Nigerian'],
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return restaurantsService.approve(restaurant._id.toString());
+    }
+
+    async function createOwnedStore(ownerId: string, name: string) {
+      const store = await storesService.create(ownerId, {
+        name,
+        type: 'groceries',
+        currency: 'NGN',
+        country: 'Nigeria',
+        address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+      });
+      return storesService.approve(store._id.toString());
+    }
+
+    it('reports scope: platform for a platform-wide code', async () => {
+      await service.create(
+        { code: 'ENRICH1', discountType: 'fixed', discountValue: 5 },
+        admin,
+      );
+
+      const all = await service.findAll();
+
+      expect(all.find((p) => p.code === 'ENRICH1')?.scope).toEqual({
+        type: 'platform',
+      });
+    });
+
+    it("reports scope: restaurant with the restaurant's name", async () => {
+      const restaurant = await createOwnedRestaurant(
+        'owner-enrich-1',
+        'Burgundy Kitchen',
+      );
+      await service.create(
+        {
+          code: 'ENRICH2',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: restaurant._id.toString(),
+        },
+        admin,
+      );
+
+      const all = await service.findAll();
+
+      expect(all.find((p) => p.code === 'ENRICH2')?.scope).toEqual({
+        type: 'restaurant',
+        id: restaurant._id.toString(),
+        name: 'Burgundy Kitchen',
+      });
+    });
+
+    it("reports scope: store with the store's name", async () => {
+      const store = await createOwnedStore(
+        'owner-enrich-2',
+        'Market Square Supermarket',
+      );
+      await service.create(
+        {
+          code: 'ENRICH3',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId: store._id.toString(),
+        },
+        admin,
+      );
+
+      const all = await service.findAll();
+
+      expect(all.find((p) => p.code === 'ENRICH3')?.scope).toEqual({
+        type: 'store',
+        id: store._id.toString(),
+        name: 'Market Square Supermarket',
+      });
+    });
+  });
+
+  describe('findActiveForSeller (docs/ROADMAP.md FDP-112)', () => {
+    const storeId = '507f1f77bcf86cd799439031';
+
+    it('includes a platform-wide active code for any seller', async () => {
+      await service.create(
+        { code: 'BANNER1', discountType: 'fixed', discountValue: 5 },
+        admin,
+      );
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'restaurant',
+        sellerId: restaurantId,
+      });
+
+      expect(active.map((p) => p.code)).toContain('BANNER1');
+    });
+
+    it('includes a code scoped to this exact restaurant, excludes one scoped to a different one', async () => {
+      await service.create(
+        {
+          code: 'BANNER2',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId,
+        },
+        admin,
+      );
+      await service.create(
+        {
+          code: 'BANNER3',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId: otherRestaurantId,
+        },
+        admin,
+      );
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'restaurant',
+        sellerId: restaurantId,
+      });
+
+      const codes = active.map((p) => p.code);
+      expect(codes).toContain('BANNER2');
+      expect(codes).not.toContain('BANNER3');
+    });
+
+    it('excludes an inactive code', async () => {
+      await service.create(
+        {
+          code: 'BANNER4',
+          discountType: 'fixed',
+          discountValue: 5,
+          isActive: false,
+        },
+        admin,
+      );
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'store',
+        sellerId: storeId,
+      });
+
+      expect(active.map((p) => p.code)).not.toContain('BANNER4');
+    });
+
+    it('excludes an expired code', async () => {
+      await service.create(
+        {
+          code: 'BANNER5',
+          discountType: 'fixed',
+          discountValue: 5,
+          expiresAt: new Date(Date.now() - 1000).toISOString(),
+        },
+        admin,
+      );
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'store',
+        sellerId: storeId,
+      });
+
+      expect(active.map((p) => p.code)).not.toContain('BANNER5');
+    });
+
+    it('excludes a code that has reached its usage limit', async () => {
+      const promo = await service.create(
+        {
+          code: 'BANNER6',
+          discountType: 'fixed',
+          discountValue: 5,
+          usageLimit: 1,
+        },
+        admin,
+      );
+      await service.redeem(promo._id.toString());
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'store',
+        sellerId: storeId,
+      });
+
+      expect(active.map((p) => p.code)).not.toContain('BANNER6');
+    });
+
+    it('excludes a restaurant-scoped code from a store seller and vice versa', async () => {
+      await service.create(
+        {
+          code: 'BANNER7',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId,
+        },
+        admin,
+      );
+
+      const active = await service.findActiveForSeller({
+        sellerType: 'store',
+        sellerId: storeId,
+      });
+
+      expect(active.map((p) => p.code)).not.toContain('BANNER7');
+    });
+  });
 });
