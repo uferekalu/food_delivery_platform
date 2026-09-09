@@ -25,7 +25,7 @@ import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useListStoresQuery } from "@/lib/redux/services/stores-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatNumber } from "@/lib/currency";
-import { DISCOUNT_TYPES, type AdminPromoCode } from "@/lib/redux/restaurant-types";
+import { DISCOUNT_TYPES, STORE_TYPES, type AdminPromoCode } from "@/lib/redux/restaurant-types";
 
 // An empty number input submits as "" — coerced to 0 by z.coerce.number() rather than treated
 // as "not provided", which would wrongly fail usageLimit's min(1) whenever it's left blank (the
@@ -56,17 +56,30 @@ function CreatePromoForm() {
     { limit: 100 },
     { skip: scopeType !== "restaurant" },
   );
-  const { data: stores, isLoading: loadingStores } = useListStoresQuery(
-    { limit: 100 },
-    { skip: scopeType !== "store" },
+  // ListStoresParams.type is required (a store's type is a real filter customers browse by) —
+  // the picker needs every store regardless of type, so both of the only two types are fetched
+  // and merged rather than adding an admin-only "all stores" endpoint just for this.
+  const storesSkip = scopeType !== "store";
+  const { data: groceryStores, isLoading: loadingGroceryStores } = useListStoresQuery(
+    { type: STORE_TYPES[0], limit: 100 },
+    { skip: storesSkip },
   );
+  const { data: pharmacyStores, isLoading: loadingPharmacyStores } = useListStoresQuery(
+    { type: STORE_TYPES[1], limit: 100 },
+    { skip: storesSkip },
+  );
+  const loadingStores = loadingGroceryStores || loadingPharmacyStores;
   const restaurantOptions = useMemo(
     () => (restaurants?.items ?? []).map((r) => ({ value: r._id, label: r.name })),
     [restaurants],
   );
   const storeOptions = useMemo(
-    () => (stores?.items ?? []).map((s) => ({ value: s._id, label: s.name })),
-    [stores],
+    () =>
+      [...(groceryStores?.items ?? []), ...(pharmacyStores?.items ?? [])].map((s) => ({
+        value: s._id,
+        label: s.name,
+      })),
+    [groceryStores, pharmacyStores],
   );
 
   const DISCOUNT_TYPE_OPTIONS = DISCOUNT_TYPES.map((value) => ({
