@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
@@ -84,6 +88,7 @@ export class MenuService {
   ): Promise<MenuItemDocument> {
     await this.assertOwnership(restaurantId, requester);
     await this.findCategoryOrThrow(restaurantId, dto.categoryId);
+    this.assertDiscountBelowPrice(dto.price, dto.discountedPrice);
     return this.itemModel.create({ ...dto, restaurantId });
   }
 
@@ -97,6 +102,12 @@ export class MenuService {
     if (dto.categoryId)
       await this.findCategoryOrThrow(restaurantId, dto.categoryId);
     const item = await this.findItemOrThrow(restaurantId, itemId);
+    this.assertDiscountBelowPrice(
+      dto.price ?? item.price,
+      dto.discountedPrice !== undefined
+        ? dto.discountedPrice
+        : item.discountedPrice,
+    );
     Object.assign(item, dto);
     return item.save();
   }
@@ -120,6 +131,15 @@ export class MenuService {
     const item = await this.findItemOrThrow(restaurantId, itemId);
     item.isAvailable = !item.isAvailable;
     return item.save();
+  }
+
+  private assertDiscountBelowPrice(
+    price: number,
+    discountedPrice: number | null | undefined,
+  ): void {
+    if (discountedPrice != null && discountedPrice >= price) {
+      throw new BadRequestException('discountedPrice must be lower than price');
+    }
   }
 
   private async assertOwnership(

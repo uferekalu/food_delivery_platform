@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { MenuService } from './menu.service';
@@ -169,6 +173,51 @@ describe('MenuService', () => {
     const remainingItems = await itemModel.find({ restaurantId }).exec();
     expect(remainingItems).toHaveLength(1);
     expect(remainingItems[0].name).toBe('Jollof Rice');
+  });
+
+  it('sets a discountedPrice below price (docs/ROADMAP.md FDP-111)', async () => {
+    const restaurant = await createTestRestaurant();
+    const restaurantId = restaurant._id.toString();
+    const category = await menuService.createCategory(restaurantId, owner, {
+      name: 'Mains',
+    });
+
+    const item = await menuService.createItem(restaurantId, owner, {
+      categoryId: category._id.toString(),
+      name: 'Jollof Rice',
+      price: 1500,
+      discountedPrice: 1400,
+    });
+
+    expect(item.discountedPrice).toBe(1400);
+  });
+
+  it('rejects a discountedPrice that is not lower than price, on create and on update', async () => {
+    const restaurant = await createTestRestaurant();
+    const restaurantId = restaurant._id.toString();
+    const category = await menuService.createCategory(restaurantId, owner, {
+      name: 'Mains',
+    });
+
+    await expect(
+      menuService.createItem(restaurantId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Jollof Rice',
+        price: 1500,
+        discountedPrice: 1500,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    const item = await menuService.createItem(restaurantId, owner, {
+      categoryId: category._id.toString(),
+      name: 'Fried Rice',
+      price: 1500,
+    });
+    await expect(
+      menuService.updateItem(restaurantId, item._id.toString(), owner, {
+        discountedPrice: 1600,
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('toggles item availability', async () => {

@@ -56,8 +56,17 @@ import {
   RiderDocument,
   RiderSchema,
 } from '../riders/schemas/rider.schema';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 jest.setTimeout(30_000);
+
+// promoCodesService.create() requires a requester as of docs/ROADMAP.md FDP-111 (vendor-created
+// promo codes) — every promo fixture in this file is platform-wide, so an admin requester here.
+const promoAdmin: AccessTokenPayload = {
+  sub: 'promo-admin-id',
+  email: 'promo-admin@example.com',
+  role: 'admin',
+};
 
 describe('OrdersService', () => {
   let mongod: MongoMemoryServer;
@@ -357,12 +366,15 @@ describe('OrdersService', () => {
         productId: product._id.toString(),
         qty: 2,
       }); // subtotal 200
-      const promo = await promoCodesService.create({
-        code: 'STORE10',
-        discountType: 'percentage',
-        discountValue: 10,
-        storeId: store._id.toString(),
-      });
+      const promo = await promoCodesService.create(
+        {
+          code: 'STORE10',
+          discountType: 'percentage',
+          discountValue: 10,
+          storeId: store._id.toString(),
+        },
+        promoAdmin,
+      );
 
       const order = await ordersService.createOrder(userId, {
         deliveryAddress: validAddress,
@@ -388,12 +400,15 @@ describe('OrdersService', () => {
       await cartService.addStoreItem(userId, {
         productId: product._id.toString(),
       });
-      await promoCodesService.create({
-        code: 'OTHERSTORE',
-        discountType: 'fixed',
-        discountValue: 5,
-        storeId: otherStore._id.toString(),
-      });
+      await promoCodesService.create(
+        {
+          code: 'OTHERSTORE',
+          discountType: 'fixed',
+          discountValue: 5,
+          storeId: otherStore._id.toString(),
+        },
+        promoAdmin,
+      );
 
       await expect(
         ordersService.createOrder(userId, {
@@ -695,11 +710,14 @@ describe('OrdersService', () => {
     const restaurant = await createApprovedRestaurant();
     const item = await createItem(restaurant._id.toString(), 100);
     await cartService.addItem(userId, { menuItemId: item._id.toString() });
-    const promo = await promoCodesService.create({
-      code: 'SAVE10',
-      discountType: 'fixed',
-      discountValue: 10,
-    });
+    const promo = await promoCodesService.create(
+      {
+        code: 'SAVE10',
+        discountType: 'fixed',
+        discountValue: 10,
+      },
+      promoAdmin,
+    );
 
     const order = await ordersService.createOrder(userId, {
       deliveryAddress: validAddress,

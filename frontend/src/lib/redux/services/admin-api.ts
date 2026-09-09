@@ -8,6 +8,7 @@ export interface CreatePromoCodeInput {
   minOrderAmount?: number;
   maxDiscountAmount?: number;
   restaurantId?: string;
+  storeId?: string;
   expiresAt?: string;
   isActive?: boolean;
   usageLimit?: number;
@@ -24,6 +25,16 @@ export const adminApi = api.injectEndpoints({
 
     listPromoCodes: builder.query<PromoCode[], void>({
       query: () => "/promo-codes",
+      providesTags: (result) =>
+        result
+          ? [...result.map((p) => ({ type: "PromoCode" as const, id: p._id })), { type: "PromoCode" as const, id: "LIST" }]
+          : [{ type: "PromoCode", id: "LIST" }],
+    }),
+
+    // A vendor's own promo codes (docs/ROADMAP.md FDP-111) — scoped to any restaurant/store they
+    // own, never the full platform-wide list listPromoCodes returns for an admin.
+    listMyPromoCodes: builder.query<PromoCode[], void>({
+      query: () => "/promo-codes/mine",
       providesTags: (result) =>
         result
           ? [...result.map((p) => ({ type: "PromoCode" as const, id: p._id })), { type: "PromoCode" as const, id: "LIST" }]
@@ -81,6 +92,7 @@ export const adminApi = api.injectEndpoints({
 export const {
   useGetAdminAnalyticsQuery,
   useListPromoCodesQuery,
+  useListMyPromoCodesQuery,
   useCreatePromoCodeMutation,
   useUpdatePromoCodeMutation,
   useGetOrderAsAdminQuery,

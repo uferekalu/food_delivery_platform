@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,9 @@ import { Model } from 'mongoose';
 import { PromoCode, PromoCodeDocument } from './schemas/promo-code.schema';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
+import { RestaurantsService } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
+import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 export type PromoCodeSeller =
   | { sellerType: 'restaurant'; sellerId: string }
@@ -26,14 +30,37 @@ export class PromoCodesService {
   constructor(
     @InjectModel(PromoCode.name)
     private readonly promoCodeModel: Model<PromoCodeDocument>,
+    private readonly restaurantsService: RestaurantsService,
+    private readonly storesService: StoresService,
   ) {}
 
-  // `async` deliberately, not a plain function returning `this.promoCodeModel.create(dto)` —
-  // assertAtMostOneSeller's throw needs to surface as a rejected promise (what every caller,
-  // and `.rejects.toThrow()` in tests, expects from this method), not a synchronous throw before
-  // any promise is even returned.
-  async create(dto: CreatePromoCodeDto): Promise<PromoCodeDocument> {
+  /**
+   * Vendor-created promo codes (docs/ROADMAP.md FDP-111) — an admin may still create a
+   * platform-wide code (neither `restaurantId` nor `storeId` set) or one scoped to any
+   * restaurant/store, same as before. A `restaurant_owner` may only create a code scoped to a
+   * restaurant/store they actually own — never platform-wide, and never for someone else's
+   * business — enforced via `assertSellerOwnership` below, which reuses the exact
+   * `assertOwnerOrAdmin` ownership check every other vendor-facing mutation in this codebase
+   * already goes through.
+   *
+   * `async` deliberately, not a plain function returning `this.promoCodeModel.create(dto)` —
+   * assertAtMostOneSeller's throw needs to surface as a rejected promise (what every caller,
+   * and `.rejects.toThrow()` in tests, expects from this method), not a synchronous throw before
+   * any promise is even returned.
+   */
+  async create(
+    dto: CreatePromoCodeDto,
+    requester: AccessTokenPayload,
+  ): Promise<PromoCodeDocument> {
     this.assertAtMostOneSeller(dto);
+    if (requester.role !== 'admin') {
+      if (!dto.restaurantId && !dto.storeId) {
+        throw new ForbiddenException(
+          'You can only create a promo code scoped to your own restaurant or store',
+        );
+      }
+      await this.assertSellerOwnership(dto, requester);
+    }
     return this.promoCodeModel.create(dto);
   }
 
@@ -41,18 +68,76 @@ export class PromoCodesService {
     return this.promoCodeModel.find().sort({ createdAt: -1 }).exec();
   }
 
+  /** A vendor's own promo codes — every code scoped to any restaurant or store they own, across
+   * both seller types (docs/ROADMAP.md FDP-111). Never includes platform-wide codes (those are
+   * admin's alone) or another vendor's codes. */
+  async findMine(requester: AccessTokenPayload): Promise<PromoCodeDocument[]> {
+    const [restaurants, stores] = await Promise.all([
+      this.restaurantsService.findMine(requester.sub),
+      this.storesService.findMine(requester.sub),
+    ]);
+    const restaurantIds = restaurants.map((r) => r._id.toString());
+    const storeIds = stores.map((s) => s._id.toString());
+    if (restaurantIds.length === 0 && storeIds.length === 0) return [];
+
+    return this.promoCodeModel
+      .find({
+        $or: [
+          { restaurantId: { $in: restaurantIds } },
+          { storeId: { $in: storeIds } },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
   async update(
     id: string,
     dto: UpdatePromoCodeDto,
+    requester: AccessTokenPayload,
   ): Promise<PromoCodeDocument> {
     const promo = await this.promoCodeModel.findById(id).exec();
     if (!promo) throw new NotFoundException('Promo code not found');
+
+    if (requester.role !== 'admin') {
+      // A vendor may only manage a code already scoped to their own business, and may never
+      // reassign it to a different restaurant/store or make it platform-wide — that's an
+      // admin-only action, since it changes who the code belongs to.
+      if (dto.restaurantId !== undefined || dto.storeId !== undefined) {
+        throw new ForbiddenException(
+          'Only an admin can change which restaurant or store a promo code belongs to',
+        );
+      }
+      await this.assertSellerOwnership(
+        {
+          restaurantId: promo.restaurantId?.toString(),
+          storeId: promo.storeId?.toString(),
+        },
+        requester,
+      );
+    }
+
     this.assertAtMostOneSeller({
       restaurantId: dto.restaurantId ?? promo.restaurantId?.toString(),
       storeId: dto.storeId ?? promo.storeId?.toString(),
     });
     Object.assign(promo, dto);
     return promo.save();
+  }
+
+  private async assertSellerOwnership(
+    seller: { restaurantId?: string; storeId?: string },
+    requester: AccessTokenPayload,
+  ): Promise<void> {
+    if (seller.restaurantId) {
+      const restaurant = await this.restaurantsService.findByIdOrThrow(
+        seller.restaurantId,
+      );
+      this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    } else if (seller.storeId) {
+      const store = await this.storesService.findByIdOrThrow(seller.storeId);
+      this.storesService.assertOwnerOrAdmin(store, requester);
+    }
   }
 
   /** At most one of restaurantId/storeId — a promo code is platform-wide (neither set),

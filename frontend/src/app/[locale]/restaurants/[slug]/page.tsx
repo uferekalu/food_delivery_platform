@@ -109,8 +109,21 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
                             <span className="font-medium text-text">{item.name}</span>
                             {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
                           </div>
-                          <span className="shrink-0 font-semibold text-text">
-                            {formatMoney(item.price, restaurant.currency, locale)}
+                          <span className="flex shrink-0 flex-col items-end gap-1">
+                            {item.discountedPrice != null ? (
+                              <>
+                                <span className="text-xs text-text-muted line-through">
+                                  {formatMoney(item.price, restaurant.currency, locale)}
+                                </span>
+                                <span className="font-semibold text-danger">
+                                  {formatMoney(item.discountedPrice, restaurant.currency, locale)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="font-semibold text-text">
+                                {formatMoney(item.price, restaurant.currency, locale)}
+                              </span>
+                            )}
                           </span>
                         </div>
                         {item.modifierGroups.length > 0 && (

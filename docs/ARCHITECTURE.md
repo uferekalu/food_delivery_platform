@@ -1721,3 +1721,67 @@ Full backend suite passes (33 tests across the touched `chatbot`/`knowledge-base
 new — `llm-chat.service.spec.ts` mocks `fetch` exactly like `sms.service.spec.ts` does for
 Termii); `tsc --noEmit` clean on both sides. No new translation keys — none of the three fixes
 change user-visible copy.
+
+## 35. Vendor promo codes and restaurant menu-item discounts (docs/ROADMAP.md FDP-111)
+
+The user asked to test promo codes and product discounts end to end and hit two gaps against
+what they expected from the request: promo codes could only be created by an admin, and the
+discounted-price/strikethrough feature — real and functional (it changes what's actually
+charged, not just displayed, see `CartService.addStoreItem`) — only existed for store products,
+never restaurant menu items. Both closed in this ticket.
+
+**Vendor-created promo codes.** `PromoCodesController.create`/`update` now also accept
+`@Roles('admin', 'restaurant_owner')`, with the actual ownership enforcement living in
+`PromoCodesService` (mirrors this codebase's established "`@Roles()` only checks the role label,
+ownership is a separate service-layer check" convention, `backend/CLAUDE.md`): a
+`restaurant_owner` may only create a code scoped to a restaurant or store they actually own —
+never platform-wide (an admin-only capability, since nothing would scope it to any particular
+vendor) and never for someone else's business — checked via a new `assertSellerOwnership` helper
+that reuses `RestaurantsService`/`StoresService`'s existing `assertOwnerOrAdmin`. A vendor may
+also update (e.g. deactivate) their own code, but can never reassign its `restaurantId`/`storeId`
+— changing which business a code belongs to stays admin-only. New `GET /promo-codes/mine`
+(`PromoCodesService.findMine`) gathers every restaurant and store a vendor owns
+(`RestaurantsService.findMine`/`StoresService.findMine`) and returns codes scoped to any of them,
+across both seller types — distinct from admin's `GET /promo-codes`, which lists everything
+platform-wide.
+
+`PromoCodesModule` now imports `RestaurantsModule`/`StoresModule` to reach their services (no
+circularity — neither imports back). Frontend: two new per-entity dashboard pages,
+`dashboard/restaurants/[id]/promo-codes` and `dashboard/stores/[id]/promo-codes`, linked from
+each entity's own management page (`DashboardRestaurantsPage`/`DashboardStoresPage`) right next
+to the existing delivery-zones/earnings links — the same per-entity-subpage shape those already
+use. Because the restaurant/store id comes from the URL, the create form needs no seller picker
+at all (unlike the admin tab, which manages every vendor's codes and has none to infer from) —
+it's the exact same `CreatePromoForm`/`PromoRow` UI as `AdminPromoCodesTab`, just with
+`restaurantId`/`storeId` baked in from `params` and the list filtered client-side from
+`useListMyPromoCodesQuery()` (a vendor's total code count across all their businesses is small
+enough that filtering the one `GET /promo-codes/mine` response client-side per page beats a
+second scoped-list endpoint).
+
+**Restaurant menu-item discounts.** `MenuItem` gained a `discountedPrice: number | null` field,
+byte-for-byte the same shape and doc comment as `Product.discountedPrice` (stores,
+docs/ROADMAP.md FDP-56). `MenuService.createItem`/`updateItem` gained the identical
+`assertDiscountBelowPrice` server-side guard `ProductsService` already had (discount must be
+strictly lower than price — a defense-in-depth check, since the frontend zod schema already
+enforces this too, exactly mirroring `CatalogManagerPage`'s own `.refine`). Confirmed first,
+before mirroring anything, that a store product's `discountedPrice` isn't just a cosmetic label —
+`CartService.addStoreItem` snapshots `product.discountedPrice ?? product.price` as the actual
+line-item charge at add-to-cart time — so `CartService.addItem` and the `reorderFromOrder` restore
+path both got the equivalent `menuItem.discountedPrice ?? menuItem.price` treatment, making the
+discount genuinely change what a customer pays for a discounted dish, not just how it's displayed.
+`MenuManagerPage`'s item form (vendor-facing) and `restaurants/[slug]/page.tsx` (customer-facing)
+both get the identical strikethrough-original/highlighted-discounted rendering
+`CatalogManagerPage`/`stores/[slug]/page.tsx` already use for store products — same muted
+line-through original price, same accent-colored discounted price beside it.
+
+Full backend suite passes (165 tests across the touched `promo-codes`/`menu`/`cart`/`orders`
+specs, several new: vendor create/update ownership enforcement and rejection paths, `findMine`
+scoping across both seller types, menu-item discount validation on create and update, cart
+charged-price preference for a discounted menu item) — `promo-codes.service.spec.ts` and
+`orders.service.spec.ts` both needed every existing `PromoCodesService.create`/`.update()` call
+site updated with a requester argument, since that's no longer optional; `tsc --noEmit`/`eslint`/
+production `build` clean on both sides. A new `VendorPromoCodesPage` translation section (28 keys,
+mostly reusing `AdminPromoCodesTab`'s exact copy verbatim — the form and row UI is identical
+regardless of who's creating the code) plus a `promoCodes` nav-button label on both dashboard list
+pages and 3 `MenuManagerPage.discountedPrice*` keys, shipped in all 6 languages, key-parity
+verified (1533 keys).
