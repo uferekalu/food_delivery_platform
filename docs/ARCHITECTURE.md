@@ -1876,3 +1876,36 @@ eligibility filtering, and a rider payout update succeeding against a deliberate
 document); `tsc --noEmit`/`eslint`/production `build` clean on both sides. New `PromoBanner`
 translation section, `AdminPromoCodesTab` scope-picker keys, and a `youSave` key in
 `MenuManagerPage`/`CatalogManagerPage`, shipped in all 6 languages, key-parity verified.
+
+## 37. A legacy promo code's `undefined` field crashed the admin Promo Codes tab (docs/ROADMAP.md FDP-114)
+
+The user reported the admin Promo Codes tab throwing a hard, page-crashing error in production:
+`Cannot read properties of undefined (reading 'type')`. Root cause: `PromoCodesService.findAll()`
+(FDP-112's admin scope enrichment) and `validate()` both decided whether a code was
+restaurant/store-scoped with `promo.restaurantId !== null` / `promo.storeId !== null` — a
+**strict** inequality. A promo code whose document predates these fields (or was written by any
+path that bypassed the schema's `default: null`, e.g. a raw insert) reads back with the field
+genuinely `undefined`, not `null`. In JavaScript `undefined !== null` evaluates to `true`, so the
+strict check wrongly treated that legacy code as scoped, then crashed calling `.toString()` on
+`undefined` inside `findAll()`'s per-row `.map()` — which failed the *entire* `GET /promo-codes`
+request (not just that one row), and the frontend then crashed a second time trying to read
+`.scope.type` off a response that never actually arrived. The identical strict check in
+`validate()` meant the same legacy code would have crashed a real customer's checkout the moment
+they tried to redeem it — not yet hit live, since redeeming an old code is rarer than an admin
+just opening the tab, but a genuine landmine sitting in the exact same code shape.
+
+Fixed both to `!= null` (loose) — the correct JS idiom for "is this field genuinely absent",
+since loose inequality against `null` treats `null` and `undefined` as equivalent while still
+distinguishing them from any real value. Two new regression tests insert a `PromoCode` document
+via the raw MongoDB driver (`promoCodeModel.collection.insertOne(...)`, deliberately bypassing
+Mongoose's own document construction and its `default: null` entirely, the only way to reliably
+reproduce a field that's truly `undefined` rather than `null`) with `restaurantId`/`storeId`
+omitted, confirming `findAll()` reports `scope: {type: 'platform'}` and `validate()` returns
+`valid: true` for a restaurant cart, instead of either throwing. Also added a defensive fallback
+in `AdminPromoCodesTab`'s row rendering (`!promo.scope || promo.scope.type === "platform" ? ...`)
+so a future backend data-shape surprise this specific fix didn't anticipate still degrades to a
+"platform-wide" badge rather than crashing the whole tab again — the same "never let one bad row
+take down the page" posture already applied throughout this codebase's list views.
+
+Full `promo-codes` suite passes (43 tests, 2 new); `tsc --noEmit`/`eslint`/production `build`
+clean on both sides. No translation changes.
