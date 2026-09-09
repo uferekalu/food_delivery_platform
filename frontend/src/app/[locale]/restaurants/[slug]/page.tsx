@@ -12,6 +12,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ItemDetailModal } from "@/components/item-detail-modal";
 import { FavoriteButton } from "@/components/favorite-button";
 import { ReviewsList } from "@/components/reviews-list";
+import { PromoBanner } from "@/components/promo-banner";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
@@ -79,6 +80,8 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
           {t("notAcceptingOrders")}
         </Alert>
       )}
+
+      <PromoBanner restaurantId={restaurant._id} currency={restaurant.currency} />
 
       <div className="flex flex-col gap-8">
         <h2 className="text-xl font-semibold text-text">{t("menu")}</h2>

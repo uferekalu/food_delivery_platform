@@ -6,9 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PromoCodesService } from './promo-codes.service';
@@ -16,6 +18,7 @@ import type { PromoCodeSeller } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 import { ValidatePromoCodeDto } from './dto/validate-promo-code.dto';
+import { ActivePromoCodesQueryDto } from './dto/active-promo-codes-query.dto';
 
 @ApiTags('promo-codes')
 @Controller('promo-codes')
@@ -29,7 +32,20 @@ export class PromoCodesController {
     return this.promoCodesService.validate(dto.code, seller, dto.subtotal);
   }
 
-  private resolveSeller(dto: ValidatePromoCodeDto): PromoCodeSeller {
+  // Public — powers the "Use code X for Y% off" banner on a restaurant/store's public page
+  // (docs/ROADMAP.md FDP-112), so a customer browsing (logged in or not) can discover a promo
+  // exists without already knowing the code.
+  @Public()
+  @Get('active')
+  findActive(@Query() query: ActivePromoCodesQueryDto) {
+    const seller = this.resolveSeller(query);
+    return this.promoCodesService.findActiveForSeller(seller);
+  }
+
+  private resolveSeller(dto: {
+    restaurantId?: string;
+    storeId?: string;
+  }): PromoCodeSeller {
     if (dto.restaurantId && dto.storeId) {
       throw new BadRequestException(
         'Provide either restaurantId or storeId, not both',

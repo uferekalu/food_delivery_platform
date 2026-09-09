@@ -66,6 +66,23 @@ export class PaystackPayoutsController {
     }
   }
 
+  /** Same "never an opaque 500" reasoning as `callPaystack`, for the DB write immediately after
+   * a successful Paystack call (docs/ROADMAP.md FDP-112) — a real production bug: the subaccount
+   * was already created on Paystack's side by this point, so a persistence failure here needs
+   * a clear message even though it isn't a Paystack error at all. */
+  private async savePayoutAccount<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      this.logger.error('Saving the payout account failed', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not save the payout account';
+      throw new BadRequestException(message);
+    }
+  }
+
   /** Not restaurant-scoped — the bank list is the same for everyone, just proxied through our
    * backend so the frontend never needs a Paystack key of its own. */
   @Get('payments/paystack/banks')
@@ -140,13 +157,15 @@ export class PaystackPayoutsController {
         }),
     );
 
-    const updated = await this.restaurantsService.setPayoutAccount(
-      restaurantId,
-      user,
-      'paystack',
-      'active',
-      subaccountCode,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.restaurantsService.setPayoutAccount(
+        restaurantId,
+        user,
+        'paystack',
+        'active',
+        subaccountCode,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(
@@ -210,13 +229,15 @@ export class PaystackPayoutsController {
         }),
     );
 
-    const updated = await this.storesService.setPayoutAccount(
-      storeId,
-      user,
-      'paystack',
-      'active',
-      subaccountCode,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.storesService.setPayoutAccount(
+        storeId,
+        user,
+        'paystack',
+        'active',
+        subaccountCode,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(
@@ -284,12 +305,14 @@ export class PaystackPayoutsController {
         }),
     );
 
-    const updated = await this.ridersService.setPayoutAccount(
-      user.sub,
-      'paystack',
-      'active',
-      subaccountCode,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.ridersService.setPayoutAccount(
+        user.sub,
+        'paystack',
+        'active',
+        subaccountCode,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(

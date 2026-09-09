@@ -315,7 +315,7 @@ export class RestaurantsService {
     const restaurant = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(restaurant, requester);
     return this.applyPayoutAccountUpdate(
-      restaurant,
+      { _id: id },
       provider,
       status,
       reference,
@@ -337,9 +337,9 @@ export class RestaurantsService {
     status: PayoutAccountStatus,
     reference: string,
   ): Promise<RestaurantDocument> {
-    const restaurant = await this.findByIdOrThrow(id);
+    await this.findByIdOrThrow(id);
     return this.applyPayoutAccountUpdate(
-      restaurant,
+      { _id: id },
       provider,
       status,
       reference,
@@ -359,8 +359,24 @@ export class RestaurantsService {
       .exec();
   }
 
-  private applyPayoutAccountUpdate(
-    restaurant: RestaurantDocument,
+  /**
+   * Atomic, targeted update (`findOneAndUpdate` with `$set`/`$push` on just the
+   * `payoutAccounts` path) rather than load-mutate-`.save()` (docs/ROADMAP.md FDP-112) — a real
+   * production bug found via the identical rider-side code path: `.save()` revalidates the
+   * *entire* document against every required field the schema has, so a restaurant/store with
+   * any unrelated pre-existing data issue would get an opaque 500 connecting a payout account, a
+   * change that touches none of those other fields. Two sequential `findOneAndUpdate` calls, not
+   * one — MongoDB rejects `$set`/`$push` on overlapping array paths in a single update (the same
+   * "path conflict" class `VendorMessagesService` already hit for `$inc`/`$setOnInsert`) — so
+   * "does an entry for this provider already exist" has to be two round trips, acceptable given
+   * this is a low-frequency, self-service, non-concurrent write. The second query's "no existing
+   * entry for this provider" filter is `payoutAccounts: { $not: { $elemMatch: { provider } } }`,
+   * not the more obvious `'payoutAccounts.provider': { $ne: provider }` — confirmed live
+   * (`RidersService`'s identical fix) that the dotted-path form does not reliably match when
+   * `payoutAccounts` is empty, the realistic case for a first-ever payout account.
+   */
+  private async applyPayoutAccountUpdate(
+    filter: QueryFilter<RestaurantDocument>,
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,
@@ -368,24 +384,42 @@ export class RestaurantsService {
   ): Promise<RestaurantDocument> {
     const bankCode = bankDetails?.bankCode ?? null;
     const accountNumber = bankDetails?.accountNumber ?? null;
-    const existing = restaurant.payoutAccounts.find(
-      (account) => account.provider === provider,
-    );
-    if (existing) {
-      existing.status = status;
-      existing.reference = reference;
-      existing.bankCode = bankCode;
-      existing.accountNumber = accountNumber;
-    } else {
-      restaurant.payoutAccounts.push({
-        provider,
-        status,
-        reference,
-        bankCode,
-        accountNumber,
-      });
-    }
-    return restaurant.save();
+
+    const updatedExisting = await this.restaurantModel
+      .findOneAndUpdate(
+        { ...filter, 'payoutAccounts.provider': provider },
+        {
+          $set: {
+            'payoutAccounts.$.status': status,
+            'payoutAccounts.$.reference': reference,
+            'payoutAccounts.$.bankCode': bankCode,
+            'payoutAccounts.$.accountNumber': accountNumber,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (updatedExisting) return updatedExisting;
+
+    const withNewEntry = await this.restaurantModel
+      .findOneAndUpdate(
+        { ...filter, payoutAccounts: { $not: { $elemMatch: { provider } } } },
+        {
+          $push: {
+            payoutAccounts: {
+              provider,
+              status,
+              reference,
+              bankCode,
+              accountNumber,
+            },
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!withNewEntry) throw new NotFoundException('Restaurant not found');
+    return withNewEntry;
   }
 
   /** Called by ReviewsService after a review is created/changed — recomputed from scratch each

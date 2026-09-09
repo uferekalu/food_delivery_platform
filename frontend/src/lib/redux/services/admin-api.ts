@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { AdminAnalytics, DiscountType, Order, PromoCode } from "../restaurant-types";
+import type { AdminAnalytics, AdminPromoCode, DiscountType, Order, PromoCode } from "../restaurant-types";
 
 export interface CreatePromoCodeInput {
   code: string;
@@ -23,7 +23,7 @@ export const adminApi = api.injectEndpoints({
       providesTags: [{ type: "AdminAnalytics", id: "SUMMARY" }],
     }),
 
-    listPromoCodes: builder.query<PromoCode[], void>({
+    listPromoCodes: builder.query<AdminPromoCode[], void>({
       query: () => "/promo-codes",
       providesTags: (result) =>
         result

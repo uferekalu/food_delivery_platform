@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { PromoCode, PromoCodeDocument } from './schemas/promo-code.schema';
+import {
+  PromoCode,
+  PromoCodeDocument,
+  type DiscountType,
+} from './schemas/promo-code.schema';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 import { RestaurantsService } from '../restaurants/restaurants.service';
@@ -24,6 +28,33 @@ export type PromoCodeValidation =
   // a plain sentence for every other rejection, and the frontend builds its own currency-aware
   // message for this one case using the cart's own currency instead of embedding a bare number.
   | { valid: false; reason: string; minOrderAmount?: number };
+
+// Admin's full list needs to show which business a code belongs to (docs/ROADMAP.md FDP-112) —
+// a raw restaurantId/storeId means nothing at a glance. A discriminated union rather than a
+// plain formatted string so the frontend can render a name + a type-specific icon/badge without
+// parsing a label back apart.
+export type PromoCodeScope =
+  | { type: 'platform' }
+  | { type: 'restaurant'; id: string; name: string }
+  | { type: 'store'; id: string; name: string };
+
+// Same plain-projection shape as VendorConversationView (vendor-messages.service.ts) — enough
+// fields for the admin list to render, not the full Mongoose document.
+export interface PromoCodeAdminView {
+  _id: string;
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount: number | null;
+  expiresAt: Date | null;
+  isActive: boolean;
+  usageLimit: number | null;
+  usedCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  scope: PromoCodeScope;
+}
 
 @Injectable()
 export class PromoCodesService {
@@ -64,8 +95,102 @@ export class PromoCodesService {
     return this.promoCodeModel.create(dto);
   }
 
-  findAll(): Promise<PromoCodeDocument[]> {
-    return this.promoCodeModel.find().sort({ createdAt: -1 }).exec();
+  /** Admin's full platform-wide list, enriched with which business each code belongs to
+   * (docs/ROADMAP.md FDP-112) — batched restaurant/store name lookups, not one query per row,
+   * the same shape `PayoutExecutionService.attachVendorNames`/`VendorMessagesService` already
+   * use for this. */
+  async findAll(): Promise<PromoCodeAdminView[]> {
+    const promos = await this.promoCodeModel
+      .find()
+      .sort({ createdAt: -1 })
+      .exec();
+
+    const restaurantIds = [
+      ...new Set(
+        promos
+          .filter((p) => p.restaurantId !== null)
+          .map((p) => p.restaurantId!.toString()),
+      ),
+    ];
+    const storeIds = [
+      ...new Set(
+        promos
+          .filter((p) => p.storeId !== null)
+          .map((p) => p.storeId!.toString()),
+      ),
+    ];
+    const [restaurants, stores] = await Promise.all([
+      restaurantIds.length > 0
+        ? this.restaurantsService.findByIds(restaurantIds)
+        : Promise.resolve([]),
+      storeIds.length > 0
+        ? this.storesService.findByIds(storeIds)
+        : Promise.resolve([]),
+    ]);
+    const restaurantNameById = new Map(
+      restaurants.map((r) => [r._id.toString(), r.name] as const),
+    );
+    const storeNameById = new Map(
+      stores.map((s) => [s._id.toString(), s.name] as const),
+    );
+
+    return promos.map((promo) => {
+      let scope: PromoCodeScope;
+      if (promo.restaurantId !== null) {
+        const id = promo.restaurantId.toString();
+        scope = {
+          type: 'restaurant',
+          id,
+          name: restaurantNameById.get(id) ?? 'Unknown restaurant',
+        };
+      } else if (promo.storeId !== null) {
+        const id = promo.storeId.toString();
+        scope = {
+          type: 'store',
+          id,
+          name: storeNameById.get(id) ?? 'Unknown store',
+        };
+      } else {
+        scope = { type: 'platform' };
+      }
+      // .toObject() (not the hydrated document directly) so the plain `createdAt`/`updatedAt`
+      // fields Mongoose adds for `{ timestamps: true }` are included without the PromoCode class
+      // needing to declare them itself.
+      return { ...promo.toObject(), scope } as PromoCodeAdminView;
+    });
+  }
+
+  /** Every currently-usable code a customer browsing this specific business could apply —
+   * platform-wide codes plus any scoped to this exact restaurant/store (docs/ROADMAP.md
+   * FDP-112) — powers the "Use code X for Y% off" banner on the public restaurant/store page.
+   * Deliberately the same eligibility rules `validate()` checks (active, not expired, under its
+   * usage limit) so nothing advertised here could then fail to redeem — `minOrderAmount` is the
+   * one thing NOT pre-checked, since there's no cart subtotal yet at browse time. */
+  async findActiveForSeller(
+    seller: PromoCodeSeller,
+  ): Promise<PromoCodeDocument[]> {
+    const now = new Date();
+    const sellerFilter =
+      seller.sellerType === 'restaurant'
+        ? { restaurantId: seller.sellerId, storeId: null }
+        : { storeId: seller.sellerId, restaurantId: null };
+
+    return this.promoCodeModel
+      .find({
+        isActive: true,
+        $and: [
+          { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+          {
+            $or: [
+              { usageLimit: null },
+              { $expr: { $lt: ['$usedCount', '$usageLimit'] } },
+            ],
+          },
+          { $or: [{ restaurantId: null, storeId: null }, sellerFilter] },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
   }
 
   /** A vendor's own promo codes — every code scoped to any restaurant or store they own, across

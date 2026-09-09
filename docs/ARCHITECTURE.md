@@ -1785,3 +1785,94 @@ mostly reusing `AdminPromoCodesTab`'s exact copy verbatim — the form and row U
 regardless of who's creating the code) plus a `promoCodes` nav-button label on both dashboard list
 pages and 3 `MenuManagerPage.discountedPrice*` keys, shipped in all 6 languages, key-parity
 verified (1533 keys).
+
+## 36. Promo-code admin scoping, customer discovery, and a payout-account 500 (docs/ROADMAP.md FDP-112)
+
+Follow-on feedback from actually using FDP-111 live, plus one unrelated production bug the user
+hit mid-session while testing riders.
+
+**Admin promo-code scoping.** FDP-111 let a vendor create a scoped code, but the *admin* form
+still had no way to scope one — no restaurant/store picker at all, so any code an admin created
+was platform-wide regardless of intent, and would never show up filtered on a vendor's own
+per-entity promo-codes page. `AdminPromoCodesTab`'s `CreatePromoForm` gained an "Applies to"
+selector (platform-wide / restaurant / store); picking the latter two lazily fetches
+(`skip` until chosen) a searchable `Select` from the existing public `useListRestaurantsQuery`/
+`useListStoresQuery` endpoints, same "reuse what already exists rather than add a new
+admin-only listing endpoint" call as FDP-108's vendor picker. Separately, `PromoCodesService
+.findAll()` previously returned bare documents with a raw `restaurantId`/`storeId` and no way to
+tell which business a code belonged to at a glance — it now returns a `PromoCodeAdminView[]`
+(plain projection, `VendorConversationView`'s established shape) with a resolved `scope`
+discriminated union (`{type:'platform'}` / `{type:'restaurant'|'store', id, name}`), built from
+one batched `RestaurantsService.findByIds`/new `StoresService.findByIds` lookup rather than a
+query per row — shown as a badge on each admin row.
+
+**Customer discovery.** A promo code was otherwise 100% invisible in-app — a customer had to
+already know a code existed (shared externally) to ever type one in at checkout. New public
+`GET /promo-codes/active?restaurantId=X` (or `?storeId=Y`), backed by
+`PromoCodesService.findActiveForSeller`, returns every code currently usable for that specific
+business: platform-wide codes plus ones scoped to it, filtered by the *same* eligibility rules
+`validate()` already checks (`isActive`, not expired, under its usage limit via the same
+`$expr` comparison `redeem()` uses) — deliberately excludes `minOrderAmount`, since there's no
+cart subtotal yet at browse time, so nothing advertised here could then fail a stricter check at
+checkout. Rendered by a new `PromoBanner` component ("Use code X for Y% off") mounted on both
+public `restaurants/[slug]/page.tsx` and `stores/[slug]/page.tsx`, right where the "currently
+closed" alert already sits — renders nothing while loading or when there's nothing active, since
+this is a bonus a visitor is never left waiting on.
+
+**A real discount-display bug, and a deliberately-scoped-out relabel.** While reviewing this,
+found `ItemDetailModal`'s Add-to-cart button computing its total from `item.price` unconditionally
+— a customer opening a discounted item's modifier/quantity modal was quoted (and would have been
+charged) the pre-discount price, the one place in the app the discount wasn't actually honored
+end to end. Fixed to `item.discountedPrice ?? item.price`, plus a small strikethrough-price line
+added to the modal body itself so the discount is visible before scrolling to the total. Separately,
+the user pointed out `discountedPrice`'s *name* was confusing — they expected it to mean "amount
+taken off" (so a ₦100 discount on a ₦4000 item), not what it's always meant since FDP-56, "the
+final price customers pay" (so ₦3900 directly). Deliberately did **not** change the underlying
+meaning — `discountedPrice` already has real vendor/test data live in the database under the
+"final price" semantic (e.g. an item priced at 4200 with `discountedPrice: 4100` genuinely means
+"sells for ₦4,100"); reinterpreting the same stored numbers as "amount off" with no migration
+would have silently collapsed that item's real price to ₦100. Instead relabeled the vendor-facing
+field to "Sale price" in both `MenuManagerPage`/`CatalogManagerPage`, and added a live-computed
+"You save {amount}" hint (`useWatch` on the price and sale-price fields, shown once sale price is
+a valid number below price) so a vendor never has to do the subtraction themselves to know what
+they're actually discounting by.
+
+**Unrelated: a rider's payout-account connection threw a raw 500.** Root cause, confirmed via a
+live `mongodb-memory-server` repro script before writing any fix: `RidersService`/
+`RestaurantsService`/`StoresService`'s `applyPayoutAccountUpdate` all used load-mutate-`.save()`
+— and Mongoose's `.save()` revalidates the *entire* document against every field the schema
+requires, not just the ones actually touched. A rider whose document had any unrelated data issue
+(this session couldn't determine what, exactly, for the specific reported account — no production
+DB access) got an opaque `AllExceptionsFilter`-caught 500 from an update that only ever touches
+`payoutAccounts`. Rewritten in all three services as two sequential atomic `findOneAndUpdate`
+calls — MongoDB rejects `$set`/`$push` targeting overlapping array paths in one update (the same
+"path conflict" class `VendorMessagesService` already hit for `$inc`/`$setOnInsert`), so "does an
+entry for this provider already exist" needs two round trips, acceptable for this low-frequency,
+self-service, non-concurrent write. Also added a `savePayoutAccount` error-wrapping helper
+(mirroring each controller's existing `callPaystack`/`callFlutterwave`/`callStripe` pattern) around
+the `setPayoutAccount`/`setPayoutAccountFromWebhook` call in all three payout controllers, so any
+*future* persistence failure there — Paystack/Flutterwave/Stripe alike — surfaces as a clear
+message instead of a raw 500, closing the actual "must never surface as an opaque 500" gap those
+controllers' own doc comments already claimed to have closed but hadn't, for this one call site.
+
+Caught a genuine MongoDB query-semantics trap live while building this, confirmed with an
+isolated repro script both ways: the obvious `'payoutAccounts.provider': { $ne: provider }`
+filter for "no existing entry for this provider" does *not* reliably match a rider whose
+`payoutAccounts` array is empty — the normal case for anyone connecting their first payout
+account ever — silently throwing the exact `NotFoundException` this whole rewrite exists to
+avoid. Fixed with the unambiguous idiom instead: `payoutAccounts: { $not: { $elemMatch:
+{ provider } } }`. A first attempt at a regression test for the rider fix also hit the
+documented Mongoose `@Prop()`-Mixed-type ObjectId/string quirk (`backend/CLAUDE.md`) the wrong
+way: the test fixture wrote `userId: customer._id` (a raw `ObjectId`) instead of
+`customer._id.toString()`, which — because `RidersService.apply()` always assigns
+`requester.sub` (a string) in real usage — silently stored `userId` as a genuine `ObjectId`
+instead of a string, causing the new string-based query to match nothing. The exact fixture
+mistake `backend/CLAUDE.md` already documents from FDP-92's `payout-execution.service.spec.ts`;
+fixed the same way, by stringifying the id in the fixture.
+
+Full backend suite passes (264 tests across `promo-codes`/`menu`/`cart`/`orders`/`riders`/
+`restaurants`/`stores`, including new coverage for admin scope enrichment, `findActiveForSeller`'s
+eligibility filtering, and a rider payout update succeeding against a deliberately incomplete
+document); `tsc --noEmit`/`eslint`/production `build` clean on both sides. New `PromoBanner`
+translation section, `AdminPromoCodesTab` scope-picker keys, and a `youSave` key in
+`MenuManagerPage`/`CatalogManagerPage`, shipped in all 6 languages, key-parity verified.

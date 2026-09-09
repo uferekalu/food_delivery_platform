@@ -61,6 +61,23 @@ export class FlutterwavePayoutsController {
     }
   }
 
+  /** Same "never an opaque 500" reasoning as `callFlutterwave`, for the DB write immediately
+   * after a successful Flutterwave call (docs/ROADMAP.md FDP-112) — the subaccount already
+   * exists on Flutterwave's side by this point, so a persistence failure here needs a clear
+   * message even though it isn't a Flutterwave error at all. */
+  private async savePayoutAccount<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      this.logger.error('Saving the payout account failed', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not save the payout account';
+      throw new BadRequestException(message);
+    }
+  }
+
   /** Not restaurant-scoped — the bank list is the same for everyone, just proxied through our
    * backend so the frontend never needs a Flutterwave key of its own. */
   @Get('payments/flutterwave/banks')
@@ -134,13 +151,15 @@ export class FlutterwavePayoutsController {
         }),
     );
 
-    const updated = await this.restaurantsService.setPayoutAccount(
-      restaurantId,
-      user,
-      'flutterwave',
-      'active',
-      subaccountId,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.restaurantsService.setPayoutAccount(
+        restaurantId,
+        user,
+        'flutterwave',
+        'active',
+        subaccountId,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(
@@ -210,13 +229,15 @@ export class FlutterwavePayoutsController {
         }),
     );
 
-    const updated = await this.storesService.setPayoutAccount(
-      storeId,
-      user,
-      'flutterwave',
-      'active',
-      subaccountId,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.storesService.setPayoutAccount(
+        storeId,
+        user,
+        'flutterwave',
+        'active',
+        subaccountId,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(
@@ -281,12 +302,14 @@ export class FlutterwavePayoutsController {
         }),
     );
 
-    const updated = await this.ridersService.setPayoutAccount(
-      user.sub,
-      'flutterwave',
-      'active',
-      subaccountId,
-      { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+    const updated = await this.savePayoutAccount(() =>
+      this.ridersService.setPayoutAccount(
+        user.sub,
+        'flutterwave',
+        'active',
+        subaccountId,
+        { bankCode: dto.bankCode, accountNumber: dto.accountNumber },
+      ),
     );
 
     this.notifyPayoutAccountChanged(

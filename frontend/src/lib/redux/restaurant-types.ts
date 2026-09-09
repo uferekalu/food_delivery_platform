@@ -347,6 +347,31 @@ export interface Notification {
 export const DISCOUNT_TYPES = ["percentage", "fixed"] as const;
 export type DiscountType = (typeof DISCOUNT_TYPES)[number];
 
+// Which business a code belongs to (docs/ROADMAP.md FDP-112) — a discriminated union rather
+// than a formatted string so the admin list can render a name + a type-specific badge.
+export type PromoCodeScope =
+  | { type: "platform" }
+  | { type: "restaurant"; id: string; name: string }
+  | { type: "store"; id: string; name: string };
+
+// Admin's full list view — same fields as PromoCode below, minus the raw restaurantId/storeId
+// (replaced by the resolved `scope`).
+export interface AdminPromoCode {
+  _id: string;
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount: number | null;
+  expiresAt: string | null;
+  isActive: boolean;
+  usageLimit: number | null;
+  usedCount: number;
+  createdAt: string;
+  updatedAt: string;
+  scope: PromoCodeScope;
+}
+
 export interface PromoCode {
   _id: string;
   code: string;

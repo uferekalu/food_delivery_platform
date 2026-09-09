@@ -177,6 +177,12 @@ export class StoresService {
     return this.storeModel.find({ ownerId }).sort({ createdAt: -1 }).exec();
   }
 
+  /** Batched lookup, mirroring RestaurantsService.findByIds exactly — used for admin-side
+   * promo-code scope display (docs/ROADMAP.md FDP-112) rather than one query per row. */
+  findByIds(ids: string[]): Promise<StoreDocument[]> {
+    return this.storeModel.find({ _id: { $in: ids } }).exec();
+  }
+
   async findByIdOrThrow(id: string): Promise<StoreDocument> {
     const store = await this.storeModel.findById(id).exec();
     if (!store) throw new NotFoundException('Store not found');
@@ -281,7 +287,7 @@ export class StoresService {
     const store = await this.findByIdOrThrow(id);
     this.assertOwnerOrAdmin(store, requester);
     return this.applyPayoutAccountUpdate(
-      store,
+      { _id: id },
       provider,
       status,
       reference,
@@ -297,9 +303,9 @@ export class StoresService {
     status: PayoutAccountStatus,
     reference: string,
   ): Promise<StoreDocument> {
-    const store = await this.findByIdOrThrow(id);
+    await this.findByIdOrThrow(id);
     return this.applyPayoutAccountUpdate(
-      store,
+      { _id: id },
       provider,
       status,
       reference,
@@ -316,8 +322,13 @@ export class StoresService {
       .exec();
   }
 
-  private applyPayoutAccountUpdate(
-    store: StoreDocument,
+  /** Atomic, targeted update — same fix, and same reasoning (including the
+   * `$not`/`$elemMatch` filter, not the more obvious dotted `$ne`), as
+   * `RestaurantsService.applyPayoutAccountUpdate` (docs/ROADMAP.md FDP-112): `.save()`
+   * revalidates the entire document, so an unrelated data issue on this store could turn
+   * connecting a payout account into an opaque 500. */
+  private async applyPayoutAccountUpdate(
+    filter: QueryFilter<StoreDocument>,
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,
@@ -325,24 +336,42 @@ export class StoresService {
   ): Promise<StoreDocument> {
     const bankCode = bankDetails?.bankCode ?? null;
     const accountNumber = bankDetails?.accountNumber ?? null;
-    const existing = store.payoutAccounts.find(
-      (account) => account.provider === provider,
-    );
-    if (existing) {
-      existing.status = status;
-      existing.reference = reference;
-      existing.bankCode = bankCode;
-      existing.accountNumber = accountNumber;
-    } else {
-      store.payoutAccounts.push({
-        provider,
-        status,
-        reference,
-        bankCode,
-        accountNumber,
-      });
-    }
-    return store.save();
+
+    const updatedExisting = await this.storeModel
+      .findOneAndUpdate(
+        { ...filter, 'payoutAccounts.provider': provider },
+        {
+          $set: {
+            'payoutAccounts.$.status': status,
+            'payoutAccounts.$.reference': reference,
+            'payoutAccounts.$.bankCode': bankCode,
+            'payoutAccounts.$.accountNumber': accountNumber,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (updatedExisting) return updatedExisting;
+
+    const withNewEntry = await this.storeModel
+      .findOneAndUpdate(
+        { ...filter, payoutAccounts: { $not: { $elemMatch: { provider } } } },
+        {
+          $push: {
+            payoutAccounts: {
+              provider,
+              status,
+              reference,
+              bankCode,
+              accountNumber,
+            },
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!withNewEntry) throw new NotFoundException('Store not found');
+    return withNewEntry;
   }
 
   private async generateUniqueSlug(name: string): Promise<string> {

@@ -58,6 +58,23 @@ export class StripePayoutsController {
     }
   }
 
+  /** Same "never an opaque 500" reasoning as `callStripe`, for the DB write immediately after
+   * creating the connected account (docs/ROADMAP.md FDP-112) — the account already exists on
+   * Stripe's side by this point, so a persistence failure here needs a clear message even
+   * though it isn't a Stripe error at all. */
+  private async savePayoutAccount<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      this.logger.error('Saving the payout account failed', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not save the payout account';
+      throw new BadRequestException(message);
+    }
+  }
+
   /** Shared by every variant below — creates a connected Express account the *first* time
    * (reused on every later call), always returns a fresh onboarding link (Account Links expire
    * within minutes, confirmed live against the sandbox — re-requesting one is the normal path
@@ -76,7 +93,7 @@ export class StripePayoutsController {
       accountId = created.accountId;
       // Always 'pending' at this point — only the account.updated webhook (once onboarding is
       // actually complete) ever flips this to 'active'.
-      await persist(accountId);
+      await this.savePayoutAccount(() => persist(accountId!));
     }
 
     const { url } = await this.callStripe('create onboarding link', () =>
