@@ -136,6 +136,7 @@ describe('Restaurants + Menu (e2e)', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       })
       .expect(201);
     const restaurant = createRes.body as {

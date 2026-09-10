@@ -249,6 +249,7 @@ describe('Riders (e2e)', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       })
       .expect(201);
     const restaurantId = (restaurantRes.body as { _id: string })._id;

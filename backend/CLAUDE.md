@@ -85,6 +85,21 @@ guards, decorators) only — domain logic never lives there.
 
 ## Testing
 
+- **`npm test` (`npx jest`) does NOT run `test/*.e2e-spec.ts`** — its `testRegex` only matches
+  `*.spec.ts`, and `*.e2e-spec.ts` doesn't fit that pattern despite the name. Run `npm run
+  test:e2e` separately; nothing else boots the real, full `AppModule` module graph the way
+  production does. A real incident (docs/ROADMAP.md FDP-115): adding a new cross-module
+  constructor dependency created a genuine 3-module circular dependency
+  (`RestaurantsModule -> NotificationsModule -> UsersModule -> RestaurantsModule`) that every
+  `*.spec.ts` file's flat, hand-picked `TestingModule` provider list was blind to — `tsc
+  --noEmit`, `nest build`, and the full `*.spec.ts` suite all passed clean, it was merged and
+  deployed, and only crashed live on Railway (`UndefinedModuleException`) on every single boot
+  attempt. `test/health.e2e-spec.ts` (or any e2e spec — they all construct the real `AppModule`)
+  would have caught this in seconds. **Always run `npm run test:e2e` before merging any change
+  that adds/removes a constructor dependency or a module import**, not just `npm test` — treat a
+  real `NestFactory.create(AppModule)` boot (what e2e tests do) as the only trustworthy check for
+  module-wiring correctness, the same way a real `next build`/`nest build` is the only trustworthy
+  check for a production TypeScript build (see the `tsc --noEmit` warning elsewhere in this file).
 - Unit tests (`*.spec.ts`) colocated with the code they test.
 - e2e tests (`test/*.e2e-spec.ts`) boot the real `AppModule` against an in-memory MongoDB via
   `mongodb-memory-server` — never a real database, never mocked-away Mongoose. Set

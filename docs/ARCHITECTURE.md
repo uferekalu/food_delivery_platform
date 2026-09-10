@@ -2053,9 +2053,32 @@ this: `@Inject(forwardRef(() => RestaurantsService))` on `UsersService`'s constr
 `restaurants.module.ts`. First attempt only added the second pair and left `reviews.service.spec.ts`
 still failing — the actual break in the cycle is `UsersService`'s pre-existing edge, not the new
 one, a reminder that a 3+ node cycle needs the forwardRef pair on whichever edge closes the loop for
-a given module's require order, not necessarily the edge that was just added. No existing
-`forwardRef` precedent existed anywhere else in this codebase (every prior cross-domain dependency
-was avoided architecturally, e.g. `AdminService` composing `RestaurantsService`+`MenuService`
+a given module's require order, not necessarily the edge that was just added.
+
+**This still wasn't the whole fix — the third edge broke live production, not any test.** All of
+this session's unit tests (including the fix above) passed, `tsc --noEmit`/`nest build` were both
+clean, and it was merged, pushed, and redeployed — only for the live Railway backend to crash on
+every single boot attempt with `UndefinedModuleException: The module at index [1] of the
+NotificationsModule "imports" array is undefined` (`Scope [AppModule -> UsersModule ->
+RestaurantsModule]`), confirmed by the user pasting the actual Railway deploy log. Root cause:
+`NotificationsModule`'s own pre-existing `imports: [..., UsersModule, ...]` — the third edge of
+the same cycle — had no `forwardRef` at all, because nothing about adding it had been touched.
+**No unit test in this repo could have caught this**: every spec file constructs its own flat,
+partial `TestingModule` with a hand-picked provider list (real or mocked), never the actual
+compiled module graph `NestFactory.create(AppModule)` walks in production — so a require-order-
+dependent break in a module nobody's test happens to also construct in the same file is invisible
+to the entire suite, `reviews.service.spec.ts` included. Fixed by wrapping this third edge the same
+way — `forwardRef(() => UsersModule)` in `NotificationsModule`'s imports,
+`@Inject(forwardRef(() => UsersService))` on `NotificationsService`'s constructor parameter — and,
+critically, **verified this time with an actual full-`AppModule` boot**, not just `tsc`/unit tests:
+a throwaway script (`NestFactory.createApplicationContext(AppModule)` against a
+`mongodb-memory-server` instance, deleted after use) that would have caught this exact class of bug
+before it ever reached Railway. All three edges of the cycle now carry the forwardRef pair (module
+import + constructor injection) — establishing that a 3+ node cross-module cycle needs every edge
+defensively wrapped, not just whichever one a given test's require order happens to expose.
+
+No existing `forwardRef` precedent existed anywhere else in this codebase (every prior cross-domain
+dependency was avoided architecturally, e.g. `AdminService` composing `RestaurantsService`+`MenuService`
 instead of either module importing the other) — this is the first case where the cycle runs through
 shared infrastructure modules (`Users`/`Notifications`) that a business-domain service legitimately
 needs, where restructuring away the cycle isn't a reasonable option.
