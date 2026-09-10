@@ -671,7 +671,8 @@
     "createRestaurant": "Crear restaurante",
     "restaurantCreated": "Restaurante creado",
     "pendingAdminApproval": "Está pendiente de aprobación por un administrador antes de aparecer públicamente.",
-    "couldNotCreateRestaurant": "No se pudo crear el restaurante"
+    "couldNotCreateRestaurant": "No se pudo crear el restaurante",
+    "autoVerifiedPendingMenu": "¡Tu registro comercial se verificó automáticamente! Agrega al menos un artículo del menú para publicarlo."
   },
   "EditRestaurantPage": {
     "restaurantNotFound": "Restaurante no encontrado, o no tienes acceso a él.",
@@ -729,7 +730,10 @@
     "closed": "Cerrado",
     "to": "a",
     "openingTimeFor": "Hora de apertura el {day}",
-    "closingTimeFor": "Hora de cierre el {day}"
+    "closingTimeFor": "Hora de cierre el {day}",
+    "registrationNumberTooShort": "No parece un número de registro válido",
+    "businessRegistrationNumber": "Número de registro comercial",
+    "businessRegistrationNumberHint": "Por ejemplo, un número CAC RC/BN nigeriano, o el equivalente de tu país. Lo verificamos automáticamente cuando es posible; si no se puede verificar automáticamente, un administrador lo revisa manualmente."
   },
   "MenuManagerPage": {
     "groupNamePlaceholder": "Nombre del grupo (ej. Tamaño)",
@@ -830,7 +834,8 @@
     "createStore": "Crear tienda",
     "storeCreated": "Tienda creada",
     "pendingAdminApproval": "Está pendiente de aprobación por un administrador antes de aparecer públicamente.",
-    "couldNotCreateStore": "No se pudo crear la tienda"
+    "couldNotCreateStore": "No se pudo crear la tienda",
+    "autoVerifiedPendingCatalog": "¡Tu registro comercial se verificó automáticamente! Agrega al menos un producto para publicarlo."
   },
   "EditStorePage": {
     "storeNotFound": "Tienda no encontrada, o no tienes acceso a ella.",
@@ -885,7 +890,10 @@
     "closed": "Cerrado",
     "to": "a",
     "openingTimeFor": "Hora de apertura el {day}",
-    "closingTimeFor": "Hora de cierre el {day}"
+    "closingTimeFor": "Hora de cierre el {day}",
+    "registrationNumberTooShort": "No parece un número de registro válido",
+    "businessRegistrationNumber": "Número de registro comercial",
+    "businessRegistrationNumberHint": "Por ejemplo, un número CAC RC/BN nigeriano, o el equivalente de tu país. Lo verificamos automáticamente cuando es posible; si no se puede verificar automáticamente, un administrador lo revisa manualmente."
   },
   "CatalogManagerPage": {
     "required": "Obligatorio",
@@ -1234,7 +1242,8 @@
     "useCodeFor": "Usa el código {code} para obtener {discount}",
     "percentOff": "{value}% de descuento",
     "amountOff": "{value} de descuento",
-    "minOrder": "(pedido mínimo de {amount})"
+    "minOrder": "(pedido mínimo de {amount})",
+    "amountOffGeneric": "un descuento especial"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Códigos promocionales",
@@ -1335,7 +1344,16 @@
     "backToAdminDashboard": "Volver al panel de administración",
     "restaurantApproved": "Restaurante aprobado",
     "couldNotApproveRestaurant": "No se pudo aprobar el restaurante",
-    "approveRestaurant": "Aprobar restaurante"
+    "approveRestaurant": "Aprobar restaurante",
+    "automatedVerification": "Verificación automática",
+    "verificationStatus": {
+      "not_attempted": "No verificado automáticamente",
+      "verified": "Verificado automáticamente",
+      "mismatch": "Falló la verificación automática"
+    },
+    "checkedAt": "Verificado el {date}",
+    "registeredName": "Nombre registrado",
+    "registeredAddress": "Dirección registrada"
   },
   "AdminStoreReviewPage": {
     "sunday": "Domingo",
@@ -1376,7 +1394,16 @@
     "backToAdminDashboard": "Volver al panel de administración",
     "storeApproved": "Tienda aprobada",
     "couldNotApproveStore": "No se pudo aprobar la tienda",
-    "approveStore": "Aprobar tienda"
+    "approveStore": "Aprobar tienda",
+    "automatedVerification": "Verificación automática",
+    "verificationStatus": {
+      "not_attempted": "No verificado automáticamente",
+      "verified": "Verificado automáticamente",
+      "mismatch": "Falló la verificación automática"
+    },
+    "checkedAt": "Verificado el {date}",
+    "registeredName": "Nombre registrado",
+    "registeredAddress": "Dirección registrada"
   },
   "AdminRiderReviewPage": {
     "riderNotFound": "Repartidor no encontrado",

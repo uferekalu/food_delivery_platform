@@ -9,6 +9,10 @@ import {
   PayoutAccount,
   PayoutAccountSchema,
 } from '../../common/schemas/payout-account.schema';
+import {
+  BusinessVerificationResult,
+  BusinessVerificationResultSchema,
+} from '../../common/schemas/business-verification-result.schema';
 
 // Glovo's own vertical split (docs/ROADMAP.md FDP-56) — a store belongs to exactly one, and a
 // category-listing page only ever shows stores of that one type (confirmed against the real
@@ -59,6 +63,14 @@ export class Store {
   // rather than inventing a parallel one.
   @Prop({ type: String, default: null })
   complianceDocumentUrl: string | null;
+
+  // Automated business verification (docs/ROADMAP.md FDP-115) — see Restaurant's identical
+  // fields for the full reasoning.
+  @Prop({ type: String, default: null, trim: true })
+  businessRegistrationNumber: string | null;
+
+  @Prop({ type: BusinessVerificationResultSchema, default: () => ({}) })
+  businessVerification: BusinessVerificationResult;
 
   /** ISO 4217 — source of truth for this store's order currency, see docs/ARCHITECTURE.md §4. */
   @Prop({ type: String, required: true, uppercase: true })

@@ -14,6 +14,8 @@ import {
   RestaurantSchema,
 } from './schemas/restaurant.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 jest.setTimeout(30_000);
 
@@ -22,6 +24,13 @@ describe('RestaurantsService', () => {
   let moduleRef: TestingModule;
   let service: RestaurantsService;
   let restaurantModel: Model<RestaurantDocument>;
+  // Mocked rather than the real BusinessVerificationService/NotificationsService (docs/ROADMAP.md
+  // FDP-115) — NotificationsService alone pulls in UsersService/MailService/SmsService/
+  // PushService/RealtimeGateway, none of which this suite needs to exercise for real. Defaults
+  // to "not configured"/no-op so every pre-existing test in this file (written before FDP-115)
+  // keeps behaving exactly as it did — `businessVerification` just stays at its schema default.
+  let verifyBusinessRegistration: jest.Mock;
+  let notify: jest.Mock;
 
   const owner: AccessTokenPayload = {
     sub: '',
@@ -46,6 +55,7 @@ describe('RestaurantsService', () => {
     country: 'Nigeria',
     address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
     complianceDocumentUrl: 'https://example.com/doc.pdf',
+    businessRegistrationNumber: 'RC1234567',
   };
 
   beforeAll(async () => {
@@ -54,6 +64,9 @@ describe('RestaurantsService', () => {
       instance: { launchTimeout: 60_000 },
     });
 
+    verifyBusinessRegistration = jest.fn();
+    notify = jest.fn().mockResolvedValue(undefined);
+
     moduleRef = await Test.createTestingModule({
       imports: [
         MongooseModule.forRoot(mongod.getUri()),
@@ -61,7 +74,14 @@ describe('RestaurantsService', () => {
           { name: Restaurant.name, schema: RestaurantSchema },
         ]),
       ],
-      providers: [RestaurantsService],
+      providers: [
+        RestaurantsService,
+        {
+          provide: BusinessVerificationService,
+          useValue: { verifyBusinessRegistration },
+        },
+        { provide: NotificationsService, useValue: { notify } },
+      ],
     }).compile();
 
     service = moduleRef.get(RestaurantsService);
@@ -72,6 +92,16 @@ describe('RestaurantsService', () => {
     // index for $geoNear query" (docs/ROADMAP.md FDP-96).
     await restaurantModel.init();
   }, 60_000); // headroom for the 60s mongod launchTimeout above, not just module compile
+
+  beforeEach(() => {
+    // Default: "not configured" — matches this repo's real-world default (no Youverify account
+    // exists yet), and keeps every pre-existing test's `isApproved`/scope assertions unaffected.
+    verifyBusinessRegistration.mockReset().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify.mockReset().mockResolvedValue(undefined);
+  });
 
   afterEach(async () => {
     await restaurantModel.deleteMany({}).exec();
@@ -510,6 +540,161 @@ describe('RestaurantsService', () => {
       await expect(service.approve(created._id.toString())).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('automated business verification (docs/ROADMAP.md FDP-115)', () => {
+    it('stores a `verified` result and notifies the owner, but does not auto-approve (no menu items yet)', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'verified',
+        registeredName: 'Burgundy Kitchen Ltd',
+        registeredAddress: '1 Main St, Lagos',
+        rawStatus: 'active',
+      });
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created.businessVerification.status).toBe('verified');
+      expect(created.businessVerification.providerRegisteredName).toBe(
+        'Burgundy Kitchen Ltd',
+      );
+      expect(created.isApproved).toBe(false); // no menu items yet — see MenuService.createItem
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'business_verification_passed' }),
+      );
+    });
+
+    it('stores a `mismatch` result and notifies the owner it needs manual review, never auto-approving', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'mismatch',
+        registeredName: 'A Different Company Ltd',
+        registeredAddress: null,
+        rawStatus: 'active',
+        reason: 'Registered name does not match',
+      });
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created.businessVerification.status).toBe('mismatch');
+      expect(created.businessVerification.failureReason).toBe(
+        'Registered name does not match',
+      );
+      expect(created.isApproved).toBe(false);
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'business_verification_needs_review' }),
+      );
+    });
+
+    it.each([
+      [
+        'not configured',
+        { outcome: 'unknown', reason: 'Youverify not configured' },
+      ],
+      ['the lookup threw', { outcome: 'unknown', reason: 'network down' }],
+    ])(
+      'treats "%s" identically — status stays `not_attempted`, isApproved stays false',
+      async (_label, mockResult) => {
+        verifyBusinessRegistration.mockResolvedValue(mockResult);
+
+        const created = await service.create('owner-id', baseDto);
+
+        expect(created.businessVerification.status).toBe('not_attempted');
+        expect(created.isApproved).toBe(false);
+      },
+    );
+
+    it('create() still succeeds and returns the restaurant even if the verification call throws synchronously', async () => {
+      verifyBusinessRegistration.mockRejectedValue(new Error('boom'));
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created._id).toBeDefined();
+      expect(created.businessVerification.status).toBe('not_attempted');
+    });
+
+    describe('autoApproveIfEligible', () => {
+      it('approves a restaurant that was auto-verified and is not yet approved', async () => {
+        verifyBusinessRegistration.mockResolvedValue({
+          outcome: 'verified',
+          registeredName: 'Burgundy Kitchen Ltd',
+          registeredAddress: null,
+          rawStatus: 'active',
+        });
+        const created = await service.create('owner-id', baseDto);
+        expect(created.isApproved).toBe(false);
+
+        await service.autoApproveIfEligible(created._id.toString());
+
+        const reloaded = await service.findByIdOrThrow(created._id.toString());
+        expect(reloaded.isApproved).toBe(true);
+        expect(notify).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'business_auto_listed' }),
+        );
+      });
+
+      it('is a no-op when the restaurant was not auto-verified', async () => {
+        const created = await service.create('owner-id', baseDto); // default mock: not_attempted
+
+        await service.autoApproveIfEligible(created._id.toString());
+
+        const reloaded = await service.findByIdOrThrow(created._id.toString());
+        expect(reloaded.isApproved).toBe(false);
+      });
+
+      it('is a no-op when the restaurant is already approved', async () => {
+        verifyBusinessRegistration.mockResolvedValue({
+          outcome: 'verified',
+          registeredName: 'Burgundy Kitchen Ltd',
+          registeredAddress: null,
+          rawStatus: 'active',
+        });
+        const created = await service.create('owner-id', baseDto);
+        await service.approve(created._id.toString());
+        notify.mockClear();
+
+        await service.autoApproveIfEligible(created._id.toString());
+
+        expect(notify).not.toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'business_auto_listed' }),
+        );
+      });
+    });
+
+    describe('reverifyBusiness', () => {
+      it('updates the registration number, re-runs verification, and auto-approves if now eligible', async () => {
+        const created = await service.create('owner-id', baseDto); // default mock: not_attempted
+        verifyBusinessRegistration.mockResolvedValue({
+          outcome: 'verified',
+          registeredName: 'Burgundy Kitchen Ltd',
+          registeredAddress: null,
+          rawStatus: 'active',
+        });
+
+        const updated = await service.reverifyBusiness(
+          created._id.toString(),
+          admin,
+          'RC7654321',
+        );
+
+        expect(updated.businessRegistrationNumber).toBe('RC7654321');
+        expect(updated.businessVerification.status).toBe('verified');
+        // Still not approved — reverifyBusiness deliberately never calls
+        // autoApproveIfEligible (it can't prove the "at least one menu item" prerequisite);
+        // only MenuService.createItem can trigger the auto-listing.
+        expect(updated.isApproved).toBe(false);
+      });
+
+      it('rejects a stranger reverifying a restaurant they do not own', async () => {
+        const created = await service.create('owner-id', baseDto);
+
+        await expect(
+          service.reverifyBusiness(
+            created._id.toString(),
+            otherOwner,
+            'RC7654321',
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
     });
   });
 

@@ -671,7 +671,8 @@
     "createRestaurant": "Créer le restaurant",
     "restaurantCreated": "Restaurant créé",
     "pendingAdminApproval": "Il est en attente d'approbation par un administrateur avant d'apparaître publiquement.",
-    "couldNotCreateRestaurant": "Impossible de créer le restaurant"
+    "couldNotCreateRestaurant": "Impossible de créer le restaurant",
+    "autoVerifiedPendingMenu": "Votre immatriculation d'entreprise a été vérifiée automatiquement ! Ajoutez au moins un article au menu pour être mis en ligne."
   },
   "EditRestaurantPage": {
     "restaurantNotFound": "Restaurant introuvable, ou vous n'y avez pas accès.",
@@ -729,7 +730,10 @@
     "closed": "Fermé",
     "to": "à",
     "openingTimeFor": "Heure d'ouverture le {day}",
-    "closingTimeFor": "Heure de fermeture le {day}"
+    "closingTimeFor": "Heure de fermeture le {day}",
+    "registrationNumberTooShort": "Ne ressemble pas à un numéro d'immatriculation valide",
+    "businessRegistrationNumber": "Numéro d'immatriculation de l'entreprise",
+    "businessRegistrationNumberHint": "Par exemple, un numéro CAC RC/BN nigérian, ou l'équivalent de votre pays. Nous le vérifions automatiquement lorsque c'est possible — si la vérification automatique échoue, un administrateur l'examine manuellement."
   },
   "MenuManagerPage": {
     "groupNamePlaceholder": "Nom du groupe (ex. Taille)",
@@ -830,7 +834,8 @@
     "createStore": "Créer la boutique",
     "storeCreated": "Boutique créée",
     "pendingAdminApproval": "Elle est en attente d'approbation par un administrateur avant d'apparaître publiquement.",
-    "couldNotCreateStore": "Impossible de créer la boutique"
+    "couldNotCreateStore": "Impossible de créer la boutique",
+    "autoVerifiedPendingCatalog": "Votre immatriculation d'entreprise a été vérifiée automatiquement ! Ajoutez au moins un produit pour être mis en ligne."
   },
   "EditStorePage": {
     "storeNotFound": "Boutique introuvable, ou vous n'y avez pas accès.",
@@ -885,7 +890,10 @@
     "closed": "Fermé",
     "to": "à",
     "openingTimeFor": "Heure d'ouverture le {day}",
-    "closingTimeFor": "Heure de fermeture le {day}"
+    "closingTimeFor": "Heure de fermeture le {day}",
+    "registrationNumberTooShort": "Ne ressemble pas à un numéro d'immatriculation valide",
+    "businessRegistrationNumber": "Numéro d'immatriculation de l'entreprise",
+    "businessRegistrationNumberHint": "Par exemple, un numéro CAC RC/BN nigérian, ou l'équivalent de votre pays. Nous le vérifions automatiquement lorsque c'est possible — si la vérification automatique échoue, un administrateur l'examine manuellement."
   },
   "CatalogManagerPage": {
     "required": "Obligatoire",
@@ -1234,7 +1242,8 @@
     "useCodeFor": "Utilisez le code {code} pour {discount}",
     "percentOff": "{value}% de réduction",
     "amountOff": "{value} de réduction",
-    "minOrder": "(commande minimum de {amount})"
+    "minOrder": "(commande minimum de {amount})",
+    "amountOffGeneric": "une remise spéciale"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Codes promo",
@@ -1335,7 +1344,16 @@
     "backToAdminDashboard": "Retour au tableau de bord administrateur",
     "restaurantApproved": "Restaurant approuvé",
     "couldNotApproveRestaurant": "Impossible d'approuver le restaurant",
-    "approveRestaurant": "Approuver le restaurant"
+    "approveRestaurant": "Approuver le restaurant",
+    "automatedVerification": "Vérification automatique",
+    "verificationStatus": {
+      "not_attempted": "Non vérifié automatiquement",
+      "verified": "Vérifié automatiquement",
+      "mismatch": "Échec de la vérification automatique"
+    },
+    "checkedAt": "Vérifié le {date}",
+    "registeredName": "Nom enregistré",
+    "registeredAddress": "Adresse enregistrée"
   },
   "AdminStoreReviewPage": {
     "sunday": "Dimanche",
@@ -1376,7 +1394,16 @@
     "backToAdminDashboard": "Retour au tableau de bord administrateur",
     "storeApproved": "Boutique approuvée",
     "couldNotApproveStore": "Impossible d'approuver la boutique",
-    "approveStore": "Approuver la boutique"
+    "approveStore": "Approuver la boutique",
+    "automatedVerification": "Vérification automatique",
+    "verificationStatus": {
+      "not_attempted": "Non vérifié automatiquement",
+      "verified": "Vérifié automatiquement",
+      "mismatch": "Échec de la vérification automatique"
+    },
+    "checkedAt": "Vérifié le {date}",
+    "registeredName": "Nom enregistré",
+    "registeredAddress": "Adresse enregistrée"
   },
   "AdminRiderReviewPage": {
     "riderNotFound": "Livreur introuvable",

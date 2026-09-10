@@ -25,6 +25,8 @@ import {
   StoreDocument,
   StoreSchema,
 } from '../stores/schemas/store.schema';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 
 jest.setTimeout(30_000);
@@ -60,7 +62,26 @@ describe('PromoCodesService', () => {
           { name: Store.name, schema: StoreSchema },
         ]),
       ],
-      providers: [PromoCodesService, RestaurantsService, StoresService],
+      providers: [
+        PromoCodesService,
+        RestaurantsService,
+        StoresService,
+        // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks, same
+        // reasoning as every other RestaurantsService/StoresService consumer's spec file.
+        {
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
     }).compile();
 
     service = moduleRef.get(PromoCodesService);
@@ -567,6 +588,7 @@ describe('PromoCodesService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return restaurantsService.approve(restaurant._id.toString());
     }
@@ -579,6 +601,7 @@ describe('PromoCodesService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return storesService.approve(store._id.toString());
     }
@@ -808,6 +831,7 @@ describe('PromoCodesService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return restaurantsService.approve(restaurant._id.toString());
     }
@@ -820,6 +844,7 @@ describe('PromoCodesService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return storesService.approve(store._id.toString());
     }
@@ -1061,6 +1086,86 @@ describe('PromoCodesService', () => {
       });
 
       expect(active.map((p) => p.code)).not.toContain('BANNER7');
+    });
+  });
+
+  describe('findActivePlatformWide (docs/ROADMAP.md FDP-116)', () => {
+    const storeId = '507f1f77bcf86cd799439031';
+
+    it('includes an active platform-wide code', async () => {
+      await service.create(
+        { code: 'MARKET1', discountType: 'percentage', discountValue: 10 },
+        admin,
+      );
+
+      const active = await service.findActivePlatformWide();
+
+      expect(active.map((p) => p.code)).toContain('MARKET1');
+    });
+
+    it('excludes a restaurant-scoped code', async () => {
+      await service.create(
+        {
+          code: 'MARKET2',
+          discountType: 'fixed',
+          discountValue: 5,
+          restaurantId,
+        },
+        admin,
+      );
+
+      const active = await service.findActivePlatformWide();
+
+      expect(active.map((p) => p.code)).not.toContain('MARKET2');
+    });
+
+    it('excludes a store-scoped code', async () => {
+      await service.create(
+        { code: 'MARKET3', discountType: 'fixed', discountValue: 5, storeId },
+        admin,
+      );
+
+      const active = await service.findActivePlatformWide();
+
+      expect(active.map((p) => p.code)).not.toContain('MARKET3');
+    });
+
+    it('excludes an inactive, expired, or usage-limit-reached platform-wide code', async () => {
+      await service.create(
+        {
+          code: 'MARKET4',
+          discountType: 'fixed',
+          discountValue: 5,
+          isActive: false,
+        },
+        admin,
+      );
+      await service.create(
+        {
+          code: 'MARKET5',
+          discountType: 'fixed',
+          discountValue: 5,
+          expiresAt: new Date(Date.now() - 1000).toISOString(),
+        },
+        admin,
+      );
+      const limited = await service.create(
+        {
+          code: 'MARKET6',
+          discountType: 'fixed',
+          discountValue: 5,
+          usageLimit: 1,
+        },
+        admin,
+      );
+      await service.redeem(limited._id.toString());
+
+      const active = await service.findActivePlatformWide();
+
+      const codes = active.map((p) => p.code);
+      expect(codes).not.toContain('MARKET4');
+      expect(codes).not.toContain('MARKET5');
+      expect(codes).not.toContain('MARKET6');
     });
   });
 });

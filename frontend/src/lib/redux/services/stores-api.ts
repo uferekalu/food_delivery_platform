@@ -44,6 +44,8 @@ export interface StoreInput {
   // Business registration proof (docs/ROADMAP.md FDP-60) — required by the backend at creation,
   // hence not optional here even though UpdateStoreInput below loosens every field.
   complianceDocumentUrl: string;
+  // Automated business verification (docs/ROADMAP.md FDP-115) — also required at creation.
+  businessRegistrationNumber: string;
 }
 
 export interface UpdateStoreInput extends Partial<StoreInput> {
@@ -104,6 +106,18 @@ export const storesApi = api.injectEndpoints({
           : [{ type: "Store", id: "PENDING" }],
     }),
 
+    // Admin-only, unfiltered by approval status (docs/ROADMAP.md FDP-116) — mirrors
+    // restaurants-api.ts's identical `listAllRestaurantsForAdmin`, see its comment for the bug
+    // this fixes (the admin promo-code scope picker used the public, approval-filtered
+    // `listStores` and came up empty for any store not yet approved).
+    listAllStoresForAdmin: builder.query<Store[], void>({
+      query: () => "/stores/admin",
+      providesTags: (result) =>
+        result
+          ? [...result.map((s) => ({ type: "Store" as const, id: s._id })), { type: "Store" as const, id: "LIST" }]
+          : [{ type: "Store", id: "LIST" }],
+    }),
+
     approveStore: builder.mutation<Store, string>({
       // Lives under /admin, not /stores, since approval requires checking both a Store-owned
       // invariant and a Product-owned one (docs/ROADMAP.md FDP-56, mirroring approveRestaurant).
@@ -152,6 +166,7 @@ export const {
   useGetNearbyStoresQuery,
   useGetStoreByIdForAdminQuery,
   useListPendingStoresQuery,
+  useListAllStoresForAdminQuery,
   useApproveStoreMutation,
   useGetMyStoresQuery,
   useCreateStoreMutation,

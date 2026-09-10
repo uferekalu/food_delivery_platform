@@ -67,6 +67,19 @@ export class CreateStoreDto {
   @IsUrl()
   complianceDocumentUrl: string;
 
+  @ApiProperty({
+    example: 'RC1234567',
+    description:
+      'Business registration number issued by the relevant registrar (e.g. Nigeria’s CAC ' +
+      '— RC/BN/IT/LP/LLP prefix, or the equivalent for another country). Automatically ' +
+      'verified against a third-party provider where configured (docs/ROADMAP.md FDP-115); ' +
+      'always required regardless of whether that check is available.',
+  })
+  @IsString()
+  @MinLength(4)
+  @MaxLength(30)
+  businessRegistrationNumber: string;
+
   @ApiProperty({ example: 'NGN', description: 'ISO 4217 currency code' })
   @IsString()
   @Length(3, 3)

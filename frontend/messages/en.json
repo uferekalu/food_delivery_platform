@@ -671,6 +671,7 @@
     "createRestaurant": "Create restaurant",
     "restaurantCreated": "Restaurant created",
     "pendingAdminApproval": "It's pending admin approval before it appears publicly.",
+    "autoVerifiedPendingMenu": "Your business registration was automatically verified! Add at least one menu item to go live.",
     "couldNotCreateRestaurant": "Couldn't create the restaurant"
   },
   "EditRestaurantPage": {
@@ -694,6 +695,7 @@
     "highEnd": "$$$$ — High-end",
     "tooShort": "Too short",
     "addAtLeastOne": "Add at least one, comma-separated",
+    "registrationNumberTooShort": "Doesn't look like a valid registration number",
     "threeLetterCode": "3-letter code, e.g. NGN",
     "required": "Required",
     "mustBeBetweenMinus90And90": "Must be between -90 and 90",
@@ -703,6 +705,8 @@
     "coverPhoto": "Cover photo",
     "businessRegistrationDocument": "Business registration document",
     "businessRegistrationHint": "Required — e.g. a CAC certificate, business license, or your country's equivalent proof of registration. An admin reviews this before your restaurant appears in the marketplace.",
+    "businessRegistrationNumber": "Business registration number",
+    "businessRegistrationNumberHint": "E.g. a Nigerian CAC RC/BN number, or your country's equivalent. We automatically verify this where possible — if it can't be verified automatically, an admin reviews it manually.",
     "restaurantName": "Restaurant name",
     "description": "Description",
     "cuisineTypes": "Cuisine types",
@@ -830,6 +834,7 @@
     "createStore": "Create store",
     "storeCreated": "Store created",
     "pendingAdminApproval": "It's pending admin approval before it appears publicly.",
+    "autoVerifiedPendingCatalog": "Your business registration was automatically verified! Add at least one product to go live.",
     "couldNotCreateStore": "Couldn't create the store"
   },
   "EditStorePage": {
@@ -844,6 +849,7 @@
     "pharmacyBeauty": "Pharmacy & beauty",
     "tooShort": "Too short",
     "required": "Required",
+    "registrationNumberTooShort": "Doesn't look like a valid registration number",
     "threeLetterCode": "3-letter code, e.g. NGN",
     "mustBeBetweenMinus90And90": "Must be between -90 and 90",
     "mustBeBetweenMinus180And180": "Must be between -180 and 180",
@@ -852,6 +858,8 @@
     "coverPhoto": "Cover photo",
     "businessRegistrationDocument": "Business registration document",
     "businessRegistrationHint": "Required — e.g. a CAC certificate, business license, or your country's equivalent proof of registration. An admin reviews this before your store appears in the marketplace.",
+    "businessRegistrationNumber": "Business registration number",
+    "businessRegistrationNumberHint": "E.g. a Nigerian CAC RC/BN number, or your country's equivalent. We automatically verify this where possible — if it can't be verified automatically, an admin reviews it manually.",
     "storeName": "Store name",
     "description": "Description",
     "storeType": "Store type",
@@ -1234,6 +1242,7 @@
     "useCodeFor": "Use code {code} for {discount}",
     "percentOff": "{value}% off",
     "amountOff": "{value} off",
+    "amountOffGeneric": "a special discount",
     "minOrder": "(min. order {amount})"
   },
   "VendorPromoCodesPage": {
@@ -1321,6 +1330,15 @@
     "businessRegistrationDocument": "Business registration document",
     "viewUploadedDocument": "View uploaded document →",
     "notUploadedRequired": "Not uploaded — required before this restaurant can be approved",
+    "automatedVerification": "Automated verification",
+    "verificationStatus": {
+      "not_attempted": "Not automatically verified",
+      "verified": "Automatically verified",
+      "mismatch": "Automatic verification failed"
+    },
+    "checkedAt": "Checked {date}",
+    "registeredName": "Registered name",
+    "registeredAddress": "Registered address",
     "openingHours": "Opening hours",
     "closed": "Closed",
     "menu": "Menu",
@@ -1362,6 +1380,15 @@
     "businessRegistrationDocument": "Business registration document",
     "viewUploadedDocument": "View uploaded document →",
     "notUploadedRequired": "Not uploaded — required before this store can be approved",
+    "automatedVerification": "Automated verification",
+    "verificationStatus": {
+      "not_attempted": "Not automatically verified",
+      "verified": "Automatically verified",
+      "mismatch": "Automatic verification failed"
+    },
+    "checkedAt": "Checked {date}",
+    "registeredName": "Registered name",
+    "registeredAddress": "Registered address",
     "openingHours": "Opening hours",
     "closed": "Closed",
     "catalog": "Catalog",

@@ -15,6 +15,8 @@ import {
   Restaurant,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   RefreshToken,
   RefreshTokenSchema,
@@ -48,7 +50,25 @@ describe('RidersService', () => {
           { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
-      providers: [RidersService, UsersService, RestaurantsService],
+      providers: [
+        RidersService,
+        UsersService,
+        RestaurantsService,
+        // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks.
+        {
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
     }).compile();
 
     ridersService = moduleRef.get(RidersService);

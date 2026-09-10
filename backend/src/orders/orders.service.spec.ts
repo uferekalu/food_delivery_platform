@@ -14,6 +14,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
 import {
   PayoutClawback,
   PayoutClawbackDocument,
@@ -129,6 +130,17 @@ describe('OrdersService', () => {
           useValue: { emitOrderStatusChanged: jest.fn() },
         },
         {
+          // Not exercised by this suite (docs/ROADMAP.md FDP-115) — a bare no-op mock, same
+          // reasoning as every other RestaurantsService/StoresService consumer's spec file.
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
           // Notification delivery (FDP-19) is fire-and-forget from OrdersService — a resolved
           // mock is enough to keep it from surfacing as an unhandled rejection in these tests.
           provide: NotificationsService,
@@ -218,6 +230,7 @@ describe('OrdersService', () => {
       country: 'Nigeria',
       address,
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     return restaurantsService.approve(restaurant._id.toString());
   }
@@ -287,6 +300,7 @@ describe('OrdersService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return storesService.approve(store._id.toString());
     }
@@ -1153,6 +1167,7 @@ describe('OrdersService', () => {
         country: 'Nigeria',
         address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       return storesService.approve(store._id.toString());
     }

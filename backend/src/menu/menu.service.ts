@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -19,6 +20,8 @@ import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Injectable()
 export class MenuService {
+  private readonly logger = new Logger(MenuService.name);
+
   constructor(
     @InjectModel(MenuCategory.name)
     private readonly categoryModel: Model<MenuCategoryDocument>,
@@ -89,7 +92,21 @@ export class MenuService {
     await this.assertOwnership(restaurantId, requester);
     await this.findCategoryOrThrow(restaurantId, dto.categoryId);
     this.assertDiscountBelowPrice(dto.price, dto.discountedPrice);
-    return this.itemModel.create({ ...dto, restaurantId });
+    const item = await this.itemModel.create({ ...dto, restaurantId });
+    // Automated business verification (docs/ROADMAP.md FDP-115) — a just-created item already
+    // proves the "at least one menu item" approval prerequisite, so this is the moment a
+    // Youverify-verified restaurant can go live without a manual admin step. A no-op unless the
+    // restaurant was auto-verified and isn't already approved; never allowed to fail item
+    // creation itself.
+    await this.restaurantsService
+      .autoApproveIfEligible(restaurantId)
+      .catch((err: unknown) =>
+        this.logger.error(
+          `Auto-approval check failed for restaurant ${restaurantId}`,
+          err,
+        ),
+      );
+    return item;
   }
 
   async updateItem(

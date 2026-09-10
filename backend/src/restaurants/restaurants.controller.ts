@@ -17,6 +17,7 @@ import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { ListRestaurantsDto } from './dto/list-restaurants.dto';
 import { NearbyQueryDto } from '../common/dto/nearby-query.dto';
+import { ReverifyBusinessRegistrationDto } from '../common/dto/reverify-business-registration.dto';
 
 @ApiTags('restaurants')
 @Controller('restaurants')
@@ -49,6 +50,17 @@ export class RestaurantsController {
   @Get('pending')
   findPendingApproval() {
     return this.restaurantsService.findPendingApproval();
+  }
+
+  // Also declared before `:slug` — same reason as `mine` above. Every restaurant regardless of
+  // approval status — for admin pickers that must be able to target ANY restaurant, not just
+  // already-approved ones (e.g. scoping an admin-created promo code before a restaurant has
+  // been approved yet — a real bug the user hit, docs/ROADMAP.md FDP-116). `findAll` above is
+  // public and approval-filtered, wrong for this.
+  @Roles('admin')
+  @Get('admin')
+  findAllForAdmin() {
+    return this.restaurantsService.findAllForAdmin();
   }
 
   // Also declared before `:slug` — same reason as `mine` above. `:slug` is public but only ever
@@ -90,5 +102,21 @@ export class RestaurantsController {
   @Patch(':id/toggle-open')
   toggleOpen(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.restaurantsService.toggleOpen(id, user);
+  }
+
+  // Automated business verification (docs/ROADMAP.md FDP-115) — lets an owner correct a mistyped
+  // registration number and re-run the automated CAC/RC check without recreating the restaurant.
+  @Roles('restaurant_owner', 'admin')
+  @Patch(':id/reverify-business')
+  reverifyBusiness(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ReverifyBusinessRegistrationDto,
+  ) {
+    return this.restaurantsService.reverifyBusiness(
+      id,
+      user,
+      dto.businessRegistrationNumber,
+    );
   }
 }

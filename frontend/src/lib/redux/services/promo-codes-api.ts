@@ -27,9 +27,13 @@ export interface ActivePromoCode {
   maxDiscountAmount: number | null;
 }
 
+// A third, seller-less variant (docs/ROADMAP.md FDP-116) — the general marketplace-browsing
+// banner (homepage, the all-restaurants listing, category pages) has no specific restaurant/
+// store to check scoped codes against yet, so it asks for platform-wide codes only.
 export type ActivePromoCodesInput =
   | { restaurantId: string; storeId?: never }
-  | { storeId: string; restaurantId?: never };
+  | { storeId: string; restaurantId?: never }
+  | { restaurantId?: never; storeId?: never };
 
 export const promoCodesApi = api.injectEndpoints({
   endpoints: (builder) => ({

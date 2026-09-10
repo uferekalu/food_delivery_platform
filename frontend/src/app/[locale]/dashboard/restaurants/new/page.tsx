@@ -35,7 +35,10 @@ function NewRestaurantForm() {
             const restaurant = await createRestaurant(input).unwrap();
             toast({
               title: t("restaurantCreated"),
-              description: t("pendingAdminApproval"),
+              description:
+                restaurant.businessVerification.status === "verified"
+                  ? t("autoVerifiedPendingMenu")
+                  : t("pendingAdminApproval"),
               variant: "success",
             });
             router.push(`/dashboard/restaurants/${restaurant._id}`);

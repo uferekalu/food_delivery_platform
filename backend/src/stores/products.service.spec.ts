@@ -9,6 +9,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { ProductsService } from './products.service';
 import { StoresService } from './stores.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Store, StoreDocument, StoreSchema } from './schemas/store.schema';
 import {
   ProductCategory,
@@ -32,6 +34,10 @@ describe('ProductsService', () => {
   let storeModel: Model<StoreDocument>;
   let categoryModel: Model<ProductCategoryDocument>;
   let productModel: Model<ProductDocument>;
+  // Mocked, not real — see RestaurantsService's own spec for the full reasoning
+  // (docs/ROADMAP.md FDP-115).
+  let verifyBusinessRegistration: jest.Mock;
+  let notify: jest.Mock;
 
   const owner: AccessTokenPayload = {
     sub: 'owner-id',
@@ -50,6 +56,12 @@ describe('ProductsService', () => {
       instance: { launchTimeout: 60_000 },
     });
 
+    verifyBusinessRegistration = jest.fn().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify = jest.fn().mockResolvedValue(undefined);
+
     moduleRef = await Test.createTestingModule({
       imports: [
         MongooseModule.forRoot(mongod.getUri()),
@@ -59,7 +71,15 @@ describe('ProductsService', () => {
           { name: Product.name, schema: ProductSchema },
         ]),
       ],
-      providers: [ProductsService, StoresService],
+      providers: [
+        ProductsService,
+        StoresService,
+        {
+          provide: BusinessVerificationService,
+          useValue: { verifyBusinessRegistration },
+        },
+        { provide: NotificationsService, useValue: { notify } },
+      ],
     }).compile();
 
     productsService = moduleRef.get(ProductsService);
@@ -68,6 +88,14 @@ describe('ProductsService', () => {
     categoryModel = moduleRef.get(getModelToken(ProductCategory.name));
     productModel = moduleRef.get(getModelToken(Product.name));
   }, 60_000);
+
+  beforeEach(() => {
+    verifyBusinessRegistration.mockReset().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify.mockReset().mockResolvedValue(undefined);
+  });
 
   afterEach(async () => {
     await Promise.all([
@@ -90,6 +118,7 @@ describe('ProductsService', () => {
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
   }
 
@@ -249,5 +278,48 @@ describe('ProductsService', () => {
       owner,
     );
     expect(toggled.isAvailable).toBe(false);
+  });
+
+  describe('createProduct auto-approval trigger (docs/ROADMAP.md FDP-115)', () => {
+    it('auto-approves the store when it was auto-verified and this is its first product', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'verified',
+        registeredName: 'Market Square Supermarket Ltd',
+        registeredAddress: null,
+        rawStatus: 'active',
+      });
+      const store = await createTestStore();
+      const storeId = store._id.toString();
+      expect(store.isApproved).toBe(false);
+      const category = await productsService.createCategory(storeId, owner, {
+        name: 'Dairy',
+      });
+
+      await productsService.createProduct(storeId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Milk',
+        price: 10,
+      });
+
+      const reloaded = await storesService.findByIdOrThrow(storeId);
+      expect(reloaded.isApproved).toBe(true);
+    });
+
+    it('does not auto-approve a store that was not auto-verified', async () => {
+      const store = await createTestStore(); // default mock: not_attempted
+      const storeId = store._id.toString();
+      const category = await productsService.createCategory(storeId, owner, {
+        name: 'Dairy',
+      });
+
+      await productsService.createProduct(storeId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Milk',
+        price: 10,
+      });
+
+      const reloaded = await storesService.findByIdOrThrow(storeId);
+      expect(reloaded.isApproved).toBe(false);
+    });
   });
 });

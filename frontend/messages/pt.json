@@ -671,7 +671,8 @@
     "createRestaurant": "Criar restaurante",
     "restaurantCreated": "Restaurante criado",
     "pendingAdminApproval": "Está pendente de aprovação por um administrador antes de aparecer publicamente.",
-    "couldNotCreateRestaurant": "Não foi possível criar o restaurante"
+    "couldNotCreateRestaurant": "Não foi possível criar o restaurante",
+    "autoVerifiedPendingMenu": "O registro da sua empresa foi verificado automaticamente! Adicione pelo menos um item ao cardápio para entrar no ar."
   },
   "EditRestaurantPage": {
     "restaurantNotFound": "Restaurante não encontrado, ou você não tem acesso a ele.",
@@ -729,7 +730,10 @@
     "closed": "Fechado",
     "to": "até",
     "openingTimeFor": "Horário de abertura de {day}",
-    "closingTimeFor": "Horário de fechamento de {day}"
+    "closingTimeFor": "Horário de fechamento de {day}",
+    "registrationNumberTooShort": "Não parece um número de registro válido",
+    "businessRegistrationNumber": "Número de registro da empresa",
+    "businessRegistrationNumberHint": "Por exemplo, um número CAC RC/BN nigeriano, ou o equivalente no seu país. Verificamos isso automaticamente quando possível — se não for possível verificar automaticamente, um administrador revisa manualmente."
   },
   "MenuManagerPage": {
     "groupNamePlaceholder": "Nome do grupo (ex. Tamanho)",
@@ -830,7 +834,8 @@
     "createStore": "Criar loja",
     "storeCreated": "Loja criada",
     "pendingAdminApproval": "Está aguardando aprovação de um administrador antes de aparecer publicamente.",
-    "couldNotCreateStore": "Não foi possível criar a loja"
+    "couldNotCreateStore": "Não foi possível criar a loja",
+    "autoVerifiedPendingCatalog": "O registro da sua empresa foi verificado automaticamente! Adicione pelo menos um produto para entrar no ar."
   },
   "EditStorePage": {
     "storeNotFound": "Loja não encontrada, ou você não tem acesso a ela.",
@@ -885,7 +890,10 @@
     "closed": "Fechado",
     "to": "até",
     "openingTimeFor": "Horário de abertura de {day}",
-    "closingTimeFor": "Horário de fechamento de {day}"
+    "closingTimeFor": "Horário de fechamento de {day}",
+    "registrationNumberTooShort": "Não parece um número de registro válido",
+    "businessRegistrationNumber": "Número de registro da empresa",
+    "businessRegistrationNumberHint": "Por exemplo, um número CAC RC/BN nigeriano, ou o equivalente no seu país. Verificamos isso automaticamente quando possível — se não for possível verificar automaticamente, um administrador revisa manualmente."
   },
   "CatalogManagerPage": {
     "required": "Obrigatório",
@@ -1234,7 +1242,8 @@
     "useCodeFor": "Use o código {code} para {discount}",
     "percentOff": "{value}% de desconto",
     "amountOff": "{value} de desconto",
-    "minOrder": "(pedido mínimo de {amount})"
+    "minOrder": "(pedido mínimo de {amount})",
+    "amountOffGeneric": "um desconto especial"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Códigos promocionais",
@@ -1335,7 +1344,16 @@
     "backToAdminDashboard": "Voltar ao painel de administração",
     "restaurantApproved": "Restaurante aprovado",
     "couldNotApproveRestaurant": "Não foi possível aprovar o restaurante",
-    "approveRestaurant": "Aprovar restaurante"
+    "approveRestaurant": "Aprovar restaurante",
+    "automatedVerification": "Verificação automática",
+    "verificationStatus": {
+      "not_attempted": "Não verificado automaticamente",
+      "verified": "Verificado automaticamente",
+      "mismatch": "Falha na verificação automática"
+    },
+    "checkedAt": "Verificado em {date}",
+    "registeredName": "Nome registrado",
+    "registeredAddress": "Endereço registrado"
   },
   "AdminStoreReviewPage": {
     "sunday": "Domingo",
@@ -1376,7 +1394,16 @@
     "backToAdminDashboard": "Voltar ao painel de administração",
     "storeApproved": "Loja aprovada",
     "couldNotApproveStore": "Não foi possível aprovar a loja",
-    "approveStore": "Aprovar loja"
+    "approveStore": "Aprovar loja",
+    "automatedVerification": "Verificação automática",
+    "verificationStatus": {
+      "not_attempted": "Não verificado automaticamente",
+      "verified": "Verificado automaticamente",
+      "mismatch": "Falha na verificação automática"
+    },
+    "checkedAt": "Verificado em {date}",
+    "registeredName": "Nome registrado",
+    "registeredAddress": "Endereço registrado"
   },
   "AdminRiderReviewPage": {
     "riderNotFound": "Entregador não encontrado",

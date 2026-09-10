@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
 import {
@@ -19,7 +19,10 @@ import { UsersController } from './users.controller';
       // AuthModule (which already depends on UsersModule, not the other way around).
       { name: RefreshToken.name, schema: RefreshTokenSchema },
     ]),
-    RestaurantsModule,
+    // forwardRef (docs/ROADMAP.md FDP-115) — see UsersService's matching `@Inject(forwardRef(...))`
+    // for the full 3-module cycle this breaks: UsersModule -> RestaurantsModule ->
+    // NotificationsModule -> UsersModule.
+    forwardRef(() => RestaurantsModule),
   ],
   controllers: [UsersController],
   providers: [UsersService],

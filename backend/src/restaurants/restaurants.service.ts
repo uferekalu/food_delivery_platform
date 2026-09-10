@@ -1,8 +1,11 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, QueryFilter } from 'mongoose';
@@ -13,6 +16,8 @@ import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interfac
 import { Restaurant, RestaurantDocument } from './schemas/restaurant.schema';
 import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
 import type { PaymentProvider } from '../payments/payment-provider';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { ListRestaurantsDto } from './dto/list-restaurants.dto';
@@ -43,9 +48,17 @@ export interface PaginatedResult<T> {
 
 @Injectable()
 export class RestaurantsService {
+  private readonly logger = new Logger(RestaurantsService.name);
+
   constructor(
     @InjectModel(Restaurant.name)
     private readonly restaurantModel: Model<RestaurantDocument>,
+    private readonly businessVerificationService: BusinessVerificationService,
+    // forwardRef here (docs/ROADMAP.md FDP-115) — see RestaurantsModule's doc comment for the
+    // full cycle this breaks: RestaurantsModule -> NotificationsModule -> UsersModule ->
+    // RestaurantsModule (UsersService already depends on RestaurantsService).
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -53,7 +66,7 @@ export class RestaurantsService {
     dto: CreateRestaurantDto,
   ): Promise<RestaurantDocument> {
     const slug = await this.generateUniqueSlug(dto.name);
-    return this.restaurantModel.create({
+    const restaurant = await this.restaurantModel.create({
       ...dto,
       ownerId,
       slug,
@@ -63,6 +76,15 @@ export class RestaurantsService {
         location: toGeoPoint(dto.address.lat, dto.address.lng),
       },
     });
+    // Never allowed to fail restaurant creation itself (docs/ROADMAP.md FDP-115) — a Youverify
+    // outage must degrade to "falls into the manual admin queue", exactly like an unconfigured
+    // API key, never to a 500 on registration.
+    await this.runVerification(
+      restaurant,
+      dto.businessRegistrationNumber,
+      dto.name,
+    );
+    return restaurant;
   }
 
   async findAllApproved(
@@ -201,6 +223,15 @@ export class RestaurantsService {
       .exec();
   }
 
+  /** Every restaurant regardless of approval status — for admin pickers that must be able to
+   * target ANY restaurant, not just already-approved ones (e.g. scoping an admin-created promo
+   * code to a restaurant still awaiting approval — a real bug the user hit, docs/ROADMAP.md
+   * FDP-116). `findAllApproved`/`findAll` are both public and approval-filtered, wrong for this.
+   * Sorted by name for a predictable, scannable picker rather than by recency. */
+  findAllForAdmin(): Promise<RestaurantDocument[]> {
+    return this.restaurantModel.find().sort({ name: 1 }).exec();
+  }
+
   /** Feeds the admin analytics overview — how many restaurants are live vs. still awaiting
    * approval. */
   async countByApproval(): Promise<{ approved: number; pending: number }> {
@@ -296,6 +327,155 @@ export class RestaurantsService {
     }
     restaurant.isApproved = true;
     return restaurant.save();
+  }
+
+  /**
+   * Runs the automated CAC/RC check and stores its result (docs/ROADMAP.md FDP-115) — called
+   * once at creation and again from `reverifyBusiness`. Never throws: a Youverify outage or an
+   * unconfigured API key both resolve to `businessVerification.status: 'not_attempted'`, which
+   * behaves identically to today (falls into the manual admin queue) — this must never turn into
+   * a failed registration or a failed re-check request.
+   */
+  private async runVerification(
+    restaurant: RestaurantDocument,
+    registrationNumber: string,
+    businessName: string,
+  ): Promise<void> {
+    try {
+      const result =
+        await this.businessVerificationService.verifyBusinessRegistration(
+          registrationNumber,
+          businessName,
+        );
+      if (result.outcome === 'verified') {
+        restaurant.businessVerification = {
+          status: 'verified',
+          providerRegisteredName: result.registeredName,
+          providerRegisteredAddress: result.registeredAddress,
+          providerRawStatus: result.rawStatus,
+          checkedAt: new Date(),
+          failureReason: null,
+        };
+      } else if (result.outcome === 'mismatch') {
+        restaurant.businessVerification = {
+          status: 'mismatch',
+          providerRegisteredName: result.registeredName,
+          providerRegisteredAddress: result.registeredAddress,
+          providerRawStatus: result.rawStatus,
+          checkedAt: new Date(),
+          failureReason: result.reason,
+        };
+      } else {
+        restaurant.businessVerification = {
+          status: 'not_attempted',
+          providerRegisteredName: null,
+          providerRegisteredAddress: null,
+          providerRawStatus: null,
+          checkedAt: null,
+          failureReason: result.reason,
+        };
+      }
+      await restaurant.save();
+
+      if (result.outcome === 'verified') {
+        await this.notify(
+          restaurant,
+          'business_verification_passed',
+          'Business verified',
+          `We automatically verified ${restaurant.name}'s business registration. Add at least one menu item to go live.`,
+        );
+      } else {
+        await this.notify(
+          restaurant,
+          'business_verification_needs_review',
+          'Business pending review',
+          `${restaurant.name} is pending manual review by our team before it can go live.`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Business verification failed unexpectedly for ${restaurant._id.toString()}`,
+        err,
+      );
+      // businessVerification stays at its 'not_attempted' schema default — identical to today.
+    }
+  }
+
+  /**
+   * Auto-approval path for a restaurant Youverify already confirmed (docs/ROADMAP.md FDP-115) —
+   * reuses `approve()`'s existing compliance-document re-check, so this can never approve a
+   * restaurant that lacks one. A no-op if already approved or not auto-verified.
+   *
+   * Deliberately does NOT itself verify the "at least one menu item" prerequisite
+   * AdminService.approveRestaurant otherwise checks manually — RestaurantsModule can't check
+   * MenuService for it (same module-cycle reason AdminService's split exists). Callers must only
+   * invoke this where that prerequisite is already known to hold by construction — today, that's
+   * exactly MenuService.createItem right after a menu item is actually created. Do NOT call this
+   * from anywhere that hasn't just proven an item exists (e.g. `reverifyBusiness` deliberately
+   * does not call it).
+   */
+  async autoApproveIfEligible(id: string): Promise<void> {
+    const restaurant = await this.findByIdOrThrow(id);
+    if (restaurant.isApproved) return;
+    if (restaurant.businessVerification.status !== 'verified') return;
+    const approved = await this.approve(id);
+    await this.notify(
+      approved,
+      'business_auto_listed',
+      'Business now live',
+      `${approved.name} is now live in the marketplace.`,
+    );
+  }
+
+  /**
+   * Lets an owner correct a mistyped registration number and re-run the automated check without
+   * touching anything else about the restaurant (docs/ROADMAP.md FDP-115) — the on-demand
+   * fallback if Youverify mismatched or wasn't configured at creation time.
+   */
+  async reverifyBusiness(
+    id: string,
+    requester: AccessTokenPayload,
+    registrationNumber: string,
+  ): Promise<RestaurantDocument> {
+    const restaurant = await this.findByIdOrThrow(id);
+    this.assertOwnerOrAdmin(restaurant, requester);
+    restaurant.businessRegistrationNumber = registrationNumber;
+    // runVerification's own `restaurant.save()` persists this field change together with the
+    // new businessVerification result in one write.
+    await this.runVerification(restaurant, registrationNumber, restaurant.name);
+    // Deliberately does NOT call autoApproveIfEligible here — unlike MenuService.createItem,
+    // nothing here proves the "at least one menu item" prerequisite is met (RestaurantsModule
+    // can't check MenuService for the same module-cycle reason AdminService.approveRestaurant
+    // exists), so a restaurant with zero items must still wait for either its first menu item
+    // (which re-runs the check) or a manual admin approval — never auto-listed straight from a
+    // re-verify call.
+    return this.findByIdOrThrow(id);
+  }
+
+  /** Best-effort vendor notification — never allowed to fail the caller (docs/ROADMAP.md
+   * FDP-115), same posture as every other side-channel notification in this codebase. */
+  private async notify(
+    restaurant: RestaurantDocument,
+    type:
+      | 'business_verification_passed'
+      | 'business_verification_needs_review'
+      | 'business_auto_listed',
+    title: string,
+    body: string,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.notify({
+        userId: restaurant.ownerId.toString(),
+        type,
+        title,
+        body,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Notification (${type}) for restaurant ${restaurant._id.toString()} failed`,
+        err,
+      );
+    }
   }
 
   /**

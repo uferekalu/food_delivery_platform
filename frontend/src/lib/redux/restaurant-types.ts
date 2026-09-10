@@ -40,6 +40,21 @@ export interface PayoutAccount {
   accountNumber: string | null;
 }
 
+// Automated business verification (docs/ROADMAP.md FDP-115) — result of the Youverify CAC/RC
+// check, run automatically once a restaurant/store is created. Independent of `isApproved`: this
+// is what the *provider* said, `isApproved` is what actually gates marketplace visibility.
+export const BUSINESS_VERIFICATION_STATUSES = ["not_attempted", "verified", "mismatch"] as const;
+export type BusinessVerificationStatus = (typeof BUSINESS_VERIFICATION_STATUSES)[number];
+
+export interface BusinessVerificationResult {
+  status: BusinessVerificationStatus;
+  providerRegisteredName: string | null;
+  providerRegisteredAddress: string | null;
+  providerRawStatus: string | null;
+  checkedAt: string | null;
+  failureReason: string | null;
+}
+
 export interface Restaurant {
   _id: string;
   ownerId: string;
@@ -49,6 +64,8 @@ export interface Restaurant {
   logoUrl: string | null;
   coverUrl: string | null;
   complianceDocumentUrl: string | null;
+  businessRegistrationNumber: string | null;
+  businessVerification: BusinessVerificationResult;
   cuisineTypes: string[];
   currency: string;
   country: string;
@@ -91,6 +108,8 @@ export interface Store {
   logoUrl: string | null;
   coverUrl: string | null;
   complianceDocumentUrl: string | null;
+  businessRegistrationNumber: string | null;
+  businessVerification: BusinessVerificationResult;
   currency: string;
   country: string;
   address: Address;

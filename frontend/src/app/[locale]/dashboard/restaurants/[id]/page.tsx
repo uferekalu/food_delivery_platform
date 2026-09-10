@@ -37,6 +37,7 @@ function EditRestaurantForm({ id }: { id: string }) {
           name: restaurant.name,
           description: restaurant.description,
           cuisineTypesRaw: restaurant.cuisineTypes.join(", "),
+          businessRegistrationNumber: restaurant.businessRegistrationNumber ?? "",
           currency: restaurant.currency,
           country: restaurant.country,
           line1: restaurant.address.line1,

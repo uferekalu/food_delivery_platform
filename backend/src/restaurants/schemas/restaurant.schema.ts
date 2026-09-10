@@ -9,6 +9,10 @@ import {
   PayoutAccount,
   PayoutAccountSchema,
 } from '../../common/schemas/payout-account.schema';
+import {
+  BusinessVerificationResult,
+  BusinessVerificationResultSchema,
+} from '../../common/schemas/business-verification-result.schema';
 
 @Schema({ timestamps: true })
 export class Restaurant {
@@ -45,6 +49,17 @@ export class Restaurant {
   // nullable on a newly-created one, CreateRestaurantDto requires it.
   @Prop({ type: String, default: null })
   complianceDocumentUrl: string | null;
+
+  // Automated business verification (docs/ROADMAP.md FDP-115) — the RC/BN/IT/LP/LLP number (or
+  // equivalent for another country) the owner entered, required by CreateRestaurantDto for every
+  // *new* restaurant, nullable at the schema level for the same legacy-record reason as
+  // complianceDocumentUrl above. `businessVerification` holds the result of the automated check
+  // against it — see BusinessVerificationResult's own doc comment for how the two interact.
+  @Prop({ type: String, default: null, trim: true })
+  businessRegistrationNumber: string | null;
+
+  @Prop({ type: BusinessVerificationResultSchema, default: () => ({}) })
+  businessVerification: BusinessVerificationResult;
 
   @Prop({ type: [String], default: [] })
   cuisineTypes: string[];

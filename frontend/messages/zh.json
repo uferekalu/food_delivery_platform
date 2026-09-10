@@ -671,7 +671,8 @@
     "createRestaurant": "创建餐厅",
     "restaurantCreated": "餐厅已创建",
     "pendingAdminApproval": "在公开显示之前，需等待管理员审批。",
-    "couldNotCreateRestaurant": "无法创建餐厅"
+    "couldNotCreateRestaurant": "无法创建餐厅",
+    "autoVerifiedPendingMenu": "您的企业注册信息已自动核实！请至少添加一个菜单项以上线。"
   },
   "EditRestaurantPage": {
     "restaurantNotFound": "未找到该餐厅，或你无权访问。",
@@ -729,7 +730,10 @@
     "closed": "休息",
     "to": "至",
     "openingTimeFor": "{day}的开始营业时间",
-    "closingTimeFor": "{day}的结束营业时间"
+    "closingTimeFor": "{day}的结束营业时间",
+    "registrationNumberTooShort": "看起来不是有效的注册号",
+    "businessRegistrationNumber": "企业注册号",
+    "businessRegistrationNumberHint": "例如尼日利亚 CAC 的 RC/BN 号码，或您所在国家/地区的等效编号。我们会尽可能自动核实；如果无法自动核实，管理员将进行人工审核。"
   },
   "MenuManagerPage": {
     "groupNamePlaceholder": "选项组名称（例如：尺寸）",
@@ -830,7 +834,8 @@
     "createStore": "创建店铺",
     "storeCreated": "店铺已创建",
     "pendingAdminApproval": "在公开显示前，需等待管理员审批。",
-    "couldNotCreateStore": "无法创建店铺"
+    "couldNotCreateStore": "无法创建店铺",
+    "autoVerifiedPendingCatalog": "您的企业注册信息已自动核实！请至少添加一件商品以上线。"
   },
   "EditStorePage": {
     "storeNotFound": "未找到该店铺，或你无权访问。",
@@ -885,7 +890,10 @@
     "closed": "休息",
     "to": "至",
     "openingTimeFor": "{day}的开始营业时间",
-    "closingTimeFor": "{day}的结束营业时间"
+    "closingTimeFor": "{day}的结束营业时间",
+    "registrationNumberTooShort": "看起来不是有效的注册号",
+    "businessRegistrationNumber": "企业注册号",
+    "businessRegistrationNumberHint": "例如尼日利亚 CAC 的 RC/BN 号码，或您所在国家/地区的等效编号。我们会尽可能自动核实；如果无法自动核实，管理员将进行人工审核。"
   },
   "CatalogManagerPage": {
     "required": "必填",
@@ -1234,7 +1242,8 @@
     "useCodeFor": "使用代码 {code} 可享 {discount}",
     "percentOff": "{value}% 折扣",
     "amountOff": "减 {value}",
-    "minOrder": "（最低订单 {amount}）"
+    "minOrder": "（最低订单 {amount}）",
+    "amountOffGeneric": "特别折扣"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "优惠码",
@@ -1335,7 +1344,16 @@
     "backToAdminDashboard": "返回管理员仪表盘",
     "restaurantApproved": "餐厅已批准",
     "couldNotApproveRestaurant": "无法批准该餐厅",
-    "approveRestaurant": "批准餐厅"
+    "approveRestaurant": "批准餐厅",
+    "automatedVerification": "自动核实",
+    "verificationStatus": {
+      "not_attempted": "尚未自动核实",
+      "verified": "已自动核实",
+      "mismatch": "自动核实失败"
+    },
+    "checkedAt": "核实于 {date}",
+    "registeredName": "注册名称",
+    "registeredAddress": "注册地址"
   },
   "AdminStoreReviewPage": {
     "sunday": "周日",
@@ -1376,7 +1394,16 @@
     "backToAdminDashboard": "返回管理员仪表盘",
     "storeApproved": "店铺已批准",
     "couldNotApproveStore": "无法批准该店铺",
-    "approveStore": "批准店铺"
+    "approveStore": "批准店铺",
+    "automatedVerification": "自动核实",
+    "verificationStatus": {
+      "not_attempted": "尚未自动核实",
+      "verified": "已自动核实",
+      "mismatch": "自动核实失败"
+    },
+    "checkedAt": "核实于 {date}",
+    "registeredName": "注册名称",
+    "registeredAddress": "注册地址"
   },
   "AdminRiderReviewPage": {
     "riderNotFound": "未找到该骑手",

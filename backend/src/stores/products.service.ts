@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -24,6 +25,8 @@ export interface StoreCatalog {
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     @InjectModel(ProductCategory.name)
     private readonly categoryModel: Model<ProductCategoryDocument>,
@@ -125,7 +128,19 @@ export class ProductsService {
     await this.assertOwnership(storeId, requester);
     await this.findLeafCategoryOrThrow(storeId, dto.categoryId);
     this.assertDiscountBelowPrice(dto.price, dto.discountedPrice);
-    return this.productModel.create({ ...dto, storeId });
+    const product = await this.productModel.create({ ...dto, storeId });
+    // Automated business verification (docs/ROADMAP.md FDP-115) — mirrors
+    // MenuService.createItem's identical auto-approval trigger, see its comment for the
+    // reasoning.
+    await this.storesService
+      .autoApproveIfEligible(storeId)
+      .catch((err: unknown) =>
+        this.logger.error(
+          `Auto-approval check failed for store ${storeId}`,
+          err,
+        ),
+      );
+    return product;
   }
 
   async updateProduct(
