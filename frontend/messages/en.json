@@ -1242,8 +1242,12 @@
     "useCodeFor": "Use code {code} for {discount}",
     "percentOff": "{value}% off",
     "amountOff": "{value} off",
-    "amountOffGeneric": "a special discount",
     "minOrder": "(min. order {amount})"
+  },
+  "PromoTicker": {
+    "percentHeadline": "Save {value}% on your next order",
+    "amountHeadlineGeneric": "Enjoy a special discount on your order",
+    "withCode": "with code"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Promo codes",
