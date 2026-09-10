@@ -1237,17 +1237,12 @@
     "noPromoCodesYet": "No promo codes yet",
     "createOneAboveDescription": "Create one above to offer a discount."
   },
-  "PromoBanner": {
-    "title": "Special offer",
-    "useCodeFor": "Use code {code} for {discount}",
-    "percentOff": "{value}% off",
-    "amountOff": "{value} off",
-    "minOrder": "(min. order {amount})"
-  },
   "PromoTicker": {
     "percentHeadline": "Save {value}% on your next order",
+    "amountHeadline": "Get {value} off your order",
     "amountHeadlineGeneric": "Enjoy a special discount on your order",
-    "withCode": "with code"
+    "withCode": "with code",
+    "minOrderNote": "(min. order {amount})"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Promo codes",

@@ -1237,13 +1237,6 @@
     "noPromoCodesYet": "暂无优惠码",
     "createOneAboveDescription": "在上方创建一个以提供折扣。"
   },
-  "PromoBanner": {
-    "title": "特别优惠",
-    "useCodeFor": "使用代码 {code} 可享 {discount}",
-    "percentOff": "{value}% 折扣",
-    "amountOff": "减 {value}",
-    "minOrder": "（最低订单 {amount}）"
-  },
   "VendorPromoCodesPage": {
     "promoCodes": "优惠码",
     "description": "创建并管理顾客在此商家结账时可使用的优惠码。",
@@ -1739,7 +1732,9 @@
   },
   "PromoTicker": {
     "percentHeadline": "下次订单立省 {value}%",
+    "amountHeadline": "订单立减 {value}",
     "amountHeadlineGeneric": "订单享受特别折扣",
-    "withCode": "使用优惠码"
+    "withCode": "使用优惠码",
+    "minOrderNote": "（最低订单 {amount}）"
   }
 }

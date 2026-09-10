@@ -2195,3 +2195,36 @@ committing) since no promo code happened to be active in the local dev database.
 verified; the now-unused `PromoBanner.amountOffGeneric` key (added in §39, no longer read once
 `PromoBanner` reverted to always requiring `currency`) was removed from all 6 files rather than
 left as dead weight.
+
+## 41. Unified `PromoTicker` and `PromoBanner` into one component (docs/ROADMAP.md FDP-119)
+
+Immediate follow-up feedback on §40's redesign: the floating ticker looked right on the
+marketplace-wide pages, but a restaurant/store's own page (`/restaurants/[slug]`,
+`/stores/[slug]`) was still showing the old `PromoBanner` — a full-width `Alert` box, the exact
+thing §40 had just replaced everywhere else. Rather than maintaining two visually-inconsistent
+promo-discovery components going forward, `PromoTicker` absorbed `PromoBanner`'s job entirely:
+
+- `PromoTicker` now takes **optional** `restaurantId`/`storeId`/`currency` props. With them, it
+  queries codes scoped to that exact business (`useGetActivePromoCodesQuery({ restaurantId })` —
+  the same `findActiveForSeller` backend path §39 already built, unchanged) and, since the
+  business's own currency is now known, can format a `fixed`-type discount as a real amount
+  (`amountHeadline`, a new key) and show the `minOrderAmount` note — both previously only
+  possible in the old `PromoBanner`. Without them, it's exactly §40's marketplace-wide ticker,
+  unchanged: platform-wide codes only, `fixed`-type discounts get the currency-free
+  `amountHeadlineGeneric` phrase, no min-order note (no currency to format it in).
+- `PromoBanner` (`frontend/src/components/promo-banner.tsx`) is now genuinely unused —
+  confirmed via a repo-wide grep before deleting it, rather than leaving a dead component behind
+  "just in case." Its i18n namespace (`PromoBanner.title`/`useCodeFor`/`percentOff`/`amountOff`/
+  `minOrder`) was removed from all 6 locale files in the same change, not left as orphaned keys.
+- `restaurants/[slug]/page.tsx` and `stores/[slug]/page.tsx` now render
+  `<PromoTicker restaurantId={restaurant._id} currency={restaurant.currency} />` /
+  `<PromoTicker storeId={store._id} currency={store.currency} />` in the exact spot `PromoBanner`
+  used to sit — visually this makes no difference (the ticker is `position: fixed` regardless of
+  where in the JSX tree it's mounted, per §40), but keeps the mount point co-located with the
+  business data it needs, matching every other page's pattern.
+
+One component, one visual treatment, for every place in the app a promo code needs to surface —
+the scoping (platform-wide vs. one business) and currency-awareness are purely data-layer
+concerns now, not a reason to fork the UI. `tsc --noEmit`/`eslint`/production `build` clean on
+both sides. `PromoTicker`'s i18n namespace gained `amountHeadline`/`minOrderNote` in all 6
+languages, key parity verified.
