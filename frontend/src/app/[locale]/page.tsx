@@ -10,7 +10,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { StoreCard } from "@/components/store-card";
 import { HeaderSearch } from "@/components/header-search";
-import { PromoBanner } from "@/components/promo-banner";
+import { PromoTicker } from "@/components/promo-ticker";
 import { cn } from "@/lib/cn";
 import { Link } from "@/i18n/navigation";
 import { SmartLink } from "@/components/smart-link";
@@ -315,14 +315,10 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
-      {/* Platform-wide promo codes (docs/ROADMAP.md FDP-116) — an admin-created code with no
-          specific restaurant/store attached previously had nowhere to actually surface to a
-          customer; PromoBanner only ever rendered on an individual restaurant/store's own page.
-          Shown here, above the hero, so it reads as a site-wide announcement rather than being
-          buried below content a visitor may never scroll to. */}
-      <Container className="pt-4">
-        <PromoBanner />
-      </Container>
+      {/* Platform-wide promo codes (docs/ROADMAP.md FDP-118) — a floating ticker, not a page
+          section, so it never pushes the hero (or anything else) down. See PromoTicker's own
+          doc comment for the full design reasoning. */}
+      <PromoTicker />
 
       {/* Hero — a solid brand band (not a soft neutral wash) with an angled bottom edge, always
           rendered dark regardless of site theme: a deliberate, theme-invariant brand moment

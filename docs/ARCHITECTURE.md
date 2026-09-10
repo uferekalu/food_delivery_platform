@@ -2138,3 +2138,60 @@ New regression tests: `findActivePlatformWide` (includes an active platform-wide
 restaurant-scoped/store-scoped/inactive/expired/usage-limit-reached ones). Full backend suite green;
 `tsc --noEmit`/`eslint`/production `build` clean on both sides. New `amountOffGeneric` key in
 `PromoBanner`, shipped in all 6 languages, key parity verified.
+
+## 40. Redesigned the marketplace-wide promo banner into a floating ticker (docs/ROADMAP.md FDP-118)
+
+Direct, specific design feedback on §39's marketplace-wide promo banner, screenshot-annotated
+"so ugly": a plain full-width `Alert` box sitting in normal document flow, pushing the homepage
+hero (and everything else) down by its own height. The ask was explicit — float above the page
+without displacing anything, hug the width of its own content rather than stretch full-width,
+auto-advance through multiple codes like a news ticker/carousel with **no** manual forward/back
+controls, and explain each offer properly instead of a bare "10% off" fragment.
+
+**New component**: `PromoTicker` (`frontend/src/components/promo-ticker.tsx`) replaces the
+marketplace-wide usage of `PromoBanner` on the homepage, `/restaurants`, and `/categories`.
+`PromoBanner` itself (the original FDP-112 component, shown on one restaurant/store's own page,
+scoped and currency-aware) is untouched — this redesign only applies to the seller-less,
+marketplace-wide case, which is visually and contextually a different thing entirely.
+
+- **Floating, not flowing**: `position: fixed`, taken fully out of document flow — mounting it
+  anywhere in a page's JSX adds zero height to that page, on any of the three pages that use it.
+  Positioned just under the sticky header (`--z-sticky`, 1100) at the next tier down
+  (`--z-dropdown`, 1000), horizontally centered via an `inset-x-0 flex justify-center` outer
+  strip. The outer strip is `pointer-events-none` so it never blocks clicks on whatever's
+  underneath its near-empty band; the pill itself opts back into `pointer-events-auto`. Top
+  offset is responsive (`top-32` / `128px` below `sm`, `top-18` / `72px` at `sm` and up) because
+  `HeaderSearchSlot` wraps the header's search box onto its own full-width row below `sm` on
+  every page (confirmed by reading its own routing-aware logic before picking these numbers) —
+  a single fixed offset would have overlapped the taller mobile header.
+- **Width hugs content, not viewport**: no fixed or full-width class anywhere on the pill — it's
+  a plain flex row that sizes to its own content, capped at `max-w-[calc(100vw-2rem)]` purely as
+  a mobile safety net for an unusually long headline, not a target width.
+- **Auto-rotation, no controls**: when more than one code is active, a `setInterval`/`setTimeout`
+  pair (4.5s dwell, 250ms crossfade) advances through them — opacity + a small vertical
+  translate, no arrows or dots anywhere, matching the explicit "don't put forward/backward
+  arrows" instruction. A single active code just sits still (the effect no-ops when `count <= 1`).
+  Verified live in a real browser that the timer/crossfade genuinely works, not just that the
+  code compiles — dev-mode overhead (HMR, an unrelated local-backend `ECONNREFUSED` polling
+  failure) made the observed rotation slower than the configured 4.5s in one throwaway test, which
+  was itself confirmed to be dev-environment noise, not a bug, before moving on.
+- **Copy, not just layout**: full sentences instead of fragments — "Save {value}% on your next
+  order" for a percentage code, plus a highlighted mono code chip and a "with code" label (hidden
+  below `sm` to stay compact) so it's unambiguous which piece is the code to type in at checkout.
+  A `fixed`-type discount still has no currency to format an amount in on a marketplace-wide
+  ticker (§39's reasoning — this is a genuinely multi-currency platform) — resists the tempting
+  shortcut of guessing a currency from the visitor's locale (locale ≠ currency; a wrong guess is
+  worse than no number at all) and uses a clear generic phrase instead ("Enjoy a special discount
+  on your order").
+
+Visually verified before shipping — a throwaway Playwright script (see `[[playwright_verification_technique]]`
+memory note) drove the local dev server and screenshotted the homepage (desktop + mobile), the
+light-background `/restaurants` page, and captured two frames ~6s apart to confirm the crossfade
+rotation genuinely swaps codes, using a temporary in-file data override (reverted before
+committing) since no promo code happened to be active in the local dev database.
+
+`tsc --noEmit`/`eslint`/production `build` clean on both sides. New `PromoTicker` i18n namespace
+(`percentHeadline`, `amountHeadlineGeneric`, `withCode`) shipped in all 6 languages, key parity
+verified; the now-unused `PromoBanner.amountOffGeneric` key (added in §39, no longer read once
+`PromoBanner` reverted to always requiring `currency`) was removed from all 6 files rather than
+left as dead weight.

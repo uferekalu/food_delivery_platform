@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Pagination } from "@/components/ui/pagination";
 import { Alert } from "@/components/ui/alert";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
-import { PromoBanner } from "@/components/promo-banner";
+import { PromoTicker } from "@/components/promo-ticker";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import type { RestaurantSort } from "@/lib/redux/restaurant-types";
@@ -95,9 +95,9 @@ function RestaurantsPageContent() {
 
   return (
     <Container className="flex flex-col gap-6 py-10">
-      {/* Platform-wide promo codes (docs/ROADMAP.md FDP-116) — see the homepage's identical
-          placement for the full reasoning. */}
-      <PromoBanner />
+      {/* Platform-wide promo codes (docs/ROADMAP.md FDP-118) — floating, not part of page flow;
+          see PromoTicker's own doc comment. */}
+      <PromoTicker />
 
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-text">{t("restaurants")}</h1>

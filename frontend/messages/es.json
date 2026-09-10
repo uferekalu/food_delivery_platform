@@ -1242,8 +1242,7 @@
     "useCodeFor": "Usa el código {code} para obtener {discount}",
     "percentOff": "{value}% de descuento",
     "amountOff": "{value} de descuento",
-    "minOrder": "(pedido mínimo de {amount})",
-    "amountOffGeneric": "un descuento especial"
+    "minOrder": "(pedido mínimo de {amount})"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Códigos promocionales",
@@ -1737,5 +1736,10 @@
     "replyPlaceholder": "Escribe una respuesta…",
     "couldNotSendMessage": "No se pudo enviar el mensaje",
     "supportTeam": "Soporte"
+  },
+  "PromoTicker": {
+    "percentHeadline": "Ahorra {value}% en tu próximo pedido",
+    "amountHeadlineGeneric": "Disfruta de un descuento especial en tu pedido",
+    "withCode": "con el código"
   }
 }

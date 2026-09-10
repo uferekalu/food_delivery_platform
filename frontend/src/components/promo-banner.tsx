@@ -7,17 +7,13 @@ import { formatMoney } from "@/lib/currency";
 
 /**
  * "Use code X for Y% off" discovery banner (docs/ROADMAP.md FDP-112) — until now a promo code
- * only worked if a customer already knew it existed (shared externally, or guessed). With a
- * `restaurantId`/`storeId`, shown on that business's public page for any currently-usable code:
- * platform-wide, or scoped to this exact business. With neither (docs/ROADMAP.md FDP-116) — the
- * general marketplace-browsing pages (homepage, the all-restaurants listing, category pages) —
- * shows platform-wide codes only, since there's no specific business's currency to format a
- * `fixed`-type amount in yet (this is a genuinely multi-currency platform: each restaurant/store
- * sets its own currency). `currency` is therefore optional; a `fixed`-type code renders with a
- * generic "a special discount" phrase instead of a formatted amount when it's absent, and
- * `minOrderAmount` (also currency-denominated) is only ever shown when `currency` is known.
- * Renders nothing while loading or when there's nothing active, rather than a loading skeleton —
- * this is a bonus, not a page section a visitor is ever left waiting on.
+ * only worked if a customer already knew it existed (shared externally, or guessed). Shown on a
+ * restaurant/store's public page for any currently-usable code: platform-wide, or scoped to this
+ * exact business. Renders nothing while loading or when there's nothing active, rather than a
+ * loading skeleton — this is a bonus, not a page section a visitor is ever left waiting on. The
+ * general marketplace-browsing pages (homepage, the all-restaurants listing, category pages) use
+ * the separate floating `PromoTicker` instead (docs/ROADMAP.md FDP-118) — a different visual
+ * treatment entirely, since there's no single business/currency context there.
  */
 export function PromoBanner({
   restaurantId,
@@ -26,12 +22,12 @@ export function PromoBanner({
 }: {
   restaurantId?: string;
   storeId?: string;
-  currency?: string;
+  currency: string;
 }) {
   const t = useTranslations("PromoBanner");
   const locale = useLocale();
   const { data } = useGetActivePromoCodesQuery(
-    restaurantId ? { restaurantId } : storeId ? { storeId } : {},
+    restaurantId ? { restaurantId } : { storeId: storeId! },
   );
 
   if (!data || data.length === 0) return null;
@@ -46,11 +42,9 @@ export function PromoBanner({
               discount:
                 promo.discountType === "percentage"
                   ? t("percentOff", { value: promo.discountValue })
-                  : currency
-                    ? t("amountOff", { value: formatMoney(promo.discountValue, currency, locale) })
-                    : t("amountOffGeneric"),
+                  : t("amountOff", { value: formatMoney(promo.discountValue, currency, locale) }),
             })}
-            {promo.minOrderAmount > 0 && currency
+            {promo.minOrderAmount > 0
               ? ` ${t("minOrder", { amount: formatMoney(promo.minOrderAmount, currency, locale) })}`
               : ""}
           </li>
