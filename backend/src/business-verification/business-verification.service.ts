@@ -1,24 +1,36 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-const BASE_URL = 'https://api.youverify.co';
+const DEFAULT_BASE_URL = 'https://api.youverify.co';
 
-// Best-effort shape, reconstructed from Youverify's public docs (CAC/company-advance-check
-// endpoint) — NOT verified against a live account, since none exists for this project yet.
-// Flag for the user to confirm the exact field names/auth header against Youverify's own
-// dashboard docs before going live, same caveat this repo already carries for Paystack's
-// refund-webhook payload shape (see payments/adapters/paystack.adapter.ts).
+// Confirmed against Youverify's real published docs (docs.youverify.co ->
+// know-your-business-services-kyb/kyb-basic, docs/ROADMAP.md FDP-120) — this replaced an earlier
+// guessed endpoint (`global/company-advance-check`) that turned out not to exist as documented.
+// `POST /v2/api/verifications/ng/company/basic` — Nigeria-specific (the `ng` segment), the only
+// KYB endpoint this integration targets today; a non-Nigerian registrationNumber simply won't be
+// found, which the existing `mismatch`/`unknown` handling below already treats safely (falls
+// back to the manual admin queue, same as any other unrecognized number). `registrationNumber`
+// must carry its real CAC prefix (RC/BN/IT/LP/LLP, no space) — Youverify rejects a bare number.
+// `isConsent: true` reflects the vendor's own registration submission (they're verifying their
+// own business as part of onboarding), not a third party's.
 interface YouverifyCacRequest {
   registrationNumber: string;
-  businessName?: string;
-  countryCode?: string;
+  isConsent: true;
 }
 
+// Live-confirmed request shape and auth header (`token`) against a real Youverify sandbox
+// account — three different real, documented endpoints all returned a specific "403 Permission
+// denied" business-logic error (not a generic 404/"missing token"), proving the request itself
+// reaches Youverify correctly. The KYB product simply isn't enabled on that account/plan yet, so
+// a genuine *successful* response body has never actually been seen — this response shape is
+// still the one Youverify's own docs example, not independently verified end-to-end. Re-confirm
+// once KYB is enabled and a real "found" response comes back, same caveat this repo already
+// carries for Paystack's refund-webhook payload shape (see payments/adapters/paystack.adapter.ts).
 interface YouverifyCacResponseData {
   registrationNumber?: string;
-  companyName?: string;
-  status?: string;
-  address?: string;
+  name?: string;
+  status?: string; // e.g. "found" — whether the number resolved to a real registration at all.
+  companyStatus?: string; // e.g. "ACTIVE" — the registration's own status, distinct from `status`.
 }
 
 interface YouverifyCacResponse {
@@ -53,18 +65,21 @@ export type BusinessVerificationOutcome =
 
 /**
  * Youverify (https://youverify.co) automated CAC/RC business-registration check (docs/ROADMAP.md
- * FDP-115). Deliberately optional, same graceful-degradation pattern as `SmsService`/Termii: no
- * real Youverify account exists for this project yet, so `isConfigured` is false and every check
- * resolves to `{ outcome: 'unknown' }`, which callers treat identically to "not configured" —
- * falling back to the existing manual admin approval queue, never blocking registration.
+ * FDP-115). Deliberately optional, same graceful-degradation pattern as `SmsService`/Termii:
+ * without `YOUVERIFY_API_KEY` set, `isConfigured` is false and every check resolves to
+ * `{ outcome: 'unknown' }`, which callers treat identically to "not configured" — falling back
+ * to the existing manual admin approval queue, never blocking registration.
  */
 @Injectable()
 export class BusinessVerificationService {
   private readonly logger = new Logger(BusinessVerificationService.name);
   private readonly apiKey?: string;
+  private readonly baseUrl: string;
 
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('YOUVERIFY_API_KEY');
+    this.baseUrl =
+      this.config.get<string>('YOUVERIFY_BASE_URL') ?? DEFAULT_BASE_URL;
   }
 
   get isConfigured(): boolean {
@@ -81,16 +96,16 @@ export class BusinessVerificationService {
 
     try {
       const res = await fetch(
-        `${BASE_URL}/v2/api/verifications/global/company-advance-check`,
+        `${this.baseUrl}/v2/api/verifications/ng/company/basic`,
         {
           method: 'POST',
           headers: {
-            token: this.apiKey!, // ASSUMPTION: Youverify's API auth header — unconfirmed, flag before going live.
+            token: this.apiKey!,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             registrationNumber,
-            businessName,
+            isConsent: true,
           } satisfies YouverifyCacRequest),
         },
       );
@@ -101,7 +116,7 @@ export class BusinessVerificationService {
       }
       const body = (await res.json()) as YouverifyCacResponse;
 
-      if (!body.success || !body.data) {
+      if (!body.success || !body.data || body.data.status !== 'found') {
         return {
           outcome: 'mismatch',
           registeredName: null,
@@ -111,13 +126,13 @@ export class BusinessVerificationService {
         };
       }
 
-      const registeredName = body.data.companyName ?? null;
+      const registeredName = body.data.name ?? null;
       if (!this.namesLooselyMatch(businessName, registeredName ?? '')) {
         return {
           outcome: 'mismatch',
           registeredName,
-          registeredAddress: body.data.address ?? null,
-          rawStatus: body.data.status ?? null,
+          registeredAddress: null,
+          rawStatus: body.data.companyStatus ?? null,
           reason: `Registered name "${registeredName}" does not match "${businessName}"`,
         };
       }
@@ -125,8 +140,8 @@ export class BusinessVerificationService {
       return {
         outcome: 'verified',
         registeredName: registeredName ?? businessName,
-        registeredAddress: body.data.address ?? null,
-        rawStatus: body.data.status ?? 'unknown',
+        registeredAddress: null,
+        rawStatus: body.data.companyStatus ?? 'unknown',
       };
     } catch (err) {
       // Network/timeout/malformed-response — an unknown outcome, never a rejection.

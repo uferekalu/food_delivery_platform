@@ -15,7 +15,13 @@ describe("Accordion", () => {
     for (const item of items) {
       expect(screen.getByRole("button", { name: item.question })).toHaveAttribute("aria-expanded", "false");
     }
-    expect(screen.queryByText("Refunds go back to your original payment method.")).not.toBeInTheDocument();
+    // The panel stays mounted (a pure-CSS grid-row collapse drives the open/close animation, see
+    // accordion.tsx's own comment) rather than unmounting, so `aria-hidden` is the correct signal
+    // to check here, not DOM presence.
+    expect(screen.getByText("Refunds go back to your original payment method.").closest('[role="region"]')).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
   });
 
   it("expands an item on click, revealing its answer", async () => {
@@ -38,10 +44,13 @@ describe("Accordion", () => {
     await user.click(trigger);
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Refunds go back to your original payment method.")).not.toBeInTheDocument();
+    expect(screen.getByText("Refunds go back to your original payment method.").closest('[role="region"]')).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
   });
 
-  it("toggles via the keyboard, and keeps other items independently open", async () => {
+  it("toggles via the keyboard", async () => {
     const user = userEvent.setup();
     render(<Accordion items={items} />);
 
@@ -49,11 +58,17 @@ describe("Accordion", () => {
     expect(screen.getByRole("button", { name: "How do refunds work?" })).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: "How do refunds work?" })).toHaveAttribute("aria-expanded", "true");
+  });
 
-    await user.tab();
-    await user.keyboard(" ");
-    expect(screen.getByRole("button", { name: "How do I track my order?" })).toHaveAttribute("aria-expanded", "true");
-    // The first item stays open too — items toggle independently, not single-open-at-a-time.
+  it("opening a second item closes whichever one was already open (single-open-at-a-time)", async () => {
+    const user = userEvent.setup();
+    render(<Accordion items={items} />);
+
+    await user.click(screen.getByRole("button", { name: "How do refunds work?" }));
     expect(screen.getByRole("button", { name: "How do refunds work?" })).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: "How do I track my order?" }));
+    expect(screen.getByRole("button", { name: "How do I track my order?" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "How do refunds work?" })).toHaveAttribute("aria-expanded", "false");
   });
 });
