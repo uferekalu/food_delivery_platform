@@ -49,9 +49,9 @@ describe('BusinessVerificationService', () => {
           success: true,
           data: {
             registrationNumber: 'RC1234567',
-            companyName: 'Burgundy Kitchen Ltd',
-            status: 'active',
-            address: '1 Main St, Lagos',
+            name: 'Burgundy Kitchen Ltd',
+            status: 'found',
+            companyStatus: 'ACTIVE',
           },
         }),
     });
@@ -64,9 +64,62 @@ describe('BusinessVerificationService', () => {
     expect(result).toEqual({
       outcome: 'verified',
       registeredName: 'Burgundy Kitchen Ltd',
-      registeredAddress: '1 Main St, Lagos',
-      rawStatus: 'active',
+      registeredAddress: null,
+      rawStatus: 'ACTIVE',
     });
+    // Confirmed against Youverify's real docs (docs/ROADMAP.md FDP-120), not a guess.
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.youverify.co/v2/api/verifications/ng/company/basic',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { token: 'key-123', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registrationNumber: 'RC1234567',
+          isConsent: true,
+        }),
+      }),
+    );
+  });
+
+  it('resolves to `mismatch` when the provider explicitly reports the number was not found (status !== "found")', async () => {
+    const service = await buildService({ YOUVERIFY_API_KEY: 'key-123' });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: { status: 'not_found' },
+        }),
+    });
+
+    const result = await service.verifyBusinessRegistration(
+      'RC0000000',
+      'Nonexistent Business',
+    );
+
+    expect(result.outcome).toBe('mismatch');
+  });
+
+  it('uses YOUVERIFY_BASE_URL when set, e.g. for a sandbox/staging key', async () => {
+    const service = await buildService({
+      YOUVERIFY_API_KEY: 'key-123',
+      YOUVERIFY_BASE_URL: 'https://api.sandbox.youverify.co',
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: { status: 'found', name: 'X' },
+        }),
+    });
+
+    await service.verifyBusinessRegistration('RC1234567', 'Burgundy Kitchen');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.sandbox.youverify.co/v2/api/verifications/ng/company/basic',
+      expect.anything(),
+    );
   });
 
   it('resolves to `mismatch` (not a throw) when the provider reports success: false / no data', async () => {
@@ -102,9 +155,9 @@ describe('BusinessVerificationService', () => {
         Promise.resolve({
           success: true,
           data: {
-            companyName: 'A Completely Different Company Ltd',
-            status: 'active',
-            address: '1 Main St, Lagos',
+            name: 'A Completely Different Company Ltd',
+            status: 'found',
+            companyStatus: 'ACTIVE',
           },
         }),
     });

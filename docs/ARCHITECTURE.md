@@ -2228,3 +2228,97 @@ the scoping (platform-wide vs. one business) and currency-awareness are purely d
 concerns now, not a reason to fork the UI. `tsc --noEmit`/`eslint`/production `build` clean on
 both sides. `PromoTicker`'s i18n namespace gained `amountHeadline`/`minOrderNote` in all 6
 languages, key parity verified.
+
+## 42. Corrected the Youverify integration against the real API (docs/ROADMAP.md FDP-120)
+
+§38 built `BusinessVerificationService` against a best-effort guess of Youverify's API, explicitly
+flagged as unverified since no real account existed. The user added a real sandbox key and a real
+business number to test it end-to-end, which turned into a genuine live-debugging session rather
+than a clean success — worth recording precisely, since every wrong guess here was corrected
+against real evidence, not further guessing.
+
+**What was actually wrong, found by live-testing against the real account:**
+- **Auth header (`token`) and the general shape were right** — a request with a valid key got a
+  specific business-logic error back, not a generic 404 or "missing token," proving both were
+  correctly implemented from the start.
+- **Base URL needed to be environment-aware.** Hitting the production host
+  (`api.youverify.co`) with a sandbox key returned an explicit
+  `"Unauthorized: You cannot make a request to PRODUCTION environment from STAGING environment"`
+  — Youverify rejects the mismatch outright rather than silently degrading. Fixed with a new
+  optional `YOUVERIFY_BASE_URL` (defaults to production), the same pattern `TERMII_BASE_URL`
+  already establishes in this codebase — a sandbox key sets this to
+  `https://api.sandbox.youverify.co`.
+- **The endpoint itself was wrong.** The guessed `global/company-advance-check` path doesn't
+  exist. Youverify's real docs live at `doc.youverify.co` (no `s`) — `docs.youverify.co` (the
+  URL guessed first) 404s outright, a trap easy to fall into. The real, documented endpoint for
+  Nigerian business verification is `POST /v2/api/verifications/ng/company/basic` — Nigeria-
+  specific by design (the `ng` segment), the only KYB endpoint this integration targets; a non-
+  Nigerian `registrationNumber` simply won't be found, which the existing `mismatch`/`unknown`
+  handling already treats safely.
+- **Request/response field names were wrong.** Real shape: request is
+  `{ registrationNumber, isConsent: true }` (`isConsent` reflects the vendor verifying their own
+  business during their own onboarding, not a third party's), where `registrationNumber` must
+  carry its real CAC prefix (`RC`/`BN`/`IT`/`LP`/`LLP`, no space) — Youverify rejects a bare
+  number. Response success fields are `name`/`status` (`"found"` vs. not)/`companyStatus`
+  (`"ACTIVE"` etc.) — not the guessed `companyName`/`address`; this basic-tier endpoint doesn't
+  return an address at all, so `registeredAddress` in `BusinessVerificationOutcome` is now always
+  `null` from this endpoint (the type is left as-is for API stability/future endpoints that might
+  populate it).
+
+**What's still unresolved, and isn't a code problem**: even against the corrected endpoint, with
+`YOUVERIFY_BASE_URL` pointed at sandbox, the live test account gets `403 Permission denied` —
+confirmed against three different real, documented endpoints (not 404s), meaning the request
+genuinely reaches Youverify and is being evaluated, but the account's KYB/company-check product
+isn't enabled on that key/plan yet, even after the user enabled "Run Company Check on Entity" in
+Youverify's dashboard permissions UI. This needs the user's own follow-up with Youverify (dashboard
+or support) — not something resolvable from this codebase. Until it is, the integration correctly
+falls back to the manual admin queue exactly as designed, same as if the key were entirely unset.
+
+Unit tests updated to the corrected request/response shape, plus a new test asserting
+`YOUVERIFY_BASE_URL` is actually used when set. Full backend suite green (653/653);
+`tsc --noEmit`/`eslint` clean.
+
+## 43. Redesigned the homepage FAQ accordion (docs/ROADMAP.md FDP-121)
+
+Direct design feedback, screenshot-annotated: the FAQ accordion looked "basic," had no smooth
+animation, and opening a new question should close whichever one was already open — the original
+build (§31, FDP-107) was a deliberate independent-toggle accordion (more than one open at once,
+matching common FAQ-page behavior), which the user explicitly wants replaced with single-open.
+
+`Accordion`/`AccordionItem` (`frontend/src/components/ui/accordion.tsx`) redesigned:
+- **Cards, not a flat list**: each question is its own `rounded-2xl` card (`flex flex-col gap-3`
+  between them) rather than a `divide-y` list — while open, the card gets a brand-tinted
+  background (`bg-primary-subtle/40`), a `border-primary/30` border, and a `shadow-sm`, so the
+  active question visually pops rather than just having its chevron flipped.
+- **Chevron badge**: the trigger's chevron now sits inside a circular badge (`size-7
+  rounded-full`) that's a neutral `bg-secondary` when closed and fills solid `bg-primary` (with
+  the chevron itself rotating 180°) when open — the same "circular icon badge" motif this session
+  already established for `PromoTicker`'s tag icon, reused deliberately for visual consistency
+  across the app rather than inventing a new treatment.
+- **Real animation, not conditional mount**: the previous version used `{open && <div>...}` — an
+  instant pop with zero transition. Replaced with a pure-CSS "auto height" technique: the panel
+  wrapper animates `grid-template-rows` between `0fr` and `1fr` (`transition-[grid-template-rows]
+  duration-300`), with an inner `overflow-hidden` clipping it and an opacity fade layered on top
+  so the answer text eases in rather than appearing the instant the row finishes growing. This is
+  simpler than a JS-measured `max-height` (no `ResizeObserver`/ref math) and avoids pulling in an
+  animation library for one component.
+- **Single-open-at-a-time**: `openIndex` state moved from each `AccordionItem` up to the parent
+  `Accordion`, so opening one item can close whichever other one was open — a real behavior
+  change from FDP-107's original independent-toggle design, made because the user explicitly
+  asked for it this time, not a default worth assuming for every future accordion in this
+  codebase.
+- **`aria-hidden` on the collapsed panel**: since the panel now stays mounted at zero height
+  (needed for the CSS transition) instead of unmounting, it's marked `aria-hidden={!open}` —
+  correct for assistive tech (a screen reader shouldn't read a zero-height answer as if it were
+  visible), and also the only deterministic "is this actually closed" signal for tests, since
+  jsdom doesn't compute real CSS grid-row layout. `accordion.test.tsx` updated to check
+  `aria-hidden` instead of DOM presence for the two tests that previously asserted
+  `queryByText(...).not.toBeInTheDocument()` (no longer true — the text is always in the DOM now,
+  just visually and semantically hidden), and the independent-toggle test was replaced with one
+  asserting the new single-open behavior.
+
+Only usage in the codebase is the homepage FAQ, confirmed via a repo-wide grep before changing the
+default behavior — no other page silently inherited a behavior change. Visually verified in a real
+browser (light and dark mode, both the closed state and opening a second item while the first was
+open) via a throwaway Playwright script against the local dev server before shipping.
+`tsc --noEmit`/production `build`/`vitest` (5/5, including the two rewritten tests) all clean.

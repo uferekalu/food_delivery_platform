@@ -73,6 +73,11 @@ export const envValidationSchema = Joi.object({
   // (docs/ROADMAP.md FDP-115). Deliberately optional. No real Youverify account exists for this
   // project yet; BusinessVerificationService degrades to a no-op (falls straight to the existing
   // manual admin review queue) when this is unset — same graceful-degradation pattern as
-  // TERMII_API_KEY above.
+  // TERMII_API_KEY above. YOUVERIFY_BASE_URL defaults to the production API
+  // (docs/ROADMAP.md FDP-120) — confirmed live that a sandbox/staging key rejects requests made
+  // against the production base with "cannot make a request to PRODUCTION environment from
+  // STAGING environment", so a sandbox key needs this overridden to
+  // https://api.sandbox.youverify.co.
   YOUVERIFY_API_KEY: Joi.string().optional(),
+  YOUVERIFY_BASE_URL: Joi.string().uri().optional(),
 });
