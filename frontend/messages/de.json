@@ -1237,13 +1237,6 @@
     "noPromoCodesYet": "Noch keine Rabattcodes",
     "createOneAboveDescription": "Erstelle oben einen, um einen Rabatt anzubieten."
   },
-  "PromoBanner": {
-    "title": "Sonderangebot",
-    "useCodeFor": "Nutze den Code {code} für {discount}",
-    "percentOff": "{value}% Rabatt",
-    "amountOff": "{value} Rabatt",
-    "minOrder": "(Mindestbestellwert {amount})"
-  },
   "VendorPromoCodesPage": {
     "promoCodes": "Rabattcodes",
     "description": "Erstelle und verwalte Rabattcodes, die Kund*innen beim Bezahlen für dieses Unternehmen einlösen können.",
@@ -1739,7 +1732,9 @@
   },
   "PromoTicker": {
     "percentHeadline": "Sparen Sie {value}% bei Ihrer nächsten Bestellung",
+    "amountHeadline": "Erhalten Sie {value} Rabatt auf Ihre Bestellung",
     "amountHeadlineGeneric": "Genießen Sie einen Sonderrabatt auf Ihre Bestellung",
-    "withCode": "mit Code"
+    "withCode": "mit Code",
+    "minOrderNote": "(Mindestbestellwert {amount})"
   }
 }

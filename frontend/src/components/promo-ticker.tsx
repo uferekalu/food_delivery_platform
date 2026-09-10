@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { cn } from "@/lib/cn";
 import { useGetActivePromoCodesQuery } from "@/lib/redux/services/promo-codes-api";
+import { formatMoney } from "@/lib/currency";
 
 // How long each code stays on screen before the ticker crossfades to the next one.
 const ROTATE_MS = 4500;
@@ -26,29 +27,54 @@ function TagIcon({ className = "size-4" }: { className?: string }) {
 }
 
 /**
- * Floating "what's on offer right now" ticker for the general marketplace-browsing pages
- * (homepage, the all-restaurants listing, category pages — docs/ROADMAP.md FDP-118, replacing
- * FDP-116's plain full-width `Alert` banner after explicit design feedback: it must float above
- * the page rather than push content down, hug its own content width rather than stretch full-
- * width, and auto-advance through multiple codes like a news ticker with no manual controls).
+ * Floating "what's on offer right now" ticker (docs/ROADMAP.md FDP-118, then FDP-119) — one
+ * component, one visual treatment, for every place a promo code needs to surface to a customer.
+ * Originally built for the marketplace-wide, seller-less case (homepage, the all-restaurants
+ * listing, category pages) replacing FDP-116's plain full-width `Alert` banner after explicit
+ * design feedback; then unified with the old `PromoBanner` (FDP-112, scoped to one restaurant/
+ * store's own page) after equally direct follow-up feedback — the scoped case was still using
+ * the old ugly full-width box and had to "look the same and beautiful" as this one. `PromoBanner`
+ * itself is gone; this is now the only promo-discovery UI in the app.
+ *
+ * With `restaurantId`/`storeId` + `currency`, shows codes scoped to that exact business (plus
+ * any platform-wide code) and can format a `fixed`-type discount as a real amount, since the
+ * business's currency is known. With neither (the marketplace-wide case), shows platform-wide
+ * codes only and a `fixed`-type discount gets a currency-free phrase instead of a formatted
+ * amount — there's no single business/currency context spanning the whole marketplace on this
+ * genuinely multi-currency platform, and guessing a currency from the visitor's locale would be
+ * wrong for some fraction of visitors.
  *
  * `position: fixed` — deliberately taken out of document flow so it never adds height to the
- * page underneath it, on any of the pages that mount it. Sits just under the sticky header
- * (`--z-sticky`), so it uses the next tier down (`--z-dropdown`) and a fixed top offset roughly
- * matching the header's own height; a few px of slack either way is fine since this is a
- * decorative floating element, not something that needs pixel-exact alignment. The outer full-
- * width strip is `pointer-events-none` (it must never block clicks on whatever's underneath it
- * once it's a near-empty band) with the pill itself opting back into `pointer-events-auto`.
+ * page underneath it, on any of the pages that mount it (this was the actual complaint about the
+ * old full-width banners: they pushed content down). Sits just under the sticky header
+ * (`--z-sticky`), so it uses the next tier down (`--z-dropdown`) and a responsive top offset
+ * (`HeaderSearchSlot` wraps onto its own row below `sm` on every page, so mobile needs more
+ * clearance than desktop) roughly matching the header's own height; a few px of slack either way
+ * is fine since this is a decorative floating element, not something that needs pixel-exact
+ * alignment. The outer full-width strip is `pointer-events-none` (it must never block clicks on
+ * whatever's underneath it once it's a near-empty band) with the pill itself opting back into
+ * `pointer-events-auto`.
  *
- * Only ever shows one code at a time — the pill's width is `w-fit`, so it's exactly as wide as
- * whichever message is currently showing, then crossfades to the next (no arrows, no dots: the
+ * Only ever shows one code at a time — the pill sizes to its own content, so it's exactly as wide
+ * as whichever message is currently showing, then crossfades to the next (no arrows, no dots: the
  * rotation itself is the only affordance, matching the explicit "don't put forward/backward
- * arrows" feedback). A single active code just sits still; rotation only starts once there's
- * more than one to cycle through.
+ * arrows" feedback). A single active code just sits still; rotation only starts once there's more
+ * than one to cycle through.
  */
-export function PromoTicker() {
+export function PromoTicker({
+  restaurantId,
+  storeId,
+  currency,
+}: {
+  restaurantId?: string;
+  storeId?: string;
+  currency?: string;
+} = {}) {
   const t = useTranslations("PromoTicker");
-  const { data } = useGetActivePromoCodesQuery({});
+  const locale = useLocale();
+  const { data } = useGetActivePromoCodesQuery(
+    restaurantId ? { restaurantId } : storeId ? { storeId } : {},
+  );
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -75,14 +101,12 @@ export function PromoTicker() {
   const promo = data && count > 0 ? data[index % count] : null;
   if (!promo) return null;
 
-  // No single business/currency context here (a marketplace-wide ticker spans every restaurant
-  // and store, each in its own currency) — a `fixed`-type discount can't be formatted with a
-  // real currency symbol without guessing wrong for some fraction of visitors, so it gets a
-  // currency-free phrase instead. `percentage` needs no currency at all and is unaffected.
   const headline =
     promo.discountType === "percentage"
       ? t("percentHeadline", { value: promo.discountValue })
-      : t("amountHeadlineGeneric");
+      : currency
+        ? t("amountHeadline", { value: formatMoney(promo.discountValue, currency, locale) })
+        : t("amountHeadlineGeneric");
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-32 z-[var(--z-dropdown)] flex justify-center px-4 sm:top-18">
@@ -100,6 +124,11 @@ export function PromoTicker() {
         <span className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 font-mono text-xs font-bold tracking-wide text-text-on-primary">
           {promo.code}
         </span>
+        {promo.minOrderAmount > 0 && currency && (
+          <span className="hidden shrink-0 text-xs text-text-muted sm:inline">
+            {t("minOrderNote", { amount: formatMoney(promo.minOrderAmount, currency, locale) })}
+          </span>
+        )}
       </div>
     </div>
   );

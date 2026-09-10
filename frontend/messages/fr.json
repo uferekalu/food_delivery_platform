@@ -1237,13 +1237,6 @@
     "noPromoCodesYet": "Aucun code promo pour l'instant",
     "createOneAboveDescription": "Créez-en un ci-dessus pour offrir une réduction."
   },
-  "PromoBanner": {
-    "title": "Offre spéciale",
-    "useCodeFor": "Utilisez le code {code} pour {discount}",
-    "percentOff": "{value}% de réduction",
-    "amountOff": "{value} de réduction",
-    "minOrder": "(commande minimum de {amount})"
-  },
   "VendorPromoCodesPage": {
     "promoCodes": "Codes promo",
     "description": "Créez et gérez des codes promo que les clients peuvent appliquer lors du paiement pour cette entreprise.",
@@ -1739,7 +1732,9 @@
   },
   "PromoTicker": {
     "percentHeadline": "Économisez {value}% sur votre prochaine commande",
+    "amountHeadline": "Obtenez {value} de réduction sur votre commande",
     "amountHeadlineGeneric": "Profitez d'une remise spéciale sur votre commande",
-    "withCode": "avec le code"
+    "withCode": "avec le code",
+    "minOrderNote": "(commande min. {amount})"
   }
 }

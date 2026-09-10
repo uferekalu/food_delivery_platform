@@ -1237,13 +1237,6 @@
     "noPromoCodesYet": "Ainda não há códigos promocionais",
     "createOneAboveDescription": "Crie um acima para oferecer um desconto."
   },
-  "PromoBanner": {
-    "title": "Oferta especial",
-    "useCodeFor": "Use o código {code} para {discount}",
-    "percentOff": "{value}% de desconto",
-    "amountOff": "{value} de desconto",
-    "minOrder": "(pedido mínimo de {amount})"
-  },
   "VendorPromoCodesPage": {
     "promoCodes": "Códigos promocionais",
     "description": "Crie e gerencie códigos promocionais que os clientes podem aplicar no checkout deste negócio.",
@@ -1739,7 +1732,9 @@
   },
   "PromoTicker": {
     "percentHeadline": "Economize {value}% no seu próximo pedido",
+    "amountHeadline": "Ganhe {value} de desconto no seu pedido",
     "amountHeadlineGeneric": "Aproveite um desconto especial no seu pedido",
-    "withCode": "com o código"
+    "withCode": "com o código",
+    "minOrderNote": "(pedido mín. {amount})"
   }
 }
