@@ -129,6 +129,44 @@ function AdminRestaurantReview({ id }: { id: string }) {
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
+        <span className="text-sm font-semibold text-text">{t("automatedVerification")}</span>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={
+              restaurant.businessVerification.status === "verified"
+                ? "success"
+                : restaurant.businessVerification.status === "mismatch"
+                  ? "danger"
+                  : "neutral"
+            }
+          >
+            {t(`verificationStatus.${restaurant.businessVerification.status}`)}
+          </Badge>
+          {restaurant.businessRegistrationNumber && (
+            <span className="text-sm text-text-muted">{restaurant.businessRegistrationNumber}</span>
+          )}
+        </div>
+        {restaurant.businessVerification.checkedAt && (
+          <span className="text-sm text-text-muted">
+            {t("checkedAt", { date: new Date(restaurant.businessVerification.checkedAt).toLocaleString(locale) })}
+          </span>
+        )}
+        {restaurant.businessVerification.providerRegisteredName && (
+          <span className="text-sm text-text-muted">
+            {t("registeredName")}: {restaurant.businessVerification.providerRegisteredName}
+          </span>
+        )}
+        {restaurant.businessVerification.providerRegisteredAddress && (
+          <span className="text-sm text-text-muted">
+            {t("registeredAddress")}: {restaurant.businessVerification.providerRegisteredAddress}
+          </span>
+        )}
+        {restaurant.businessVerification.failureReason && (
+          <span className="text-sm text-danger">{restaurant.businessVerification.failureReason}</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
         <span className="text-sm font-semibold text-text">{t("openingHours")}</span>
         <div className="flex flex-col gap-1">
           {restaurant.openingHours.length === 0 ? (

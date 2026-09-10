@@ -1909,3 +1909,209 @@ take down the page" posture already applied throughout this codebase's list view
 
 Full `promo-codes` suite passes (43 tests, 2 new); `tsc --noEmit`/`eslint`/production `build`
 clean on both sides. No translation changes.
+
+## 38. Automated business verification: Youverify CAC/RC check for restaurants and stores (docs/ROADMAP.md FDP-115)
+
+The user asked for a second, automated layer of vendor verification alongside the existing manual
+admin review (FDP-60): a restaurant/store owner enters their business registration number
+(Nigeria's CAC — RC/BN/IT/LP/LLP prefix, or another country's equivalent) at signup, an automated
+check runs against a third-party API, and — if it confirms the business — the restaurant/store can
+go live without waiting on a human, once it also has at least one menu item/product. If the check
+fails or can't run, it falls back to exactly today's manual admin queue; admin can still approve
+manually regardless of what the automated check found.
+
+**Provider**: Youverify (chosen for having a direct CAC/RC lookup endpoint). No real Youverify
+account exists for this project — `BusinessVerificationService`
+(`backend/src/business-verification/business-verification.service.ts`) is built as an optional,
+graceful-degradation integration from day one, the same posture as `SmsService`/Termii: reads
+`YOUVERIFY_API_KEY` via `ConfigService.get` (not `getOrThrow`), and when unset every call resolves
+to `{ outcome: 'unknown', reason: 'Youverify not configured' }` without ever touching the network.
+The request/response shape (`YouverifyCacRequest`/`YouverifyCacResponse`, the `company-advance-check`
+endpoint, a `token` auth header) is a best-effort reconstruction from Youverify's public docs, **not
+verified against a live account** — flagged in the file's own doc comment for confirmation against
+Youverify's real dashboard docs before this goes live with a real key, the same caveat this codebase
+already carries for Paystack's refund-webhook payload shape.
+
+**The three-way outcome, and why "unknown" is not "mismatch"**: `verifyBusinessRegistration()`
+returns a discriminated union — `verified` (the number resolves and the registered name loosely
+matches what the owner entered — a case/punctuation-insensitive substring check, not a real fuzzy-
+match library), `mismatch` (Youverify responded but the number wasn't found or the name didn't
+match — a confirmed negative *result*, never a thrown error), or `unknown` (not configured, a
+network/timeout error, or an unparseable response). This mirrors the payments adapters'
+"confirmed-fail vs unknown-outcome" distinction (§28) applied to a new domain: a network blip must
+never be treated as "this business failed verification" — both `mismatch` and `unknown` fall back
+to the exact same manual-admin-queue behavior this app already had, so an unconfigured API key or a
+Youverify outage is indistinguishable from today's default, never a new way to wrongly reject a
+legitimate vendor.
+
+**Data model**: a new shared sub-schema, `BusinessVerificationResult`
+(`backend/src/common/schemas/business-verification-result.schema.ts`, `{ status:
+'not_attempted'|'verified'|'mismatch', providerRegisteredName, providerRegisteredAddress,
+providerRawStatus, checkedAt, failureReason }`), embedded on both `Restaurant` and `Store` as
+`businessVerification`, alongside a new plain `businessRegistrationNumber: string | null` field
+(required by `CreateRestaurantDto`/`CreateStoreDto` for new registrations, nullable at the schema
+level only for the same legacy-record reason `complianceDocumentUrl` already is — existing vendors
+are never retroactively required to backfill it). `providerRegisteredAddress` is stored and shown
+to admin purely as a reference — per an explicit product decision, address matching never hard-
+fails automated verification, since free-text address comparison (abbreviations, formatting) is
+unreliable enough to wrongly reject a legitimate business. `not_attempted` deliberately covers both
+"never configured" and "the lookup threw" as the *same* stored status — both must behave identically
+for gating, and `failureReason` still lets ops distinguish them in the raw document if needed.
+Critically, **`businessVerification` never replaces `isApproved`** — every existing marketplace-
+visibility query (`findAllApproved`, `findNearby`, `findBySlug`, `findPendingApproval`) still filters
+on `isApproved` alone, unchanged; `businessVerification.status` is informational/advisory data that
+only two new write paths (below) ever read before deciding whether to auto-flip `isApproved`.
+
+**Where the check runs, and why not async/webhook**: `RestaurantsService.create()`/
+`StoresService.create()` call a new private `runVerification()` synchronously, right after the
+document is created — deliberately different from the payout/payment domain's webhook-primary,
+poll-fallback pattern (§19/§28): Youverify's CAC lookup is a synchronous request/response (submit a
+number, get an immediate result), not a genuinely asynchronous provider-side process, so there's no
+webhook to wait for and no need for the `@nestjs/schedule` cron/reconciliation pattern
+`payout-scheduler.service.ts` uses elsewhere. `runVerification()` is wrapped so it can **never** fail
+registration itself — a Youverify outage degrades to `not_attempted`, identical to an unconfigured
+key, never a 500 on signup.
+
+**The auto-approval trigger, and a real design bug caught by the test suite**: a `verified` result
+at creation time can't immediately flip `isApproved` — a brand-new restaurant/store has zero menu
+items yet, so the *other* existing approval prerequisite (≥1 menu item/product, enforced today by
+`AdminService.approveRestaurant`/`approveStore` for the exact module-cycle reason documented in
+§FDP-60) can never be satisfied at that moment. A new `RestaurantsService.autoApproveIfEligible(id)`
+(and the `StoresService` mirror) is called from `MenuService.createItem()`/
+`ProductsService.createProduct()` right after an item/product is actually created — by construction,
+a just-created item already proves the "≥1 item" prerequisite without an extra count query, and
+`autoApproveIfEligible` reuses `approve()` verbatim (still re-checks `complianceDocumentUrl`), so
+there is still exactly one method that ever flips `isApproved` true.
+
+The first implementation also called `autoApproveIfEligible` from the new `reverifyBusiness()`
+endpoint (below) — a real bug caught by this ticket's own test suite: `autoApproveIfEligible` itself
+has no way to check the menu-item/product-count prerequisite (same module-cycle constraint that
+keeps that check out of `RestaurantsService.approve()` entirely), so calling it from `reverifyBusiness`
+could auto-list a restaurant with **zero menu items** the moment its registration number was
+corrected and verified — silently bypassing a real business rule. Fixed by removing that call:
+`reverifyBusiness()` only re-runs the Youverify check and saves the result; going live still
+requires either the vendor's first menu item (which re-triggers the check on its own) or a manual
+admin approval. This is flagged here specifically because the bug was invisible by inspection — it
+only surfaced once a test asserted `isApproved` stayed `false` after a bare re-verify call on a
+restaurant with no items.
+
+**Endpoints**: `PATCH /restaurants/:id/reverify-business` and `PATCH /stores/:id/reverify-business`
+(owner-or-admin, `ReverifyBusinessRegistrationDto` shared from `common/dto/` since both are
+byte-identical) let an owner correct a mistyped registration number and re-run the check without
+touching anything else about the listing — the fallback if Youverify mismatched or wasn't
+configured at creation time. `AdminService.approveRestaurant()`/`approveStore()` and
+`RestaurantsService.approve()`/`StoresService.approve()` are **unchanged** — an admin can approve a
+`mismatch` or `not_attempted` business exactly as before; nothing about Youverify's opinion ever
+blocks the manual override, per an explicit product requirement.
+
+**Notifications**: three new `NOTIFICATION_TYPES` (`business_verification_passed`,
+`business_verification_needs_review`, `business_auto_listed`) close a notification gap that existed
+even before this ticket — `RestaurantsService.approve()`/`AdminService.approveRestaurant()` never
+notified a vendor of anything. A vendor now learns immediately whether their registration was
+auto-verified (with a note that a menu item/product is still needed to go live) or needs manual
+review, and gets a separate notification the moment `autoApproveIfEligible` actually flips
+`isApproved` — the point their listing genuinely becomes visible to customers. All three calls are
+wrapped in try/catch, same "a notification failure never fails the caller" posture as every other
+side-channel notification in this codebase.
+
+**Frontend**: a new required `businessRegistrationNumber` field on both vendor registration forms
+(no format regex — deliberately generic, since the platform already supports many countries beyond
+Nigeria and Youverify's own graceful `mismatch`/`unknown` fallback handles a non-Nigerian number
+without needing client-side format validation to gate it); the post-creation toast now branches on
+`businessVerification.status === "verified"` to tell an owner they're auto-verified and just need a
+menu item, instead of the old static "pending admin approval" copy regardless of outcome; and a new
+card on both admin review pages shows the automated result (status badge, registered name/address,
+checked-at timestamp, failure reason) next to the existing single Approve button, which is
+unchanged — informational only, never gating what admin can click.
+
+All 6 languages shipped in the same change (key parity verified across
+`frontend/messages/*.json`). Full backend suite green (new `business-verification.service.spec.ts`
+plus extended `restaurants`/`stores`/`menu`/`products` service specs, and every other spec file that
+constructs a real `RestaurantsService`/`StoresService` updated with no-op mocks for the two new
+constructor dependencies); `tsc --noEmit`/`eslint`/production `build` clean on both sides.
+
+**A real circular-dependency bug, caught only by running every spec file together**: adding
+`NotificationsService` to `RestaurantsService` closed a genuine 3-module cycle that had never
+existed before — `RestaurantsModule` → `NotificationsModule` (new) → `UsersModule` (pre-existing,
+for email/SMS lookups) → `RestaurantsModule` (pre-existing: `UsersService` already reads
+`RestaurantsService.findByIds`/`findByIdOrThrow`). Every individual spec file that mocks
+`RestaurantsService`/`StoresService` away (`admin`, `payments`) never touched this; even
+`restaurants.service.spec.ts`/`stores.service.spec.ts` themselves didn't, since they never
+construct `UsersService` in the same module. It only surfaced in `reviews.service.spec.ts`, whose
+testing module constructs `ReviewsService`, `RestaurantsService`, and `UsersService` together in
+one flat `providers` array — there, `UsersService`'s constructor reported its `RestaurantsService`
+parameter as literally `undefined` ("Nest can't resolve dependencies of the UsersService (UserModel,
+RefreshTokenModel, ?)"). Root cause: TypeScript's `emitDecoratorMetadata` embeds a direct reference
+to each constructor parameter's class in the compiled JS, evaluated synchronously when the class
+declaration runs — mid-circular-`require()`, `RestaurantsService`'s module hadn't finished
+evaluating yet, so the reference was genuinely `undefined` at that instant, independent of which
+spec file happened to import things in what order. Fixed with NestJS's standard tool for exactly
+this: `@Inject(forwardRef(() => RestaurantsService))` on `UsersService`'s constructor parameter,
+`forwardRef(() => RestaurantsModule)` on `UsersModule`'s import (`backend/src/users/users.service.ts`,
+`users.module.ts`), plus the matching `@Inject(forwardRef(() => NotificationsService))` /
+`forwardRef(() => NotificationsModule)` pair on the new edge in `restaurants.service.ts`/
+`restaurants.module.ts`. First attempt only added the second pair and left `reviews.service.spec.ts`
+still failing — the actual break in the cycle is `UsersService`'s pre-existing edge, not the new
+one, a reminder that a 3+ node cycle needs the forwardRef pair on whichever edge closes the loop for
+a given module's require order, not necessarily the edge that was just added. No existing
+`forwardRef` precedent existed anywhere else in this codebase (every prior cross-domain dependency
+was avoided architecturally, e.g. `AdminService` composing `RestaurantsService`+`MenuService`
+instead of either module importing the other) — this is the first case where the cycle runs through
+shared infrastructure modules (`Users`/`Notifications`) that a business-domain service legitimately
+needs, where restructuring away the cycle isn't a reasonable option.
+
+**Two more pre-existing, unrelated build breaks fixed in the same branch** — both silently broken
+on `main` already (confirmed via a clean-`main` diff before touching either), caught only by a real
+`nest build`, not `tsc --noEmit` alone, continuing this session's running theme that the latter
+cannot be trusted as a production-build proxy in this repo: `riders.service.ts` still imported
+`FilterQuery` from `mongoose`, a type Mongoose 9's currently-installed patch no longer exports
+(renamed to `QueryFilter`, matching what `restaurants.service.ts`/`stores.service.ts` already use) —
+fixed by renaming the import and its one usage. `promo-codes.service.ts`'s `findAll()` had a
+`{ ...promo.toObject(), scope } as PromoCodeAdminView` cast that a Mongoose typings update made no
+longer structurally valid (TypeScript could no longer see `createdAt`/`updatedAt` on `toObject()`'s
+inferred return type) — fixed by casting through `unknown` first, per TypeScript's own suggested
+fix for this exact error, with no behavior change (the fields are genuinely present at runtime).
+
+## 39. Two promo-code marketplace-visibility bugs: platform-wide codes invisible to customers, admin scope picker always empty (docs/ROADMAP.md FDP-116)
+
+Two more live bugs the user hit, both about promo codes never actually reaching the people meant
+to use them.
+
+**Platform-wide codes had nowhere to show.** `PromoBanner` (FDP-112) only ever rendered on an
+individual restaurant/store's own public page, requiring a `restaurantId` or `storeId` — a
+platform-wide code an admin created (no business attached at all) was technically returned by
+`findActiveForSeller` whenever a customer *did* happen to be looking at some specific business, but
+never surfaced anywhere a customer browsing the marketplace itself (homepage, the all-restaurants
+listing, the groceries/pharmacy category pages) would ever see it — exactly the user's report.
+Fixed with a new `PromoCodesService.findActivePlatformWide()` (same active/not-expired/under-limit
+eligibility rules as `findActiveForSeller`, filtered to `restaurantId: null AND storeId: null`) and
+a `GET /promo-codes/active` branch: with neither `restaurantId` nor `storeId` in the query (previously
+a `400`), it now returns platform-wide codes only. `PromoBanner` itself gained a seller-less mode
+(`restaurantId`/`storeId` both omitted) and an optional `currency` prop — deliberately optional,
+since a marketplace-wide banner has no single business's currency to format a `fixed`-type amount
+in on a genuinely multi-currency platform (each restaurant/store sets its own `currency`); a
+`fixed`-type code without a `currency` in scope renders generic "a special discount" wording instead
+of a wrongly-denominated number, while a `percentage`-type code is unaffected (no currency needed).
+Mounted on the homepage (above the hero, as a site-wide announcement), `/restaurants`, and
+`/categories`.
+
+**The admin promo-code scope picker was always empty.** Screenshot-reported: choosing "Applies to:
+Restaurant" (or Store) in the admin create-promo-code form showed a searchable picker with "No
+matches" no matter what was typed. Root cause: the picker called the *public*, approval-filtered
+`GET /restaurants` (`RestaurantsService.findAllApproved`) / `GET /stores` — so a promo code could
+only ever be scoped to an already-*approved* restaurant/store, and in this case there simply
+weren't any yet (the platform's test restaurants were still pending). This is a real, separate class
+of bug from the marketplace-visibility one above: an **admin-only tool silently inheriting a
+customer-facing approval filter it has no business having** — an admin managing promo codes needs
+to be able to target any restaurant/store, approved or not. Fixed with a genuinely new admin-only
+endpoint on each domain, `GET /restaurants/admin` / `GET /stores/admin`
+(`RestaurantsService.findAllForAdmin`/`StoresService.findAllForAdmin` — no approval filter, sorted
+by name), declared before `:slug` for the same route-ordering reason `mine`/`pending`/`admin/:id`
+already are. This also let the store picker drop its FDP-113 workaround entirely (fetching groceries
+and pharmacy types separately and merging, since the public `listStores` requires a `type` filter) —
+the new admin endpoint needs no type filter at all, one query instead of two.
+
+New regression tests: `findActivePlatformWide` (includes an active platform-wide code, excludes
+restaurant-scoped/store-scoped/inactive/expired/usage-limit-reached ones). Full backend suite green;
+`tsc --noEmit`/`eslint`/production `build` clean on both sides. New `amountOffGeneric` key in
+`PromoBanner`, shipped in all 6 languages, key parity verified.

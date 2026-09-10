@@ -6,6 +6,8 @@ import { Model } from 'mongoose';
 import { DeliveryZonesService } from './delivery-zones.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   Restaurant,
   RestaurantDocument,
@@ -60,7 +62,26 @@ describe('DeliveryZonesService', () => {
           { name: DeliveryZone.name, schema: DeliveryZoneSchema },
         ]),
       ],
-      providers: [DeliveryZonesService, RestaurantsService, StoresService],
+      providers: [
+        DeliveryZonesService,
+        RestaurantsService,
+        StoresService,
+        // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks, same
+        // reasoning as every other RestaurantsService/StoresService consumer's spec file.
+        {
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
     }).compile();
 
     deliveryZonesService = moduleRef.get(DeliveryZonesService);
@@ -98,6 +119,7 @@ describe('DeliveryZonesService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
       address,
     });
   }
@@ -119,6 +141,7 @@ describe('DeliveryZonesService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
       address,
     });
   }

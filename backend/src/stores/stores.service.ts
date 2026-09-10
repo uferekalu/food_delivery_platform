@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -13,6 +14,8 @@ import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interfac
 import type { PaginatedResult } from '../restaurants/restaurants.service';
 import type { PayoutAccountStatus } from '../common/schemas/payout-account.schema';
 import type { PaymentProvider } from '../payments/payment-provider';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -34,13 +37,17 @@ const SORT_SPECS: Record<StoreSort, Record<string, 1 | -1>> = {
 
 @Injectable()
 export class StoresService {
+  private readonly logger = new Logger(StoresService.name);
+
   constructor(
     @InjectModel(Store.name) private readonly storeModel: Model<StoreDocument>,
+    private readonly businessVerificationService: BusinessVerificationService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(ownerId: string, dto: CreateStoreDto): Promise<StoreDocument> {
     const slug = await this.generateUniqueSlug(dto.name);
-    return this.storeModel.create({
+    const store = await this.storeModel.create({
       ...dto,
       ownerId,
       slug,
@@ -50,6 +57,10 @@ export class StoresService {
         location: toGeoPoint(dto.address.lat, dto.address.lng),
       },
     });
+    // Never allowed to fail store creation itself (docs/ROADMAP.md FDP-115) — see
+    // RestaurantsService.create's identical reasoning.
+    await this.runVerification(store, dto.businessRegistrationNumber, dto.name);
+    return store;
   }
 
   async findAllApproved(
@@ -173,6 +184,12 @@ export class StoresService {
     return { approved, pending };
   }
 
+  /** Every store regardless of approval status — mirrors
+   * RestaurantsService.findAllForAdmin exactly, see its doc comment (docs/ROADMAP.md FDP-116). */
+  findAllForAdmin(): Promise<StoreDocument[]> {
+    return this.storeModel.find().sort({ name: 1 }).exec();
+  }
+
   findMine(ownerId: string): Promise<StoreDocument[]> {
     return this.storeModel.find({ ownerId }).sort({ createdAt: -1 }).exec();
   }
@@ -246,6 +263,131 @@ export class StoresService {
     }
     store.isApproved = true;
     return store.save();
+  }
+
+  /** Runs the automated CAC/RC check and stores its result — mirrors
+   * RestaurantsService.runVerification exactly, see its doc comment for the full reasoning. */
+  private async runVerification(
+    store: StoreDocument,
+    registrationNumber: string,
+    businessName: string,
+  ): Promise<void> {
+    try {
+      const result =
+        await this.businessVerificationService.verifyBusinessRegistration(
+          registrationNumber,
+          businessName,
+        );
+      if (result.outcome === 'verified') {
+        store.businessVerification = {
+          status: 'verified',
+          providerRegisteredName: result.registeredName,
+          providerRegisteredAddress: result.registeredAddress,
+          providerRawStatus: result.rawStatus,
+          checkedAt: new Date(),
+          failureReason: null,
+        };
+      } else if (result.outcome === 'mismatch') {
+        store.businessVerification = {
+          status: 'mismatch',
+          providerRegisteredName: result.registeredName,
+          providerRegisteredAddress: result.registeredAddress,
+          providerRawStatus: result.rawStatus,
+          checkedAt: new Date(),
+          failureReason: result.reason,
+        };
+      } else {
+        store.businessVerification = {
+          status: 'not_attempted',
+          providerRegisteredName: null,
+          providerRegisteredAddress: null,
+          providerRawStatus: null,
+          checkedAt: null,
+          failureReason: result.reason,
+        };
+      }
+      await store.save();
+
+      if (result.outcome === 'verified') {
+        await this.notify(
+          store,
+          'business_verification_passed',
+          'Business verified',
+          `We automatically verified ${store.name}'s business registration. Add at least one product to go live.`,
+        );
+      } else {
+        await this.notify(
+          store,
+          'business_verification_needs_review',
+          'Business pending review',
+          `${store.name} is pending manual review by our team before it can go live.`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Business verification failed unexpectedly for ${store._id.toString()}`,
+        err,
+      );
+    }
+  }
+
+  /** Auto-approval path for a store Youverify already confirmed — mirrors
+   * RestaurantsService.autoApproveIfEligible exactly, see its doc comment (including the
+   * caller-must-already-guarantee-the-product-count-prerequisite contract). Only
+   * ProductsService.createProduct calls this today. */
+  async autoApproveIfEligible(id: string): Promise<void> {
+    const store = await this.findByIdOrThrow(id);
+    if (store.isApproved) return;
+    if (store.businessVerification.status !== 'verified') return;
+    const approved = await this.approve(id);
+    await this.notify(
+      approved,
+      'business_auto_listed',
+      'Business now live',
+      `${approved.name} is now live in the marketplace.`,
+    );
+  }
+
+  /** Lets an owner correct a mistyped registration number and re-run the automated check —
+   * mirrors RestaurantsService.reverifyBusiness exactly, including deliberately NOT calling
+   * autoApproveIfEligible here (nothing here proves the "at least one product" prerequisite —
+   * see that method's doc comment). */
+  async reverifyBusiness(
+    id: string,
+    requester: AccessTokenPayload,
+    registrationNumber: string,
+  ): Promise<StoreDocument> {
+    const store = await this.findByIdOrThrow(id);
+    this.assertOwnerOrAdmin(store, requester);
+    store.businessRegistrationNumber = registrationNumber;
+    await this.runVerification(store, registrationNumber, store.name);
+    return this.findByIdOrThrow(id);
+  }
+
+  /** Best-effort vendor notification — never allowed to fail the caller, same posture as every
+   * other side-channel notification in this codebase. */
+  private async notify(
+    store: StoreDocument,
+    type:
+      | 'business_verification_passed'
+      | 'business_verification_needs_review'
+      | 'business_auto_listed',
+    title: string,
+    body: string,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.notify({
+        userId: store.ownerId.toString(),
+        type,
+        title,
+        body,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Notification (${type}) for store ${store._id.toString()} failed`,
+        err,
+      );
+    }
   }
 
   async updateRatingStats(

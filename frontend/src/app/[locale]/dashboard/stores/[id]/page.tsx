@@ -38,6 +38,7 @@ function EditStoreForm({ id }: { id: string }) {
           description: store.description,
           type: store.type,
           tagsRaw: store.tags.join(", "),
+          businessRegistrationNumber: store.businessRegistrationNumber ?? "",
           currency: store.currency,
           country: store.country,
           line1: store.address.line1,

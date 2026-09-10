@@ -131,6 +131,44 @@ function AdminStoreReview({ id }: { id: string }) {
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
+        <span className="text-sm font-semibold text-text">{t("automatedVerification")}</span>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={
+              store.businessVerification.status === "verified"
+                ? "success"
+                : store.businessVerification.status === "mismatch"
+                  ? "danger"
+                  : "neutral"
+            }
+          >
+            {t(`verificationStatus.${store.businessVerification.status}`)}
+          </Badge>
+          {store.businessRegistrationNumber && (
+            <span className="text-sm text-text-muted">{store.businessRegistrationNumber}</span>
+          )}
+        </div>
+        {store.businessVerification.checkedAt && (
+          <span className="text-sm text-text-muted">
+            {t("checkedAt", { date: new Date(store.businessVerification.checkedAt).toLocaleString(locale) })}
+          </span>
+        )}
+        {store.businessVerification.providerRegisteredName && (
+          <span className="text-sm text-text-muted">
+            {t("registeredName")}: {store.businessVerification.providerRegisteredName}
+          </span>
+        )}
+        {store.businessVerification.providerRegisteredAddress && (
+          <span className="text-sm text-text-muted">
+            {t("registeredAddress")}: {store.businessVerification.providerRegisteredAddress}
+          </span>
+        )}
+        {store.businessVerification.failureReason && (
+          <span className="text-sm text-danger">{store.businessVerification.failureReason}</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
         <span className="text-sm font-semibold text-text">{t("openingHours")}</span>
         <div className="flex flex-col gap-1">
           {store.openingHours.length === 0 ? (

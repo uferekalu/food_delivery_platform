@@ -68,4 +68,11 @@ export const envValidationSchema = Joi.object({
   // the original deterministic keyword matcher when unset.
   ANTHROPIC_API_KEY: Joi.string().optional(),
   ANTHROPIC_MODEL: Joi.string().optional(),
+
+  // Youverify (https://youverify.co) — automated CAC/RC business-registration verification
+  // (docs/ROADMAP.md FDP-115). Deliberately optional. No real Youverify account exists for this
+  // project yet; BusinessVerificationService degrades to a no-op (falls straight to the existing
+  // manual admin review queue) when this is unset — same graceful-degradation pattern as
+  // TERMII_API_KEY above.
+  YOUVERIFY_API_KEY: Joi.string().optional(),
 });

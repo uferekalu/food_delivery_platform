@@ -11,6 +11,8 @@ import { StoresService } from './stores.service';
 import { Store, StoreDocument, StoreSchema } from './schemas/store.schema';
 import type { StoreType } from './schemas/store.schema';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 jest.setTimeout(30_000);
 
@@ -19,6 +21,10 @@ describe('StoresService', () => {
   let moduleRef: TestingModule;
   let service: StoresService;
   let storeModel: Model<StoreDocument>;
+  // Mocked, not real — see RestaurantsService's equivalent spec for the full reasoning
+  // (docs/ROADMAP.md FDP-115).
+  let verifyBusinessRegistration: jest.Mock;
+  let notify: jest.Mock;
 
   const owner: AccessTokenPayload = {
     sub: '',
@@ -43,6 +49,7 @@ describe('StoresService', () => {
     country: 'Nigeria',
     address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
     complianceDocumentUrl: 'https://example.com/doc.pdf',
+    businessRegistrationNumber: 'RC1234567',
   };
 
   beforeAll(async () => {
@@ -51,12 +58,22 @@ describe('StoresService', () => {
       instance: { launchTimeout: 60_000 },
     });
 
+    verifyBusinessRegistration = jest.fn();
+    notify = jest.fn().mockResolvedValue(undefined);
+
     moduleRef = await Test.createTestingModule({
       imports: [
         MongooseModule.forRoot(mongod.getUri()),
         MongooseModule.forFeature([{ name: Store.name, schema: StoreSchema }]),
       ],
-      providers: [StoresService],
+      providers: [
+        StoresService,
+        {
+          provide: BusinessVerificationService,
+          useValue: { verifyBusinessRegistration },
+        },
+        { provide: NotificationsService, useValue: { notify } },
+      ],
     }).compile();
 
     service = moduleRef.get(StoresService);
@@ -65,6 +82,14 @@ describe('StoresService', () => {
     // `findNearby`'s $geoNear (docs/ROADMAP.md FDP-96).
     await storeModel.init();
   }, 60_000);
+
+  beforeEach(() => {
+    verifyBusinessRegistration.mockReset().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify.mockReset().mockResolvedValue(undefined);
+  });
 
   afterEach(async () => {
     await storeModel.deleteMany({}).exec();
@@ -195,6 +220,119 @@ describe('StoresService', () => {
       await expect(service.approve(created._id.toString())).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('automated business verification (docs/ROADMAP.md FDP-115)', () => {
+    it('stores a `verified` result and notifies the owner, but does not auto-approve (no products yet)', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'verified',
+        registeredName: 'Market Square Supermarket Ltd',
+        registeredAddress: '1 Main St, Lagos',
+        rawStatus: 'active',
+      });
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created.businessVerification.status).toBe('verified');
+      expect(created.isApproved).toBe(false); // no products yet — see ProductsService.createProduct
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'business_verification_passed' }),
+      );
+    });
+
+    it('stores a `mismatch` result and notifies the owner it needs manual review', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'mismatch',
+        registeredName: 'A Different Company Ltd',
+        registeredAddress: null,
+        rawStatus: 'active',
+        reason: 'Registered name does not match',
+      });
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created.businessVerification.status).toBe('mismatch');
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'business_verification_needs_review' }),
+      );
+    });
+
+    it('treats "not configured" and "the lookup threw" identically — status stays `not_attempted`', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'unknown',
+        reason: 'network down',
+      });
+
+      const created = await service.create('owner-id', baseDto);
+
+      expect(created.businessVerification.status).toBe('not_attempted');
+      expect(created.isApproved).toBe(false);
+    });
+
+    describe('autoApproveIfEligible', () => {
+      it('approves a store that was auto-verified and is not yet approved', async () => {
+        verifyBusinessRegistration.mockResolvedValue({
+          outcome: 'verified',
+          registeredName: 'Market Square Supermarket Ltd',
+          registeredAddress: null,
+          rawStatus: 'active',
+        });
+        const created = await service.create('owner-id', baseDto);
+
+        await service.autoApproveIfEligible(created._id.toString());
+
+        const reloaded = await service.findByIdOrThrow(created._id.toString());
+        expect(reloaded.isApproved).toBe(true);
+        expect(notify).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'business_auto_listed' }),
+        );
+      });
+
+      it('is a no-op when the store was not auto-verified', async () => {
+        const created = await service.create('owner-id', baseDto);
+
+        await service.autoApproveIfEligible(created._id.toString());
+
+        const reloaded = await service.findByIdOrThrow(created._id.toString());
+        expect(reloaded.isApproved).toBe(false);
+      });
+    });
+
+    describe('reverifyBusiness', () => {
+      it('updates the registration number and re-runs verification, without auto-approving', async () => {
+        const created = await service.create('owner-id', baseDto);
+        verifyBusinessRegistration.mockResolvedValue({
+          outcome: 'verified',
+          registeredName: 'Market Square Supermarket Ltd',
+          registeredAddress: null,
+          rawStatus: 'active',
+        });
+
+        const updated = await service.reverifyBusiness(
+          created._id.toString(),
+          admin,
+          'RC7654321',
+        );
+
+        expect(updated.businessRegistrationNumber).toBe('RC7654321');
+        expect(updated.businessVerification.status).toBe('verified');
+        // Still not approved — reverifyBusiness deliberately never calls
+        // autoApproveIfEligible; only ProductsService.createProduct can trigger auto-listing.
+        expect(updated.isApproved).toBe(false);
+      });
+
+      it('rejects a stranger reverifying a store they do not own', async () => {
+        const created = await service.create('owner-id', baseDto);
+
+        await expect(
+          service.reverifyBusiness(
+            created._id.toString(),
+            otherOwner,
+            'RC7654321',
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
     });
   });
 

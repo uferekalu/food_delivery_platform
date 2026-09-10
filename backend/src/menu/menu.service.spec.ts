@@ -9,6 +9,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model } from 'mongoose';
 import { MenuService } from './menu.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   Restaurant,
   RestaurantDocument,
@@ -34,6 +36,10 @@ describe('MenuService', () => {
   let menuService: MenuService;
   let restaurantsService: RestaurantsService;
   let restaurantModel: Model<RestaurantDocument>;
+  // Mocked, not real — see RestaurantsService's own spec for the full reasoning
+  // (docs/ROADMAP.md FDP-115).
+  let verifyBusinessRegistration: jest.Mock;
+  let notify: jest.Mock;
   let categoryModel: Model<MenuCategoryDocument>;
   let itemModel: Model<MenuItemDocument>;
 
@@ -54,6 +60,12 @@ describe('MenuService', () => {
       instance: { launchTimeout: 60_000 },
     });
 
+    verifyBusinessRegistration = jest.fn().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify = jest.fn().mockResolvedValue(undefined);
+
     moduleRef = await Test.createTestingModule({
       imports: [
         MongooseModule.forRoot(mongod.getUri()),
@@ -63,7 +75,15 @@ describe('MenuService', () => {
           { name: MenuItem.name, schema: MenuItemSchema },
         ]),
       ],
-      providers: [MenuService, RestaurantsService],
+      providers: [
+        MenuService,
+        RestaurantsService,
+        {
+          provide: BusinessVerificationService,
+          useValue: { verifyBusinessRegistration },
+        },
+        { provide: NotificationsService, useValue: { notify } },
+      ],
     }).compile();
 
     menuService = moduleRef.get(MenuService);
@@ -72,6 +92,14 @@ describe('MenuService', () => {
     categoryModel = moduleRef.get(getModelToken(MenuCategory.name));
     itemModel = moduleRef.get(getModelToken(MenuItem.name));
   }, 60_000); // headroom for the 60s mongod launchTimeout above, not just module compile
+
+  beforeEach(() => {
+    verifyBusinessRegistration.mockReset().mockResolvedValue({
+      outcome: 'unknown',
+      reason: 'Youverify not configured',
+    });
+    notify.mockReset().mockResolvedValue(undefined);
+  });
 
   afterEach(async () => {
     await Promise.all([
@@ -94,6 +122,7 @@ describe('MenuService', () => {
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
   }
 
@@ -115,6 +144,7 @@ describe('MenuService', () => {
       country: 'Nigeria',
       address: { line1: '2 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     const categoryOnB = await menuService.createCategory(
       restaurantB._id.toString(),
@@ -239,5 +269,67 @@ describe('MenuService', () => {
       owner,
     );
     expect(toggled.isAvailable).toBe(false);
+  });
+
+  describe('createItem auto-approval trigger (docs/ROADMAP.md FDP-115)', () => {
+    it('auto-approves the restaurant when it was auto-verified and this is its first item', async () => {
+      verifyBusinessRegistration.mockResolvedValue({
+        outcome: 'verified',
+        registeredName: 'Burgundy Kitchen Ltd',
+        registeredAddress: null,
+        rawStatus: 'active',
+      });
+      const restaurant = await createTestRestaurant();
+      const restaurantId = restaurant._id.toString();
+      expect(restaurant.isApproved).toBe(false);
+      const category = await menuService.createCategory(restaurantId, owner, {
+        name: 'Mains',
+      });
+
+      await menuService.createItem(restaurantId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Jollof Rice',
+        price: 12,
+      });
+
+      const reloaded = await restaurantsService.findByIdOrThrow(restaurantId);
+      expect(reloaded.isApproved).toBe(true);
+    });
+
+    it('does not auto-approve a restaurant that was not auto-verified', async () => {
+      const restaurant = await createTestRestaurant(); // default mock: not_attempted
+      const restaurantId = restaurant._id.toString();
+      const category = await menuService.createCategory(restaurantId, owner, {
+        name: 'Mains',
+      });
+
+      await menuService.createItem(restaurantId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Jollof Rice',
+        price: 12,
+      });
+
+      const reloaded = await restaurantsService.findByIdOrThrow(restaurantId);
+      expect(reloaded.isApproved).toBe(false);
+    });
+
+    it('still returns the created item even if the auto-approval check itself throws', async () => {
+      const restaurant = await createTestRestaurant();
+      const restaurantId = restaurant._id.toString();
+      const category = await menuService.createCategory(restaurantId, owner, {
+        name: 'Mains',
+      });
+      jest
+        .spyOn(restaurantsService, 'autoApproveIfEligible')
+        .mockRejectedValueOnce(new Error('boom'));
+
+      const item = await menuService.createItem(restaurantId, owner, {
+        categoryId: category._id.toString(),
+        name: 'Jollof Rice',
+        price: 12,
+      });
+
+      expect(item.name).toBe('Jollof Rice');
+    });
   });
 });

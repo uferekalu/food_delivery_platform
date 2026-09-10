@@ -10,6 +10,8 @@ import { Model, Types } from 'mongoose';
 import { CartService, type ReorderSourceOrder } from './cart.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StoresService } from '../stores/stores.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   Restaurant,
   RestaurantDocument,
@@ -76,7 +78,26 @@ describe('CartService', () => {
           { name: Cart.name, schema: CartSchema },
         ]),
       ],
-      providers: [CartService, RestaurantsService, StoresService],
+      providers: [
+        CartService,
+        RestaurantsService,
+        StoresService,
+        // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks, same
+        // reasoning as every other RestaurantsService/StoresService consumer's spec file.
+        {
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
     }).compile();
 
     cartService = moduleRef.get(CartService);
@@ -112,6 +133,7 @@ describe('CartService', () => {
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     return restaurantsService.approve(restaurant._id.toString());
   }
@@ -124,6 +146,7 @@ describe('CartService', () => {
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     return storesService.approve(store._id.toString());
   }
@@ -342,6 +365,7 @@ describe('CartService', () => {
       country: 'Nigeria',
       address: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     const item = await createItem(restaurant._id.toString());
 
@@ -653,6 +677,7 @@ describe('CartService', () => {
         country: 'Nigeria',
         address: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
         complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
       });
       const item = await createItem(restaurant._id.toString());
       const order = restaurantOrder(restaurant._id, [

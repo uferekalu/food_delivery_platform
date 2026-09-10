@@ -34,10 +34,16 @@ export class PromoCodesController {
 
   // Public — powers the "Use code X for Y% off" banner on a restaurant/store's public page
   // (docs/ROADMAP.md FDP-112), so a customer browsing (logged in or not) can discover a promo
-  // exists without already knowing the code.
+  // exists without already knowing the code. With neither restaurantId nor storeId (the general
+  // marketplace-browsing pages — homepage, the all-restaurants listing, category pages —
+  // docs/ROADMAP.md FDP-116), returns platform-wide codes only, since there's no specific
+  // business to check scoped codes against yet.
   @Public()
   @Get('active')
   findActive(@Query() query: ActivePromoCodesQueryDto) {
+    if (!query.restaurantId && !query.storeId) {
+      return this.promoCodesService.findActivePlatformWide();
+    }
     const seller = this.resolveSeller(query);
     return this.promoCodesService.findActiveForSeller(seller);
   }

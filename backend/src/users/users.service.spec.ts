@@ -16,6 +16,8 @@ import {
   RefreshTokenSchema,
 } from '../auth/schemas/refresh-token.schema';
 import { User, UserDocument, UserSchema } from './schemas/user.schema';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 jest.setTimeout(30_000);
 
@@ -43,7 +45,24 @@ describe('UsersService', () => {
           { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
-      providers: [UsersService, RestaurantsService],
+      providers: [
+        UsersService,
+        RestaurantsService,
+        // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks.
+        {
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
     }).compile();
 
     usersService = moduleRef.get(UsersService);
@@ -82,6 +101,7 @@ describe('UsersService', () => {
       currency: 'NGN',
       country: 'Nigeria',
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
     });
   }

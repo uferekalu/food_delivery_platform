@@ -21,11 +21,11 @@ import {
   useListPromoCodesQuery,
   useUpdatePromoCodeMutation,
 } from "@/lib/redux/services/admin-api";
-import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
-import { useListStoresQuery } from "@/lib/redux/services/stores-api";
+import { useListAllRestaurantsForAdminQuery } from "@/lib/redux/services/restaurants-api";
+import { useListAllStoresForAdminQuery } from "@/lib/redux/services/stores-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatNumber } from "@/lib/currency";
-import { DISCOUNT_TYPES, STORE_TYPES, type AdminPromoCode } from "@/lib/redux/restaurant-types";
+import { DISCOUNT_TYPES, type AdminPromoCode } from "@/lib/redux/restaurant-types";
 
 // An empty number input submits as "" — coerced to 0 by z.coerce.number() rather than treated
 // as "not provided", which would wrongly fail usageLimit's min(1) whenever it's left blank (the
@@ -51,35 +51,24 @@ function CreatePromoForm() {
   }));
 
   // Fetched only once actually needed — same skip-until-open reasoning as
-  // AdminMessagesTab's vendor picker (docs/ROADMAP.md FDP-108).
-  const { data: restaurants, isLoading: loadingRestaurants } = useListRestaurantsQuery(
-    { limit: 100 },
+  // AdminMessagesTab's vendor picker (docs/ROADMAP.md FDP-108). Admin-only, unfiltered by
+  // approval status (docs/ROADMAP.md FDP-116) — the public `listRestaurants`/`listStores` this
+  // used to call only ever return *approved* businesses, so scoping a promo code to a restaurant/
+  // store still awaiting approval was silently impossible: the picker just came up empty.
+  const { data: restaurants, isLoading: loadingRestaurants } = useListAllRestaurantsForAdminQuery(
+    undefined,
     { skip: scopeType !== "restaurant" },
   );
-  // ListStoresParams.type is required (a store's type is a real filter customers browse by) —
-  // the picker needs every store regardless of type, so both of the only two types are fetched
-  // and merged rather than adding an admin-only "all stores" endpoint just for this.
-  const storesSkip = scopeType !== "store";
-  const { data: groceryStores, isLoading: loadingGroceryStores } = useListStoresQuery(
-    { type: STORE_TYPES[0], limit: 100 },
-    { skip: storesSkip },
-  );
-  const { data: pharmacyStores, isLoading: loadingPharmacyStores } = useListStoresQuery(
-    { type: STORE_TYPES[1], limit: 100 },
-    { skip: storesSkip },
-  );
-  const loadingStores = loadingGroceryStores || loadingPharmacyStores;
+  const { data: stores, isLoading: loadingStores } = useListAllStoresForAdminQuery(undefined, {
+    skip: scopeType !== "store",
+  });
   const restaurantOptions = useMemo(
-    () => (restaurants?.items ?? []).map((r) => ({ value: r._id, label: r.name })),
+    () => (restaurants ?? []).map((r) => ({ value: r._id, label: r.name })),
     [restaurants],
   );
   const storeOptions = useMemo(
-    () =>
-      [...(groceryStores?.items ?? []), ...(pharmacyStores?.items ?? [])].map((s) => ({
-        value: s._id,
-        label: s.name,
-      })),
-    [groceryStores, pharmacyStores],
+    () => (stores ?? []).map((s) => ({ value: s._id, label: s.name })),
+    [stores],
   );
 
   const DISCOUNT_TYPE_OPTIONS = DISCOUNT_TYPES.map((value) => ({

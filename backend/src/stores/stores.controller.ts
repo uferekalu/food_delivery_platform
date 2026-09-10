@@ -17,6 +17,7 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { ListStoresDto } from './dto/list-stores.dto';
 import { NearbyStoresQueryDto } from './dto/nearby-stores-query.dto';
+import { ReverifyBusinessRegistrationDto } from '../common/dto/reverify-business-registration.dto';
 
 @ApiTags('stores')
 @Controller('stores')
@@ -48,6 +49,14 @@ export class StoresController {
   @Get('pending')
   findPendingApproval() {
     return this.storesService.findPendingApproval();
+  }
+
+  // Also declared before `:slug` — same route-ordering reasoning as RestaurantsController's
+  // identical endpoint (docs/ROADMAP.md FDP-116).
+  @Roles('admin')
+  @Get('admin')
+  findAllForAdmin() {
+    return this.storesService.findAllForAdmin();
   }
 
   @Roles('admin')
@@ -82,5 +91,21 @@ export class StoresController {
   @Patch(':id/toggle-open')
   toggleOpen(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.storesService.toggleOpen(id, user);
+  }
+
+  // Automated business verification (docs/ROADMAP.md FDP-115) — same reasoning as
+  // RestaurantsController's identical endpoint.
+  @Roles('restaurant_owner', 'admin')
+  @Patch(':id/reverify-business')
+  reverifyBusiness(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ReverifyBusinessRegistrationDto,
+  ) {
+    return this.storesService.reverifyBusiness(
+      id,
+      user,
+      dto.businessRegistrationNumber,
+    );
   }
 }

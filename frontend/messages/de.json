@@ -671,7 +671,8 @@
     "createRestaurant": "Restaurant erstellen",
     "restaurantCreated": "Restaurant erstellt",
     "pendingAdminApproval": "Es wartet auf die Genehmigung eines Administrators, bevor es öffentlich erscheint.",
-    "couldNotCreateRestaurant": "Das Restaurant konnte nicht erstellt werden"
+    "couldNotCreateRestaurant": "Das Restaurant konnte nicht erstellt werden",
+    "autoVerifiedPendingMenu": "Ihre Gewerbeanmeldung wurde automatisch verifiziert! Fügen Sie mindestens ein Menüelement hinzu, um live zu gehen."
   },
   "EditRestaurantPage": {
     "restaurantNotFound": "Restaurant nicht gefunden, oder du hast keinen Zugriff darauf.",
@@ -729,7 +730,10 @@
     "closed": "Geschlossen",
     "to": "bis",
     "openingTimeFor": "Öffnungszeit am {day}",
-    "closingTimeFor": "Schließzeit am {day}"
+    "closingTimeFor": "Schließzeit am {day}",
+    "registrationNumberTooShort": "Sieht nicht wie eine gültige Registrierungsnummer aus",
+    "businessRegistrationNumber": "Gewerbeanmeldungsnummer",
+    "businessRegistrationNumberHint": "Z. B. eine nigerianische CAC-RC/BN-Nummer oder das Äquivalent Ihres Landes. Wir überprüfen dies nach Möglichkeit automatisch — wenn eine automatische Überprüfung nicht möglich ist, prüft ein Administrator sie manuell."
   },
   "MenuManagerPage": {
     "groupNamePlaceholder": "Gruppenname (z. B. Größe)",
@@ -830,7 +834,8 @@
     "createStore": "Shop erstellen",
     "storeCreated": "Shop erstellt",
     "pendingAdminApproval": "Er wartet auf die Genehmigung durch einen Administrator, bevor er öffentlich erscheint.",
-    "couldNotCreateStore": "Der Shop konnte nicht erstellt werden"
+    "couldNotCreateStore": "Der Shop konnte nicht erstellt werden",
+    "autoVerifiedPendingCatalog": "Ihre Gewerbeanmeldung wurde automatisch verifiziert! Fügen Sie mindestens ein Produkt hinzu, um live zu gehen."
   },
   "EditStorePage": {
     "storeNotFound": "Shop nicht gefunden, oder du hast keinen Zugriff darauf.",
@@ -885,7 +890,10 @@
     "closed": "Geschlossen",
     "to": "bis",
     "openingTimeFor": "Öffnungszeit am {day}",
-    "closingTimeFor": "Schließzeit am {day}"
+    "closingTimeFor": "Schließzeit am {day}",
+    "registrationNumberTooShort": "Sieht nicht wie eine gültige Registrierungsnummer aus",
+    "businessRegistrationNumber": "Gewerbeanmeldungsnummer",
+    "businessRegistrationNumberHint": "Z. B. eine nigerianische CAC-RC/BN-Nummer oder das Äquivalent Ihres Landes. Wir überprüfen dies nach Möglichkeit automatisch — wenn eine automatische Überprüfung nicht möglich ist, prüft ein Administrator sie manuell."
   },
   "CatalogManagerPage": {
     "required": "Erforderlich",
@@ -1234,7 +1242,8 @@
     "useCodeFor": "Nutze den Code {code} für {discount}",
     "percentOff": "{value}% Rabatt",
     "amountOff": "{value} Rabatt",
-    "minOrder": "(Mindestbestellwert {amount})"
+    "minOrder": "(Mindestbestellwert {amount})",
+    "amountOffGeneric": "einen Sonderrabatt"
   },
   "VendorPromoCodesPage": {
     "promoCodes": "Rabattcodes",
@@ -1335,7 +1344,16 @@
     "backToAdminDashboard": "Zurück zum Admin-Dashboard",
     "restaurantApproved": "Restaurant genehmigt",
     "couldNotApproveRestaurant": "Restaurant konnte nicht genehmigt werden",
-    "approveRestaurant": "Restaurant genehmigen"
+    "approveRestaurant": "Restaurant genehmigen",
+    "automatedVerification": "Automatisierte Überprüfung",
+    "verificationStatus": {
+      "not_attempted": "Nicht automatisch überprüft",
+      "verified": "Automatisch überprüft",
+      "mismatch": "Automatische Überprüfung fehlgeschlagen"
+    },
+    "checkedAt": "Geprüft am {date}",
+    "registeredName": "Eingetragener Name",
+    "registeredAddress": "Eingetragene Adresse"
   },
   "AdminStoreReviewPage": {
     "sunday": "Sonntag",
@@ -1376,7 +1394,16 @@
     "backToAdminDashboard": "Zurück zum Admin-Dashboard",
     "storeApproved": "Shop genehmigt",
     "couldNotApproveStore": "Shop konnte nicht genehmigt werden",
-    "approveStore": "Shop genehmigen"
+    "approveStore": "Shop genehmigen",
+    "automatedVerification": "Automatisierte Überprüfung",
+    "verificationStatus": {
+      "not_attempted": "Nicht automatisch überprüft",
+      "verified": "Automatisch überprüft",
+      "mismatch": "Automatische Überprüfung fehlgeschlagen"
+    },
+    "checkedAt": "Geprüft am {date}",
+    "registeredName": "Eingetragener Name",
+    "registeredAddress": "Eingetragene Adresse"
   },
   "AdminRiderReviewPage": {
     "riderNotFound": "Fahrer nicht gefunden",

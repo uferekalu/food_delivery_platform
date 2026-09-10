@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { StoreCard, BasketIcon, PillIcon } from "@/components/store-card";
+import { PromoBanner } from "@/components/promo-banner";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useListStoresQuery } from "@/lib/redux/services/stores-api";
 import type { StoreType } from "@/lib/redux/restaurant-types";
@@ -256,6 +257,10 @@ function CategoriesContent() {
 
   return (
     <Container className="flex flex-col gap-6 py-10">
+      {/* Platform-wide promo codes (docs/ROADMAP.md FDP-116) — see the homepage's identical
+          placement for the full reasoning. */}
+      <PromoBanner />
+
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-text">{t("categories")}</h1>
         <p className="text-text-muted">{t("everythingInOnePlace")}</p>

@@ -162,8 +162,11 @@ export class PromoCodesService {
       }
       // .toObject() (not the hydrated document directly) so the plain `createdAt`/`updatedAt`
       // fields Mongoose adds for `{ timestamps: true }` are included without the PromoCode class
-      // needing to declare them itself.
-      return { ...promo.toObject(), scope } as PromoCodeAdminView;
+      // needing to declare them itself. Cast through `unknown` first — a Mongoose typings update
+      // (unrelated to this ticket) made `toObject()`'s inferred return type no longer
+      // structurally overlap enough for a direct `as` here, even though the fields really are
+      // present at runtime.
+      return { ...promo.toObject(), scope } as unknown as PromoCodeAdminView;
     });
   }
 
@@ -194,6 +197,37 @@ export class PromoCodesService {
             ],
           },
           { $or: [{ restaurantId: null, storeId: null }, sellerFilter] },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  /**
+   * Every currently-usable *platform-wide* code — powers the general marketplace-browsing promo
+   * banner (homepage, the all-restaurants listing, the groceries/pharmacy category pages —
+   * docs/ROADMAP.md FDP-116) for a customer who hasn't drilled into one specific restaurant/store
+   * yet, so `findActiveForSeller`'s seller-scoped codes don't apply. Same eligibility rules as
+   * `findActiveForSeller`, just without a seller filter, and deliberately excludes any
+   * restaurant/store-scoped code — those only make sense once a customer is actually looking at
+   * that business, which `findActiveForSeller` already covers on the restaurant/store page
+   * itself.
+   */
+  async findActivePlatformWide(): Promise<PromoCodeDocument[]> {
+    const now = new Date();
+    return this.promoCodeModel
+      .find({
+        isActive: true,
+        restaurantId: null,
+        storeId: null,
+        $and: [
+          { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+          {
+            $or: [
+              { usageLimit: null },
+              { $expr: { $lt: ['$usedCount', '$usageLimit'] } },
+            ],
+          },
         ],
       })
       .sort({ createdAt: -1 })

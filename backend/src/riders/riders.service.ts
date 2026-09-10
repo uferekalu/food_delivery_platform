@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { Model, QueryFilter } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { Rider, RiderDocument } from './schemas/rider.schema';
@@ -172,7 +172,7 @@ export class RidersService {
    * `NotFoundException` this whole rewrite exists to avoid.
    */
   private async applyPayoutAccountUpdate(
-    filter: FilterQuery<RiderDocument>,
+    filter: QueryFilter<RiderDocument>,
     provider: PaymentProvider,
     status: PayoutAccountStatus,
     reference: string,

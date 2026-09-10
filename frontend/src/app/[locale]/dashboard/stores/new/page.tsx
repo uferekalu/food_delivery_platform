@@ -47,7 +47,14 @@ function NewStoreForm() {
           setError(null);
           try {
             const store = await createStore(input).unwrap();
-            toast({ title: t("storeCreated"), description: t("pendingAdminApproval"), variant: "success" });
+            toast({
+              title: t("storeCreated"),
+              description:
+                store.businessVerification.status === "verified"
+                  ? t("autoVerifiedPendingCatalog")
+                  : t("pendingAdminApproval"),
+              variant: "success",
+            });
             router.push(`/dashboard/stores/${store._id}`);
           } catch (err) {
             setError(getErrorMessage(err, t("couldNotCreateStore")));

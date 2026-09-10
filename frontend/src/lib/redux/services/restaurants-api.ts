@@ -41,6 +41,8 @@ export interface RestaurantInput {
   // Business registration proof (docs/ROADMAP.md FDP-60) — required by the backend at creation,
   // hence not optional here even though UpdateRestaurantInput below loosens every field.
   complianceDocumentUrl: string;
+  // Automated business verification (docs/ROADMAP.md FDP-115) — also required at creation.
+  businessRegistrationNumber: string;
 }
 
 export interface UpdateRestaurantInput extends Partial<RestaurantInput> {
@@ -140,6 +142,19 @@ export const restaurantsApi = api.injectEndpoints({
           ? [...result.map((r) => ({ type: "Restaurant" as const, id: r._id })), { type: "Restaurant" as const, id: "PENDING" }]
           : [{ type: "Restaurant", id: "PENDING" }],
     }),
+
+    // Admin-only, unfiltered by approval status (docs/ROADMAP.md FDP-116) — for pickers that must
+    // be able to target ANY restaurant, e.g. scoping an admin-created promo code to one that's
+    // still awaiting approval. `listRestaurants` above is public and approval-filtered, which was
+    // a real bug: the admin promo-code scope picker used it and came up empty for any restaurant
+    // not yet approved.
+    listAllRestaurantsForAdmin: builder.query<Restaurant[], void>({
+      query: () => "/restaurants/admin",
+      providesTags: (result) =>
+        result
+          ? [...result.map((r) => ({ type: "Restaurant" as const, id: r._id })), { type: "Restaurant" as const, id: "LIST" }]
+          : [{ type: "Restaurant", id: "LIST" }],
+    }),
   }),
 });
 
@@ -154,4 +169,5 @@ export const {
   useToggleRestaurantOpenMutation,
   useApproveRestaurantMutation,
   useListPendingRestaurantsQuery,
+  useListAllRestaurantsForAdminQuery,
 } = restaurantsApi;

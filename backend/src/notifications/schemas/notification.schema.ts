@@ -20,6 +20,10 @@ export const NOTIFICATION_TYPES = [
   'support_ticket_created',
   'new_vendor_message',
   'new_admin_message',
+  // Automated business verification (docs/ROADMAP.md FDP-115).
+  'business_verification_passed',
+  'business_verification_needs_review',
+  'business_auto_listed',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

@@ -45,6 +45,7 @@ interface FormInput {
   description?: string;
   type: StoreType;
   tagsRaw?: string;
+  businessRegistrationNumber: string;
   currency: string;
   country: string;
   line1: string;
@@ -87,6 +88,7 @@ export function StoreForm({
     description: z.string().max(2000).optional(),
     type: z.enum(STORE_TYPES),
     tagsRaw: z.string().optional(),
+    businessRegistrationNumber: z.string().min(4, t("registrationNumberTooShort")).max(30),
     currency: z.string().length(3, t("threeLetterCode")),
     country: z.string().min(2).max(100),
     line1: z.string().min(1, t("required")),
@@ -162,6 +164,7 @@ export function StoreForm({
       openingHours: hours,
       estimatedDeliveryMinutes: values.estimatedDeliveryMinutes,
       complianceDocumentUrl,
+      businessRegistrationNumber: values.businessRegistrationNumber,
       ...(logoUrl ? { logoUrl } : {}),
       ...(coverUrl ? { coverUrl } : {}),
     });
@@ -203,6 +206,14 @@ export function StoreForm({
       </FormField>
       <FormField label={t("tags")} hint={t("tagsHint")} error={errors.tagsRaw?.message}>
         <Input {...register("tagsRaw")} />
+      </FormField>
+      <FormField
+        label={t("businessRegistrationNumber")}
+        hint={t("businessRegistrationNumberHint")}
+        error={errors.businessRegistrationNumber?.message}
+        required
+      >
+        <Input placeholder="RC1234567" {...register("businessRegistrationNumber")} />
       </FormField>
 
       <div className="grid gap-5 sm:grid-cols-2">

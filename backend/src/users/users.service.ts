@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -41,6 +43,15 @@ export class UsersService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(RefreshToken.name)
     private readonly refreshTokenModel: Model<RefreshTokenDocument>,
+    // forwardRef here (docs/ROADMAP.md FDP-115) — RestaurantsModule now imports NotificationsModule
+    // (for the automated-verification vendor notification), and NotificationsModule imports
+    // UsersModule, which imports RestaurantsModule — a genuine 3-module cycle:
+    // UsersModule -> RestaurantsModule -> NotificationsModule -> UsersModule. Without this,
+    // TypeScript's emitted `design:paramtypes` for this parameter can literally be `undefined`
+    // depending on which file Node happens to require first (a real, order-dependent breakage —
+    // caught by reviews.service.spec.ts, which constructs every one of these services together in
+    // one flat providers array).
+    @Inject(forwardRef(() => RestaurantsService))
     private readonly restaurantsService: RestaurantsService,
   ) {}
 

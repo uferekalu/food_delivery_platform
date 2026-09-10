@@ -17,6 +17,7 @@ import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { RidersService } from '../riders/riders.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
 import {
   Order,
   OrderDocument,
@@ -115,6 +116,16 @@ describe('ReviewsService', () => {
           provide: NotificationsService,
           useValue: { notify: jest.fn().mockResolvedValue(undefined) },
         },
+        {
+          // Not exercised by this suite (docs/ROADMAP.md FDP-115) — a bare no-op mock.
+          provide: BusinessVerificationService,
+          useValue: {
+            verifyBusinessRegistration: jest.fn().mockResolvedValue({
+              outcome: 'unknown',
+              reason: 'not configured',
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -158,6 +169,7 @@ describe('ReviewsService', () => {
       country: 'Nigeria',
       address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
       complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
     });
     return restaurantsService.approve(restaurant._id.toString());
   }
