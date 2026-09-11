@@ -96,59 +96,47 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
           menu.map((category) => (
             <div key={category._id} className="flex flex-col gap-3">
               <h3 className="text-lg font-semibold text-text">{category.name}</h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 {category.items
                   .filter((item) => item.isAvailable)
                   .map((item) => (
-                    <div key={item._id} className="flex flex-col gap-3 overflow-hidden rounded-lg border border-border">
+                    <div
+                      key={item._id}
+                      className="flex h-full flex-col overflow-hidden rounded-lg border border-border transition-shadow duration-150 hover:border-border-strong hover:shadow-md"
+                    >
                       {item.imageUrl && (
                         // A menu item photo doesn't warrant next/image's layout machinery here.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.imageUrl} alt="" className="h-40 w-full object-cover" />
+                        <img src={item.imageUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
                       )}
-                      <div className="flex flex-col gap-3 p-4 pt-0 first:pt-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium text-text">{item.name}</span>
-                            {item.description && <span className="text-sm text-text-muted">{item.description}</span>}
-                          </div>
-                          <span className="flex shrink-0 flex-col items-end gap-1">
-                            {item.discountedPrice != null ? (
-                              <>
-                                <span className="text-xs text-text-muted line-through">
-                                  {formatMoney(item.price, restaurant.currency, locale)}
-                                </span>
-                                <span className="font-semibold text-danger">
-                                  {formatMoney(item.discountedPrice, restaurant.currency, locale)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="font-semibold text-text">
-                                {formatMoney(item.price, restaurant.currency, locale)}
-                              </span>
-                            )}
-                          </span>
+                      <div className="flex flex-1 flex-col gap-2 p-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="line-clamp-2 text-sm font-medium text-text">{item.name}</span>
+                          {item.description && (
+                            <span className="line-clamp-1 text-xs text-text-muted">{item.description}</span>
+                          )}
                         </div>
-                        {item.modifierGroups.length > 0 && (
-                          <div className="flex flex-col gap-1 border-t border-border pt-2">
-                            {item.modifierGroups.map((group) => (
-                              <div key={group.name} className="text-xs text-text-muted">
-                                <span className="font-medium text-text">{group.name}</span>
-                                {group.min > 0 && <span> ({t("required")})</span>}
-                                {": "}
-                                {group.options
-                                  .map((option) =>
-                                    option.priceDelta > 0
-                                      ? `${option.name} (+${formatMoney(option.priceDelta, restaurant.currency, locale)})`
-                                      : option.name,
-                                  )
-                                  .join(", ")}
-                              </div>
-                            ))}
+                        {item.discountedPrice != null ? (
+                          <div className="flex flex-wrap items-baseline gap-1.5">
+                            <span className="text-sm font-semibold text-danger">
+                              {formatMoney(item.discountedPrice, restaurant.currency, locale)}
+                            </span>
+                            <span className="text-xs text-text-muted line-through">
+                              {formatMoney(item.price, restaurant.currency, locale)}
+                            </span>
                           </div>
+                        ) : (
+                          <span className="text-sm font-semibold text-text">
+                            {formatMoney(item.price, restaurant.currency, locale)}
+                          </span>
                         )}
                         {isOpenNow && (
-                          <Button variant="outline" size="sm" className="self-start" onClick={() => setActiveItem(item)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-auto w-full"
+                            onClick={() => setActiveItem(item)}
+                          >
                             {t("addToCart")}
                           </Button>
                         )}
