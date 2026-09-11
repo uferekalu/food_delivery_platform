@@ -118,13 +118,25 @@ export class RestaurantsService {
         $ne: null,
       };
     }
-    const sort = SORT_SPECS[query.sort ?? 'newest'];
+    // Sponsored listings (docs/ROADMAP.md FDP-124) — isSponsored always leads the sort, so a
+    // currently-sponsored restaurant floats to the top of every listing regardless of the
+    // requested sort, with the normal sort order still applying as the tiebreaker within each
+    // group (sponsored vs. not) — the same "sponsored slots always on top" behavior Glovo/
+    // Chowdeck use, not a real-time auction, just a config-table-driven boost.
+    const sort = {
+      isSponsored: -1 as const,
+      ...SORT_SPECS[query.sort ?? 'newest'],
+    };
     if (query.sort === 'delivery_time' && !filter.estimatedDeliveryMinutes) {
       // Same reasoning as above: sorting by a field that's null for most restaurants would put
       // them first (MongoDB sorts null/missing ahead of numbers in ascending order) — excluding
       // them keeps the sorted list actually meaningful.
       filter.estimatedDeliveryMinutes = { $exists: true, $ne: null };
     }
+    // Powers the homepage's sponsored carousel (docs/ROADMAP.md FDP-124) — reuses this same
+    // endpoint rather than a parallel one, matching PromoCodesController.findActive's own
+    // precedent of branching on a query param instead of adding a new route.
+    if (query.sponsoredOnly) filter.isSponsored = true;
 
     const [items, total] = await Promise.all([
       this.restaurantModel
@@ -612,6 +624,25 @@ export class RestaurantsService {
   ): Promise<void> {
     await this.restaurantModel
       .updateOne({ _id: restaurantId }, { avgRating, reviewCount })
+      .exec();
+  }
+
+  /**
+   * Sponsored listings (docs/ROADMAP.md FDP-124) — the only writer of `sponsoredUntil`/
+   * `isSponsored` outside the schema's own defaults; called exclusively from
+   * AdCampaignsService's payment-success handler and its daily lifecycle sweep, never from a
+   * user-facing route, so no ownership check here (mirrors
+   * setPayoutAccountFromWebhook's identical "authenticity comes from the caller, not a
+   * requester" reasoning). A direct `updateOne`, not load-then-`.save()`, for the same
+   * "don't revalidate the entire document for an unrelated field" reasoning
+   * `applyPayoutAccountUpdate`'s doc comment already documents.
+   */
+  async setSponsorship(id: string, sponsoredUntil: Date | null): Promise<void> {
+    await this.restaurantModel
+      .updateOne(
+        { _id: id },
+        { $set: { sponsoredUntil, isSponsored: sponsoredUntil !== null } },
+      )
       .exec();
   }
 

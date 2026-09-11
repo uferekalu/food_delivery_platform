@@ -24,6 +24,11 @@ export const NOTIFICATION_TYPES = [
   'business_verification_passed',
   'business_verification_needs_review',
   'business_auto_listed',
+  // Sponsored-listing ad campaigns (docs/ROADMAP.md FDP-124).
+  'ad_campaign_created',
+  'ad_campaign_payment_failed',
+  'ad_campaign_active',
+  'ad_campaign_ended',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

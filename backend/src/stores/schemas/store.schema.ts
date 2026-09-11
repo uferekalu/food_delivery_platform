@@ -106,6 +106,14 @@ export class Store {
   // A static owner-set estimate, same reasoning as Restaurant.estimatedDeliveryMinutes.
   @Prop({ type: Number, default: null, min: 0 })
   estimatedDeliveryMinutes: number | null;
+
+  // Sponsored listings (docs/ROADMAP.md FDP-124) — mirrors Restaurant.sponsoredUntil/isSponsored
+  // exactly, see that schema's doc comment for the full denormalization reasoning.
+  @Prop({ type: Date, default: null })
+  sponsoredUntil: Date | null;
+
+  @Prop({ type: Boolean, default: false, index: true })
+  isSponsored: boolean;
 }
 
 export type StoreDocument = HydratedDocument<Store>;
@@ -114,5 +122,7 @@ export const StoreSchema = SchemaFactory.createForClass(Store);
 // reasoning as RestaurantSchema.
 StoreSchema.index({ isApproved: 1, type: 1, avgRating: -1 });
 StoreSchema.index({ isApproved: 1, type: 1, createdAt: -1 });
+// Sponsored listings (docs/ROADMAP.md FDP-124) — see Restaurant's identical index comment.
+StoreSchema.index({ isApproved: 1, type: 1, isSponsored: -1, createdAt: -1 });
 // "Near me" (docs/ROADMAP.md FDP-96) — same reasoning as RestaurantSchema's equivalent index.
 StoreSchema.index({ 'address.location': '2dsphere' });

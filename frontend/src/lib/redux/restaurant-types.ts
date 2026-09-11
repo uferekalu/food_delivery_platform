@@ -78,6 +78,10 @@ export interface Restaurant {
   priceLevel: number;
   estimatedDeliveryMinutes: number | null;
   payoutAccounts: PayoutAccount[];
+  /** Sponsored listings (docs/ROADMAP.md FDP-124) — non-null while an ad campaign is currently
+   * active for this restaurant. `isSponsored` is the field to actually check/sort on. */
+  sponsoredUntil: string | null;
+  isSponsored: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,6 +124,9 @@ export interface Store {
   reviewCount: number;
   estimatedDeliveryMinutes: number | null;
   payoutAccounts: PayoutAccount[];
+  /** Sponsored listings (docs/ROADMAP.md FDP-124) — see Restaurant's identical fields. */
+  sponsoredUntil: string | null;
+  isSponsored: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -406,6 +413,50 @@ export interface PromoCode {
   usedCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// Sponsored-listing ad campaigns (docs/ROADMAP.md FDP-124).
+export const AD_CAMPAIGN_STATUSES = [
+  "pending_payment",
+  "scheduled",
+  "active",
+  "ended",
+  "cancelled",
+] as const;
+export type AdCampaignStatus = (typeof AD_CAMPAIGN_STATUSES)[number];
+
+export const AD_CAMPAIGN_PAYMENT_STATUSES = ["pending", "succeeded", "failed"] as const;
+export type AdCampaignPaymentStatus = (typeof AD_CAMPAIGN_PAYMENT_STATUSES)[number];
+
+export type AdCampaignVendor =
+  | { type: "restaurant"; id: string; name: string }
+  | { type: "store"; id: string; name: string };
+
+export interface AdCampaign {
+  _id: string;
+  restaurantId: string | null;
+  storeId: string | null;
+  status: AdCampaignStatus;
+  paymentStatus: AdCampaignPaymentStatus;
+  startDate: string;
+  endDate: string;
+  durationDays: number;
+  currency: string;
+  dailyRate: number;
+  totalPrice: number;
+  priceOverridden: boolean;
+  paymentProvider: PaymentProvider | null;
+  markedPaidManually: boolean;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  adminNotes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Admin's full list view — same fields as AdCampaign, plus the resolved vendor display.
+export interface AdminAdCampaign extends AdCampaign {
+  vendor: AdCampaignVendor;
 }
 
 export interface AdminUser {

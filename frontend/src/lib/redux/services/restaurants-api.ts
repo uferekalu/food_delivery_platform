@@ -17,6 +17,9 @@ export interface ListRestaurantsParams {
   sort?: RestaurantSort;
   page?: number;
   limit?: number;
+  /** Only currently-sponsored restaurants (docs/ROADMAP.md FDP-124) — powers the homepage
+   * sponsored carousel. */
+  sponsoredOnly?: boolean;
 }
 
 // "Restaurants near me" (docs/ROADMAP.md FDP-96).
@@ -50,7 +53,9 @@ export interface UpdateRestaurantInput extends Partial<RestaurantInput> {
   coverUrl?: string;
 }
 
-function toQueryString(params: Record<string, string | number | undefined>): string {
+function toQueryString(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") search.set(key, String(value));

@@ -187,6 +187,60 @@ describe('StoresService', () => {
       });
       expect(result.total).toBe(1);
     });
+
+    describe('sponsored listings (docs/ROADMAP.md FDP-124)', () => {
+      async function createApprovedSponsored(name: string, sponsored: boolean) {
+        const created = await createApproved({ name, type: 'groceries' });
+        await storeModel
+          .updateOne(
+            { _id: created._id },
+            {
+              isSponsored: sponsored,
+              sponsoredUntil: sponsored
+                ? new Date(Date.now() + 86_400_000)
+                : null,
+            },
+          )
+          .exec();
+        return created;
+      }
+
+      it('a sponsored store sorts first regardless of the requested sort', async () => {
+        await createApprovedSponsored('Not Sponsored, Higher Rated', false);
+        const sponsored = await createApprovedSponsored(
+          'Sponsored, Lower Rated',
+          true,
+        );
+        await storeModel
+          .updateOne({ name: 'Not Sponsored, Higher Rated' }, { avgRating: 5 })
+          .exec();
+        await storeModel
+          .updateOne({ _id: sponsored._id }, { avgRating: 1 })
+          .exec();
+
+        const result = await service.findAllApproved({
+          type: 'groceries',
+          sort: 'rating',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.items[0].name).toBe('Sponsored, Lower Rated');
+      });
+
+      it('sponsoredOnly filters out non-sponsored stores entirely', async () => {
+        await createApprovedSponsored('Regular Store', false);
+        await createApprovedSponsored('Boosted Store', true);
+
+        const result = await service.findAllApproved({
+          type: 'groceries',
+          sponsoredOnly: true,
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(1);
+        expect(result.items[0].name).toBe('Boosted Store');
+      });
+    });
   });
 
   describe('findBySlug', () => {

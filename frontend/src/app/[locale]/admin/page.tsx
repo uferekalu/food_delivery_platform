@@ -10,6 +10,7 @@ import { RestaurantsTab } from "./restaurants-tab";
 import { StoresTab } from "./stores-tab";
 import { RidersTab } from "./riders-tab";
 import { PromoCodesTab } from "./promo-codes-tab";
+import { AdCampaignsTab } from "./ad-campaigns-tab";
 import { RefundsTab } from "./refunds-tab";
 import { UsersTab } from "./users-tab";
 import { PayoutsTab } from "./payouts-tab";
@@ -29,6 +30,7 @@ function AdminDashboard() {
         <Tab value="riders">{t("riders")}</Tab>
         <Tab value="users">{t("users")}</Tab>
         <Tab value="promo-codes">{t("promoCodes")}</Tab>
+        <Tab value="ad-campaigns">{t("adCampaigns")}</Tab>
         <Tab value="refunds">{t("refunds")}</Tab>
         <Tab value="payouts">{t("payouts")}</Tab>
         <Tab value="support">{t("support")}</Tab>
@@ -51,6 +53,9 @@ function AdminDashboard() {
       </TabPanel>
       <TabPanel value="promo-codes">
         <PromoCodesTab />
+      </TabPanel>
+      <TabPanel value="ad-campaigns">
+        <AdCampaignsTab />
       </TabPanel>
       <TabPanel value="refunds">
         <RefundsTab />

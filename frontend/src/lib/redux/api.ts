@@ -129,6 +129,7 @@ export const api = createApi({
     "SupportTicket",
     "VendorMessage",
     "VendorConversation",
+    "AdCampaign",
   ],
   endpoints: () => ({}),
 });
