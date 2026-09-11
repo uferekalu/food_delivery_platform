@@ -47,7 +47,12 @@ function useTimeAgo() {
 
 function NotificationRow({ notification, onOpen }: { notification: Notification; onOpen: (n: Notification) => void }) {
   const timeAgo = useTimeAgo();
-  const orderId = typeof notification.metadata.orderId === "string" ? notification.metadata.orderId : null;
+  // Defensive against `metadata` being genuinely absent (docs/ROADMAP.md FDP-127) — a real
+  // production crash: Mongoose's minimize behavior stripped an empty `metadata: {}` down to no
+  // key at all for any notification that never set it (most types), so a notification fetched
+  // before the backend fix (or any future type that still doesn't set metadata) could reach here
+  // with `metadata` genuinely `undefined`, not `{}`, and `.orderId` on that threw uncaught.
+  const orderId = typeof notification.metadata?.orderId === "string" ? notification.metadata.orderId : null;
 
   const body = (
     <div className="flex items-start gap-2">

@@ -32,7 +32,19 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-@Schema({ timestamps: true })
+// `minimize: false` — a real production bug (docs/ROADMAP.md FDP-127): Mongoose's default
+// `minimize: true` strips any empty-object field (`{}`) entirely before persisting AND again
+// before serializing a document to JSON, so the vast majority of notifications (any type that
+// never sets `metadata`, e.g. `business_verification_needs_review` or `ad_campaign_created`) came
+// back from `GET /notifications` with the `metadata` key missing outright, not present as `{}`
+// — contradicting its own `Record<string, unknown>` type (required, not optional) on both sides
+// of the API. The frontend's `NotificationRow`/`NotificationCard` read
+// `notification.metadata.orderId` without a guard, trusting that contract, and crashed the whole
+// page with "Cannot read properties of undefined (reading 'orderId')" the moment a user opened
+// any notification whose metadata had been silently minimized away. `minimize: false` keeps
+// `metadata: {}` in both the stored document and every serialized response, so the field is
+// truthfully always an object, never absent.
+@Schema({ timestamps: true, minimize: false })
 export class Notification {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   userId: Types.ObjectId;

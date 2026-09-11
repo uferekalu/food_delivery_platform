@@ -103,7 +103,16 @@ export function VendorAdCampaignsManager({
   vendorId: string;
 }) {
   const t = useTranslations("VendorAdCampaignsPage");
-  const { data: allMine, isLoading } = useListMyAdCampaignsQuery();
+  // `refetchOnMountOrArgChange` (docs/ROADMAP.md FDP-127) — a real bug: this data can change from
+  // an entirely different session (an admin creating/cancelling a campaign), and there is no
+  // socket push wired up for ad campaigns the way order status has one, so RTK Query's default
+  // cache-until-invalidated behavior meant a vendor who had this page open (or cached from an
+  // earlier visit) before the admin acted kept seeing stale data — most visibly, "No ad campaigns
+  // yet" even after a campaign genuinely existed, with no way to notice short of a hard refresh.
+  // Forces a fresh fetch on every mount instead of trusting whatever was last cached.
+  const { data: allMine, isLoading } = useListMyAdCampaignsQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
   const campaigns = (allMine ?? []).filter((c) =>
     vendorType === "restaurant" ? c.restaurantId === vendorId : c.storeId === vendorId,
   );
