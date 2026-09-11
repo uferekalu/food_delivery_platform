@@ -92,6 +92,12 @@ function MyRestaurantsList() {
                   {t("promoCodes")}
                 </Link>
                 <Link
+                  href={`/dashboard/restaurants/${restaurant._id}/advertise`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  {t("advertise")}
+                </Link>
+                <Link
                   href={`/dashboard/restaurants/${restaurant._id}/earnings`}
                   className={buttonVariants({ variant: "outline", size: "sm" })}
                 >

@@ -665,7 +665,8 @@
     "salesReport": "Sales report",
     "close": "Close",
     "alsoSellGroceriesOrPharmacy": "Also want to sell groceries or pharmacy items?",
-    "addAStore": "Add a store"
+    "addAStore": "Add a store",
+    "advertise": "Advertise"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Add a restaurant",
@@ -810,7 +811,8 @@
     "salesReport": "Sales report",
     "close": "Close",
     "alsoRunARestaurant": "Also run a restaurant?",
-    "addRestaurant": "Add a restaurant"
+    "addRestaurant": "Add a restaurant",
+    "advertise": "Advertise"
   },
   "StoreEarningsPage": {
     "storeNotFound": "Store not found",
@@ -1780,5 +1782,36 @@
     "markPaid": "Mark paid",
     "markedPaid": "Campaign marked as paid and activated",
     "couldNotMarkPaid": "Couldn't mark campaign as paid"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "My ad campaigns",
+    "description": "Our team sets up sponsored placements to help customers discover your business. Pay to activate a campaign and it goes live as a Sponsored listing across the marketplace.",
+    "noCampaignsYet": "No ad campaigns yet",
+    "adminCreatesDescription": "Our team will reach out when a sponsored-placement opportunity is set up for you.",
+    "status_pending_payment": "Awaiting payment",
+    "status_scheduled": "Scheduled",
+    "status_active": "Live",
+    "status_ended": "Ended",
+    "status_cancelled": "Cancelled",
+    "paymentFailed": "Payment failed — try again",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "Pay now to activate this campaign",
+    "cancelReasonLabel": "Reason: {reason}",
+    "payNow": "Pay now",
+    "couldNotStartPayment": "Couldn't start payment",
+    "liveBanner": "This campaign is live — you're showing as Sponsored"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "Confirming your payment…",
+    "confirmingPaymentLabel": "Confirming payment",
+    "usuallyTakesAFewSeconds": "This usually takes a few seconds.",
+    "paymentNotCompleted": "Payment not completed",
+    "paymentCancelledOrFailed": "The payment was cancelled or didn't go through.",
+    "campaignActivated": "Your ad campaign is active",
+    "campaignActivatedDescription": "Your business is now showing as Sponsored across the marketplace.",
+    "backToMyCampaigns": "Back to my ad campaigns",
+    "checkAgain": "Check again",
+    "couldNotLoadCampaign": "Couldn't load this ad campaign",
+    "loading": "Loading…"
   }
 }

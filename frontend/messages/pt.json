@@ -665,7 +665,8 @@
     "salesReport": "Relatório de vendas",
     "close": "Fechar",
     "alsoSellGroceriesOrPharmacy": "Também quer vender produtos de mercearia ou farmácia?",
-    "addAStore": "Adicionar uma loja"
+    "addAStore": "Adicionar uma loja",
+    "advertise": "Anunciar"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Adicionar um restaurante",
@@ -810,7 +811,8 @@
     "salesReport": "Relatório de vendas",
     "close": "Fechar",
     "alsoRunARestaurant": "Também administra um restaurante?",
-    "addRestaurant": "Adicionar um restaurante"
+    "addRestaurant": "Adicionar um restaurante",
+    "advertise": "Anunciar"
   },
   "StoreEarningsPage": {
     "storeNotFound": "Loja não encontrada",
@@ -1780,5 +1782,36 @@
     "markPaid": "Marcar como pago",
     "markedPaid": "Campanha marcada como paga e ativada",
     "couldNotMarkPaid": "Não foi possível marcar a campanha como paga"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "Minhas campanhas publicitárias",
+    "description": "Nossa equipe configura posicionamentos patrocinados para ajudar os clientes a descobrir seu negócio. Pague para ativar uma campanha e ela entrará no ar como um anúncio patrocinado em todo o marketplace.",
+    "noCampaignsYet": "Ainda não há campanhas publicitárias",
+    "adminCreatesDescription": "Nossa equipe entrará em contato quando uma oportunidade de posicionamento patrocinado for configurada para você.",
+    "status_pending_payment": "Pagamento pendente",
+    "status_scheduled": "Agendada",
+    "status_active": "Ao vivo",
+    "status_ended": "Encerrada",
+    "status_cancelled": "Cancelada",
+    "paymentFailed": "Pagamento falhou — tente novamente",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "Pague agora para ativar esta campanha",
+    "cancelReasonLabel": "Motivo: {reason}",
+    "payNow": "Pagar agora",
+    "couldNotStartPayment": "Não foi possível iniciar o pagamento",
+    "liveBanner": "Esta campanha está ao vivo — você aparece como patrocinado"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "Confirmando seu pagamento…",
+    "confirmingPaymentLabel": "Confirmando pagamento",
+    "usuallyTakesAFewSeconds": "Isso geralmente leva alguns segundos.",
+    "paymentNotCompleted": "Pagamento não concluído",
+    "paymentCancelledOrFailed": "O pagamento foi cancelado ou não foi concluído.",
+    "campaignActivated": "Sua campanha publicitária está ativa",
+    "campaignActivatedDescription": "Seu negócio agora aparece como patrocinado em todo o marketplace.",
+    "backToMyCampaigns": "Voltar para minhas campanhas publicitárias",
+    "checkAgain": "Verificar novamente",
+    "couldNotLoadCampaign": "Não foi possível carregar esta campanha publicitária",
+    "loading": "Carregando…"
   }
 }
