@@ -58,7 +58,9 @@ function formatDateTime(iso: string): string {
 
 function NotificationCard({ notification, onMarkRead }: { notification: Notification; onMarkRead: (id: string) => void }) {
   const t = useTranslations("NotificationsPage");
-  const orderId = typeof notification.metadata.orderId === "string" ? notification.metadata.orderId : null;
+  // Defensive against `metadata` being genuinely absent — see NotificationRow's identical guard
+  // in notification-bell.tsx for the full reasoning (docs/ROADMAP.md FDP-127).
+  const orderId = typeof notification.metadata?.orderId === "string" ? notification.metadata.orderId : null;
 
   return (
     <Card className={cn(!notification.isRead && "border-primary")}>

@@ -2730,3 +2730,98 @@ to the top regardless of rating/price/newest) plus a dedicated homepage rail —
 Glovo/Chowdeck's own sponsored-listing ad products use, built entirely by reusing this app's
 existing payment-adapter, cron, denormalization, and carousel patterns rather than introducing new
 ones.
+
+## 49. Two real bugs from live-testing the ad-campaigns epic (docs/ROADMAP.md FDP-127)
+
+The user live-tested FDP-124/125/126 on the deployed app and found two real bugs. Both were
+reproduced first, against a real local backend with real seeded data, before writing a single
+line of fix — guessing at either of these from the symptom alone would very likely have led
+somewhere wrong, and did initially: the first instinct on bug (1) was that the crash lived
+somewhere in the new ad-campaigns code, since it was ad-campaign notifications that triggered it.
+Reproducing it live showed otherwise.
+
+### Bug 1: opening any metadata-less notification crashed the page
+
+**Symptom**: clicking a notification threw `Uncaught TypeError: Cannot read properties of
+undefined (reading 'orderId')`, taking down the whole page.
+
+**Root cause, found by reproduction, not guesswork**: `notification-bell.tsx` and
+`notifications/page.tsx` both read `notification.metadata.orderId` with no guard on `metadata`
+itself, trusting the schema's own documented type — `metadata: Record<string, unknown>`, required,
+never optional. That contract was false. Mongoose's default `minimize: true` strips any
+*empty-object* field (`{}`) entirely, both before persisting a document AND again before
+serializing one to JSON — so `NotificationsService.notify()`'s `metadata: input.metadata ?? {}`
+faithfully computed `{}` for any notification whose caller never passed real metadata, but Mongoose
+silently dropped that `{}` before it ever reached MongoDB. A direct query against the raw
+collection (bypassing Mongoose entirely) confirmed it: the stored documents had no `metadata` key
+at all, not even `{}`. This affected the clear majority of notification types in this codebase —
+`business_verification_needs_review`, `business_verification_passed`, `business_auto_listed`, and
+all four new `ad_campaign_*` types never set metadata — meaning this exact crash has been a latent,
+dormant bug since long before this session's ad-campaigns work, just never triggered because those
+notification types hadn't been clicked through in a way that surfaced it until now.
+
+**Fix, both ends**:
+- **Schema** (`backend/src/notifications/schemas/notification.schema.ts`): `@Schema({ timestamps:
+  true, minimize: false })`. `metadata: {}` is now truthfully persisted and truthfully serialized
+  for every notification going forward, closing the root cause.
+- **Frontend, defensively, regardless of the backend fix** (`notification-bell.tsx`,
+  `notifications/page.tsx`): `notification.metadata?.orderId` instead of
+  `notification.metadata.orderId`. Necessary even after the schema fix, since every notification
+  already persisted in a real production database before this fix still has the key missing —
+  `minimize: false` only changes behavior for documents written after the fix deploys, it doesn't
+  retroactively repair existing ones. The frontend `Notification` type's `metadata` field was
+  changed from required to optional (`metadata?: Record<string, unknown>`) to make this a real,
+  checked contract rather than a silently-violated one.
+- **Also fixed in passing**: the frontend's `NotificationType` union had drifted to only 4 of the
+  backend's real ~19 values (`order_placed`/`order_status`/`new_order`/`payment_failed` only) —
+  brought back in sync with `NOTIFICATION_TYPES` in the backend schema. This wasn't itself causing
+  the crash (TypeScript types are erased at runtime), but it's a real, adjacent staleness worth
+  closing while already in this file.
+
+**Verified by reproduction, not just by reasoning**: a throwaway Playwright script logged in as a
+real vendor, opened the notification panel, and clicked the ad-campaign notification — confirmed
+the exact crash and stack trace (`at NotificationRow (...)`) pre-fix, then confirmed zero crashes
+clicking through all 4 real notifications in the panel post-fix, with a screenshot of the panel
+rendering cleanly.
+
+### Bug 2: a vendor's Advertise page showed no campaign that genuinely existed
+
+**Symptom**: admin creates a campaign for a restaurant; the vendor's own `/dashboard/restaurants/
+[id]/advertise` page shows "No ad campaigns yet" regardless.
+
+**Root cause, confirmed by a real before/after reproduction**: `VendorAdCampaignsManager`'s
+`useListMyAdCampaignsQuery()` and `AdCampaignsTab`'s `useListAdCampaignsQuery()` both used RTK
+Query's defaults — no `refetchOnMountOrArgChange`, no polling, no cache-busting of any kind. That's
+correct for data only the *current* user's own actions can change (their cart, their own orders,
+where a mutation's `invalidatesTags` closes the loop within the same session). It's wrong for
+`GET /ad-campaigns/mine`: this data can change because of an *admin's* action in a completely
+different browser session, and — unlike orders, which have a real `order:statusChanged` socket
+event — there is no realtime push wired up for ad campaigns at all. A vendor who loaded the
+Advertise page even once before the admin acted (or whose cache simply hadn't been garbage
+collected, RTK Query's `keepUnusedDataFor` default is 60 seconds of no subscribers) would keep
+seeing the stale, empty result indefinitely, with no way to notice short of a hard page reload.
+
+Reproduced precisely: loaded the Advertise page for a restaurant with zero campaigns (caching the
+empty array), created a campaign for that exact restaurant via a raw HTTP call from Node —
+deliberately outside the browser, to simulate the admin's genuinely separate session — then
+client-side-navigated away and back to the same page in the *same* browser tab (same RTK Query
+store, no full reload). Confirmed the stale "No ad campaigns yet" state reproduced exactly as
+reported, then confirmed the fix resolves it in the identical scenario.
+
+**Fix**: `refetchOnMountOrArgChange: true` on both query calls — `VendorAdCampaignsManager`
+(`frontend/src/components/vendor-ad-campaigns-manager.tsx`) and `AdCampaignsTab`
+(`frontend/src/app/[locale]/admin/ad-campaigns-tab.tsx`, same cross-session gap in the other
+direction: a vendor's webhook-driven payment can change a campaign's status while an admin has the
+tab open). Forces a fresh network fetch every time either component mounts, rather than trusting
+whatever was last cached — the correct fix given no realtime alternative exists for this data path,
+and a proportionate one given how infrequently either page is actually visited (no polling needed,
+just "always check on arrival").
+
+### Testing
+
+No new automated tests this ticket — both bugs were behavioral/integration issues (a serialization
+side effect, a cross-session cache-staleness gap) that a unit test in isolation wouldn't have
+caught with any more confidence than the live Playwright reproductions already provided, and both
+reproductions are preserved in this write-up as the record of what was actually verified. Full
+backend suite (685/685 across 45 suites) confirmed still green after the schema change;
+`tsc --noEmit`/`eslint`/production `build` clean on both sides after both fixes.

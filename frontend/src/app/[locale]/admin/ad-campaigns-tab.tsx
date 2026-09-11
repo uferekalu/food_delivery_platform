@@ -346,7 +346,13 @@ function CampaignRow({ campaign }: { campaign: AdminAdCampaign }) {
 
 export function AdCampaignsTab() {
   const t = useTranslations("AdminAdCampaignsTab");
-  const { data, isLoading } = useListAdCampaignsQuery();
+  // refetchOnMountOrArgChange (docs/ROADMAP.md FDP-127) — a vendor's payment can flip a
+  // campaign's status via a webhook, a process entirely outside this admin session, with no
+  // socket push to invalidate this cache; same reasoning as
+  // VendorAdCampaignsManager's identical fix.
+  const { data, isLoading } = useListAdCampaignsQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
 
   return (
     <div className="flex flex-col gap-6">

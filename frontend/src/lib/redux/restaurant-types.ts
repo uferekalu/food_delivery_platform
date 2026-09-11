@@ -355,7 +355,34 @@ export interface Review {
 export const NOTIFICATION_CHANNELS = ["inapp", "email", "sms"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
-export type NotificationType = "order_placed" | "order_status" | "new_order" | "payment_failed";
+// Mirrors backend/src/notifications/schemas/notification.schema.ts's NOTIFICATION_TYPES — this
+// had drifted out of sync (only 4 of ~19 real values listed) before docs/ROADMAP.md FDP-127;
+// kept as a plain string union rather than validated against the backend array at build time, so
+// a future backend addition here is a type-annotation update, not a build break, consistent with
+// how this file already treats every other cross-cutting enum.
+export type NotificationType =
+  | "order_placed"
+  | "order_status"
+  | "new_order"
+  | "payment_failed"
+  | "payout_account_changed"
+  | "payout_succeeded"
+  | "payout_failed"
+  | "payout_reconciliation_needed"
+  | "refund_clawback_created"
+  | "refund_reconciliation_needed"
+  | "order_refunded_externally"
+  | "order_dispute_flagged"
+  | "support_ticket_created"
+  | "new_vendor_message"
+  | "new_admin_message"
+  | "business_verification_passed"
+  | "business_verification_needs_review"
+  | "business_auto_listed"
+  | "ad_campaign_created"
+  | "ad_campaign_payment_failed"
+  | "ad_campaign_active"
+  | "ad_campaign_ended";
 
 export interface Notification {
   _id: string;
@@ -365,7 +392,10 @@ export interface Notification {
   body: string;
   isRead: boolean;
   channels: NotificationChannel[];
-  metadata: Record<string, unknown>;
+  // Optional, not just `Record<string, unknown>` (docs/ROADMAP.md FDP-127) — a real notification
+  // predating the backend's `minimize: false` fix can still reach the frontend with this key
+  // genuinely absent, not `{}`; every read site must use `?.`, never assume it's present.
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
