@@ -18,6 +18,9 @@ export interface ListStoresParams {
   sort?: StoreSort;
   page?: number;
   limit?: number;
+  /** Only currently-sponsored stores (docs/ROADMAP.md FDP-124) — powers the homepage sponsored
+   * carousel. */
+  sponsoredOnly?: boolean;
 }
 
 // "Stores near me" (docs/ROADMAP.md FDP-96) — `type` required, same reasoning as
@@ -53,7 +56,9 @@ export interface UpdateStoreInput extends Partial<StoreInput> {
   coverUrl?: string;
 }
 
-function toQueryString(params: Record<string, string | number | undefined>): string {
+function toQueryString(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") search.set(key, String(value));

@@ -2426,3 +2426,177 @@ medium/mobile widths and in dark mode — confirmed 5/3/1 columns, no distortion
 rendering correctly (this grid uses a plain `<img>`, not `next/image`, so no `remotePatterns`
 allowlist issue the way FDP-122's own seed images hit against `res.cloudinary.com`-only). `tsc
 --noEmit`/`eslint`/production `build` clean.
+
+## 46. Sponsored-listing ad campaigns, part 1: backend + admin (docs/ROADMAP.md FDP-124)
+
+New feature, requested directly: admin advertises a vendor (restaurant, grocery, or pharmacy) to
+customers for a period, modeled on Glovo/Chowdeck's boosted/sponsored listings, and the vendor is
+charged for it. This is the first of three tickets — backend + admin management here; vendor-side
+checkout (the actual charging) and the customer-facing "Sponsored" badge/carousel follow as
+FDP-125/126. Designed in plan mode given the scope (new schema, a real billing flow, a new cron
+job, cross-cutting changes to the hottest read path in the app) and one confirmed product decision
+up front: **an already-`active` (paid, live) campaign can never be cancelled early** — it always
+runs to its natural end date; admin can only cancel `pending_payment`/`scheduled` ones.
+
+### Why billing had to be a vendor-completed checkout, not a server-side charge
+
+Confirmed by reading `PaymentsService` in full before designing this: every charge in this app is
+a fresh, redirect-based checkout session (Stripe Checkout / Paystack initialize / Flutterwave
+payment link) — there is no saved/tokenized vendor payment method anywhere in the codebase, and no
+"vendor pays platform" flow existed before this ticket at all (every prior use of the payment
+adapters is customer-pays-for-order). That rules out a silent server-initiated charge. It also
+rules out debiting a vendor's future payout, the other candidate mechanism: `docs/ARCHITECTURE.md`
+§14 already states this platform holds no in-house wallet — a vendor's payout is *computed live*
+from `Order` documents at batch time, not drawn down from a persisted balance, so there is nothing
+to "deduct an ad charge from" without inventing a new balance concept `PayoutClawback` was never
+designed to be (it nets a *refund* against future payouts, a materially different, narrower
+intent). The only mechanism consistent with this app's existing infrastructure: admin creates and
+prices the campaign in a `pending_payment` state, the vendor completes a real checkout to activate
+it (FDP-125), and the campaign's own webhook/verify pipeline is a near-exact structural copy of
+`PaymentsService.initiatePayment`/`handleWebhook`/`verifyPayment` — same `InitiatePaymentParams`
+shape reused as-is (its `orderId`/`orderNumber` fields are opaque strings to every adapter, not
+literally order-specific), same `paymentRefs` array-plus-latest-pointer correlation pattern, same
+cross-provider-mismatch guard, same `paymentStatus` split from the main lifecycle `status` (a
+failed charge attempt only ever flips `paymentStatus: 'failed'`, never blocks a retry — mirrors
+`Order.paymentStatus`/`OrdersService.markPaymentFailed` exactly).
+
+### Schema and lifecycle — `backend/src/ad-campaigns/`
+
+`AdCampaign` (`schemas/ad-campaign.schema.ts`) mirrors `PromoCode`'s `restaurantId: ObjectId|null`
+/ `storeId: ObjectId|null` scoping convention, but unlike a promo code, a campaign is never
+platform-wide — exactly one of the two is always set, enforced in `AdCampaignsService.create()`.
+Fields: `status` (`pending_payment | scheduled | active | ended | cancelled`), a separate
+`paymentStatus` (`pending | succeeded | failed`), `startDate`/`endDate`/`durationDays`, a
+`currency`/`dailyRate`/`totalPrice` snapshot taken at creation time (so a vendor changing their
+listing currency afterward can never retroactively alter an already-quoted price), `paymentRefs`,
+`markedPaidManually`, and admin audit fields (`createdByAdminId`, `cancelReason`, `adminNotes`).
+
+The state machine (`ad-campaign-state-machine.ts`, the same graph-as-data shape as
+`order-state-machine.ts`'s `ORDER_TRANSITIONS`):
+```
+pending_payment -> scheduled | active | cancelled
+scheduled       -> active | cancelled
+active          -> ended
+ended, cancelled: terminal
+```
+`pending_payment -> active` is a real graph edge, not just a `scheduled` detour — when a vendor
+pays for a campaign whose `startDate` has already arrived (a same-day campaign), `markPaid()`
+promotes straight to `active` and denormalizes the vendor's sponsorship immediately, rather than
+making them wait for tomorrow's cron sweep just because they happened to pay today. There is
+deliberately no `payment_failed` node in the graph at all — exactly like `Order`, a failed charge
+only touches the separate `paymentStatus` field, so a retry is just "call `initiateCampaignPayment`
+again while still `pending_payment`," no state-machine edge needed.
+
+**Concurrency safety for "one active-or-pending campaign per vendor":** `create()` does an
+app-level pre-check first (for a clean 400 error message), but the actual guarantee is a partial
+unique index on `restaurantId`/`storeId` filtered to non-terminal statuses — the same
+belt-and-suspenders spirit `PromoCodesService.redeem()`'s `$expr`-guarded `updateOne` already
+uses for a different race, just via an index instead of a filtered update here. A duplicate-key
+error from the index is caught and rethrown as the same friendly `BadRequestException`, so two
+concurrent admin creates for the same vendor can't both succeed even if the pre-check itself loses
+the race.
+
+### Denormalizing sponsorship onto Restaurant/Store, and the nullable-Date sort trap
+
+`Restaurant`/`Store` each gain `sponsoredUntil: Date | null` and `isSponsored: boolean`, written
+only by `AdCampaignsService`'s payment-success handler and its daily lifecycle sweep (via new
+`RestaurantsService.setSponsorship`/`StoresService.setSponsorship`, direct targeted `updateOne`
+calls, not load-then-`.save()` — same "don't revalidate the whole document for one unrelated field"
+reasoning `applyPayoutAccountUpdate`'s existing doc comment already documents). This is a
+deliberate denormalization: `findAllApproved` stays a plain indexed `.find()`/`.sort()`, never a
+live per-request join against the `AdCampaign` collection on the hottest read path in the app.
+
+The sort itself: `{ isSponsored: -1, ...SORT_SPECS[query.sort] }` — sponsored vendors always float
+to the top of every listing regardless of the requested sort (rating/price/newest/etc. still
+apply as the tiebreaker within each group), the same "sponsored slots always on top" behavior
+Glovo/Chowdeck use. This deliberately checks the explicit `isSponsored` boolean, not
+`sponsoredUntil`'s nullability, even though MongoDB's BSON comparison order would make a
+descending sort on a nullable Date put every non-null value before every `null` one "for free."
+The reason: a *populated* `sponsoredUntil` sorts before `null` regardless of whether that date is
+already in the past — relying on it directly would keep an expired-but-not-yet-swept campaign
+floating to the top of search results for up to a full day (the sweep's own granularity), a real
+fairness gap for a paid, customer-visible placement claim that payout batching's "a day's delay
+just delays money arriving" tolerance doesn't excuse. `isSponsored` is flipped by the exact same
+two writers that touch `sponsoredUntil`, so it's never a second source of truth, just an explicit,
+trivially-unit-testable proxy instead of leaning on BSON trivia a future migration could silently
+break. A new `sponsoredOnly` query param on the existing `GET /restaurants`/`GET /stores` (not a
+new endpoint — matches `PromoCodesController.findActive`'s own precedent of branching on a query
+param) filters to `isSponsored: true`, ready for FDP-126's homepage carousel.
+
+### The daily lifecycle sweep
+
+`AdCampaignSchedulerService` (`ad-campaign-scheduler.service.ts`) is a direct copy of
+`PayoutSchedulerService`'s pattern — the only other `@Cron` job anywhere in this codebase —
+using `CronExpression.EVERY_DAY_AT_MIDNIGHT` rather than a literal cron string (unlike
+`PayoutSchedulerService`'s weekly-Monday job, the enum has a daily-midnight preset). `ScheduleModule
+.forRoot()` is already registered globally in `app.module.ts`; this new service is just added to
+`AdCampaignsModule`'s own `providers`, not re-registered. Its body (`AdCampaignsService
+.runLifecycleSweep()`) does two passes — `scheduled→active` where `startDate <= now`, `active→ended`
+where `endDate <= now` — each per-campaign wrapped in its own try/catch so one bad vendor lookup
+can never abort the rest of the sweep, the same defensive posture `PayoutExecutionService
+.runWeeklyBatch`'s own doc comment already establishes. A matching `POST
+/ad-campaigns/run-lifecycle-sweep` admin-only endpoint mirrors `POST /payouts/run-weekly-batch`'s
+existing manual-trigger precedent, for testing/retry rather than waiting for midnight UTC.
+
+### Admin "mark paid manually" — an intentional second path, not just a test shortcut
+
+Alongside the real online-checkout flow (FDP-125), admin can `PATCH /ad-campaigns/:id/mark-paid`
+to record an offline arrangement (a bank transfer, an invoiced deal negotiated outside the app) —
+converges on the exact same `markPaid()` activation logic a real webhook triggers, so there is only
+ever one activation code path regardless of how the money actually moved. This was added as a
+genuine, permanent capability, not a throwaway QA hack: it also happens to be what let this ticket
+be fully verified end-to-end (create → pay → active → sponsored badge on the vendor) before
+FDP-125's real checkout UI exists.
+
+### Module wiring — confirmed non-circular
+
+`AdCampaignsModule` imports `RestaurantsModule`, `StoresModule`, `NotificationsModule`, and
+`PaymentsModule` (for its exported `StripeAdapter`/`PaystackAdapter`/`FlutterwaveAdapter` — the
+same reuse `PayoutsModule` already does, rather than re-instantiating a redundant set of provider
+clients) — all four as plain imports, no `forwardRef`. This is exactly the same import shape
+`PaymentsModule` itself already uses for three of those four modules, and is safe for the identical
+reason: none of `RestaurantsModule`/`StoresModule`/`NotificationsModule`/`PaymentsModule` import
+anything back toward this new module. Given this session's own hard-won lesson (§38: a real
+production crash from an unbroken 3-module cycle that only surfaced in `npm run test:e2e`, never in
+`npm test`'s per-spec `TestingModule`s), this was verified two ways before considering it safe: a
+from-scratch `NestFactory.createApplicationContext(AppModule)` boot against a fresh
+`mongodb-memory-server` instance (a throwaway script, deleted after use), and a full `npm run
+test:e2e` run (7/7 suites). `PaymentProviderResolver` is not exported by `PaymentsModule`, so — the
+same reasoning `OrdersModule` already documents for its own independent instance — it's provided
+fresh in `AdCampaignsModule` too; it's a stateless class with no constructor dependencies, so a
+second instance costs nothing.
+
+### Admin UI
+
+New `frontend/src/app/[locale]/admin/ad-campaigns-tab.tsx`, structurally mirroring
+`promo-codes-tab.tsx`'s create-form-plus-list shape: a vendor-type toggle (restaurant/store, no
+"platform-wide" option since a campaign always targets one vendor) driving the same lazy
+`useListAllRestaurantsForAdminQuery`/`useListAllStoresForAdminQuery` searchable picker promo codes
+already use, a start-date field, a duration control (7/14/30-day quick-select chips plus a custom
+numeric input — matches the "weekly or thereabouts, admin decides" request), an optional
+total-price override (`MoneyInput`, currency-aware once a vendor is picked), and optional admin
+notes. Deliberately does **not** show a live computed price preview mirroring the backend's rate
+table client-side — that would risk the two tables drifting apart; instead a hint explains the
+default-pricing behavior, and the authoritative price is always whatever `AdCampaignsService
+.create()` actually computes server-side. Each campaign row shows a color-coded status badge
+(warning/info/success/neutral/danger for pending/scheduled/active/ended/cancelled), a payment-failed
+badge when relevant, a "Paid manually" badge, the date range and price, and Cancel/Mark-paid
+actions gated by status exactly as the backend's state machine allows. Verified live end-to-end in
+a real browser before shipping: created a campaign via a seeded test restaurant, confirmed the
+"Awaiting payment" badge and correct `dailyRate × durationDays` total, clicked Mark paid, watched
+it flip to a "Live" success badge with "Paid manually," in both light and dark mode.
+
+### Testing
+
+New `ad-campaigns.service.spec.ts` (28 tests: create validation and overlap-rejection, payment
+success on both a future-dated and same-day campaign, a failed-then-retried-successful webhook,
+cross-provider webhook mismatch ignored, `markPaidManually`, ownership enforcement, cancel
+allowed/refused by status, the lifecycle sweep's both directions plus a not-yet-due no-op, and a
+legacy-document defensive test mirroring `PromoCodesService`'s own FDP-114 regression pattern for
+a campaign with neither `restaurantId` nor `storeId` set), `ad-campaign-pricing.spec.ts`,
+`ad-campaign-state-machine.spec.ts`, and new sponsored-sort/`sponsoredOnly`-filter tests added to
+both `restaurants.service.spec.ts` and `stores.service.spec.ts`. Full backend suite: 685/685
+tests passing across 45 suites, plus the full `npm run test:e2e` run described above (one earlier
+run reported a single suite failing with zero failed tests inside it — a `mongodb-memory-server`
+launch-timeout flake, not a real regression; confirmed by an immediate clean rerun: 45/45 suites,
+685/685 tests). `tsc --noEmit`/`eslint`/production `build` clean on both sides.

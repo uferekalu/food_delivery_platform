@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export const RESTAURANT_SORTS = [
   'newest',
@@ -60,6 +68,15 @@ export class ListRestaurantsDto {
   @IsOptional()
   @IsIn(RESTAURANT_SORTS)
   sort?: RestaurantSort = 'newest';
+
+  @ApiPropertyOptional({
+    description:
+      'Only currently-sponsored restaurants (docs/ROADMAP.md FDP-124) — powers the homepage sponsored carousel.',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  sponsoredOnly?: boolean;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

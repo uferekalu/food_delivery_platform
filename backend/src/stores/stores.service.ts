@@ -86,10 +86,16 @@ export class StoresService {
         $ne: null,
       };
     }
-    const sort = SORT_SPECS[query.sort ?? 'newest'];
+    // Sponsored listings (docs/ROADMAP.md FDP-124) — see RestaurantsService.findAllApproved's
+    // identical comment for the full reasoning.
+    const sort = {
+      isSponsored: -1 as const,
+      ...SORT_SPECS[query.sort ?? 'newest'],
+    };
     if (query.sort === 'delivery_time' && !filter.estimatedDeliveryMinutes) {
       filter.estimatedDeliveryMinutes = { $exists: true, $ne: null };
     }
+    if (query.sponsoredOnly) filter.isSponsored = true;
 
     const [items, total] = await Promise.all([
       this.storeModel
@@ -397,6 +403,17 @@ export class StoresService {
   ): Promise<void> {
     await this.storeModel
       .updateOne({ _id: storeId }, { avgRating, reviewCount })
+      .exec();
+  }
+
+  /** Sponsored listings (docs/ROADMAP.md FDP-124) — mirrors
+   * RestaurantsService.setSponsorship exactly, see its doc comment for the full reasoning. */
+  async setSponsorship(id: string, sponsoredUntil: Date | null): Promise<void> {
+    await this.storeModel
+      .updateOne(
+        { _id: id },
+        { $set: { sponsoredUntil, isSponsored: sponsoredUntil !== null } },
+      )
       .exec();
   }
 

@@ -220,6 +220,64 @@ describe('RestaurantsService', () => {
         expect(result.total).toBe(0); // no restaurant literally named/tagged ".*"
       });
     });
+
+    describe('sponsored listings (docs/ROADMAP.md FDP-124)', () => {
+      async function createApprovedSponsored(name: string, sponsored: boolean) {
+        const created = await service.create('507f1f77bcf86cd799439011', {
+          ...baseDto,
+          name,
+        });
+        await restaurantModel
+          .updateOne(
+            { _id: created._id },
+            {
+              isApproved: true,
+              isSponsored: sponsored,
+              sponsoredUntil: sponsored
+                ? new Date(Date.now() + 86_400_000)
+                : null,
+            },
+          )
+          .exec();
+        return created;
+      }
+
+      it('a sponsored restaurant sorts first regardless of the requested sort', async () => {
+        await createApprovedSponsored('Not Sponsored, Higher Rated', false);
+        const sponsored = await createApprovedSponsored(
+          'Sponsored, Lower Rated',
+          true,
+        );
+        // Give the non-sponsored one a strictly higher rating, so a naive rating-sort would put
+        // it first — isSponsored must still win as the leading sort key.
+        await restaurantModel
+          .updateOne({ name: 'Not Sponsored, Higher Rated' }, { avgRating: 5 })
+          .exec();
+        await restaurantModel
+          .updateOne({ _id: sponsored._id }, { avgRating: 1 })
+          .exec();
+
+        const result = await service.findAllApproved({
+          sort: 'rating',
+          page: 1,
+          limit: 20,
+        });
+        expect(result.items[0].name).toBe('Sponsored, Lower Rated');
+      });
+
+      it('sponsoredOnly filters out non-sponsored restaurants entirely', async () => {
+        await createApprovedSponsored('Regular Place', false);
+        await createApprovedSponsored('Boosted Place', true);
+
+        const result = await service.findAllApproved({
+          sponsoredOnly: true,
+          page: 1,
+          limit: 20,
+        });
+        expect(result.total).toBe(1);
+        expect(result.items[0].name).toBe('Boosted Place');
+      });
+    });
   });
 
   describe('findBySlug', () => {

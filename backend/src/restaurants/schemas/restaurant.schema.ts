@@ -104,6 +104,21 @@ export class Restaurant {
   // Vendor payouts epic, part 1 of 4 (docs/ROADMAP.md FDP-51) — see PayoutAccount's doc comment.
   @Prop({ type: [PayoutAccountSchema], default: [] })
   payoutAccounts: PayoutAccount[];
+
+  // Sponsored listings (docs/ROADMAP.md FDP-124) — denormalized from AdCampaign so the hot
+  // discovery-listing path (findAllApproved) stays a plain indexed .find(), never a live
+  // cross-collection join. Never written to directly outside AdCampaignsService's payment-success
+  // handler and its daily lifecycle sweep — see RestaurantsService.setSponsorship. `isSponsored`
+  // is the field actually sorted/filtered on (an explicit boolean, not inferred from
+  // sponsoredUntil's nullability — a nullable Date sorts non-null-before-null in MongoDB
+  // regardless of whether that date is in the future, which would keep an expired-but-not-yet-
+  // swept campaign floating to the top for up to a day); `sponsoredUntil` is kept alongside it
+  // purely for display ("Sponsored until Oct 3") and as the sweep's own end-date query trigger.
+  @Prop({ type: Date, default: null })
+  sponsoredUntil: Date | null;
+
+  @Prop({ type: Boolean, default: false, index: true })
+  isSponsored: boolean;
 }
 
 export type RestaurantDocument = HydratedDocument<Restaurant>;
@@ -118,6 +133,10 @@ RestaurantSchema.index({ isApproved: 1, avgRating: -1 });
 RestaurantSchema.index({ isApproved: 1, priceLevel: 1 });
 RestaurantSchema.index({ isApproved: 1, estimatedDeliveryMinutes: 1 });
 RestaurantSchema.index({ isApproved: 1, createdAt: -1 });
+// Sponsored listings (docs/ROADMAP.md FDP-124) — isSponsored now leads findAllApproved's sort,
+// so it leads this compound index too, same "sort/filter field leads the index" convention as
+// every index above.
+RestaurantSchema.index({ isApproved: 1, isSponsored: -1, createdAt: -1 });
 // "Near me" (docs/ROADMAP.md FDP-96) — powers `$geoNear` in `RestaurantsService.findNearby`.
 // Standalone (not compounded with `isApproved`) since 2dsphere indexes have their own compounding
 // rules and `$geoNear`'s own `query` option already applies the `isApproved` filter without
