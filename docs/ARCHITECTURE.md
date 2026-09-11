@@ -2322,3 +2322,69 @@ default behavior — no other page silently inherited a behavior change. Visuall
 browser (light and dark mode, both the closed state and opening a second item while the first was
 open) via a throwaway Playwright script against the local dev server before shipping.
 `tsc --noEmit`/production `build`/`vitest` (5/5, including the two rewritten tests) all clean.
+
+## 44. Card grid density (5/3/1 columns) and a decluttered header (docs/ROADMAP.md FDP-122)
+
+Direct feedback with 4 screenshots: restaurant/store/product cards were too large, fitting only 3
+per row on a large screen when the user wanted 5; and the header felt congested on medium/large
+screens once notifications, cart, language, theme, and account controls were all sitting in one
+undifferentiated row.
+
+**Card density.** `RestaurantCard`/`StoreCard` (`frontend/src/components/restaurant-card.tsx`,
+`store-card.tsx`) shrank across the board rather than just scaling down uniformly, since a naive
+scale-down at a smaller grid cell risked clipped text or an unreadable price: cover image
+`h-36`→`h-24 sm:h-28`, placeholder icon and logo badge sizes reduced, tighter card padding, title
+gets `truncate` (was allowed to wrap and push the card taller), and cuisine/tag badges capped to
+showing 1 instead of 3 (the full list was never going to fit at this card width regardless of font
+size). `ProductCard` (inlined in `frontend/src/app/[locale]/stores/[slug]/page.tsx`) was rewritten
+from a horizontal image-left/content-right layout to a compact vertical stack — small top image,
+`line-clamp-2` name, `line-clamp-1` description, a price row (struck-through original + discounted
+price when applicable), and a full-width "Add to cart" button pinned to the card's bottom via
+`mt-auto` so every card in a row has the button at the same vertical position regardless of how
+many lines the name/description wrapped to.
+
+Every discovery grid moved from `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` (1/2/3) to
+`grid-cols-1 sm:grid-cols-3 lg:grid-cols-5` (1/3/5, matching the exact counts requested) — the
+restaurants listing, both grids on `/categories` (restaurants and stores), both grids on
+`/near-me`, and the store-detail product grid. Skeleton loaders on each page updated to the same
+column count and a shorter placeholder height, so the loading state doesn't visually jump when
+real cards replace it.
+
+**Header decluttering.** `AuthStatus`'s authenticated, non-stacked branch used to render up to 6
+separate inline links next to notifications/cart/language/theme (more for a user with several
+roles, e.g. an admin who's also a restaurant owner) — exactly the "congested header" the
+screenshot showed. Collapsed into a single avatar-triggered `DropdownMenu`: one control for
+"everything about my account" no matter how many role-specific links a given account has. Built
+the `items: DropdownMenuItem[]` array conditionally by role (restaurant/store links for
+`restaurant_owner`/`admin`, messages for `restaurant_owner` only, rider dashboard for `rider`,
+admin dashboard for `admin`, orders/account always, log out always `destructive`). The `stacked`
+variant (used inside `MobileNav`'s drawer, which has vertical room to spare) is untouched — still
+a plain list of links, since collapsing it into a dropdown-inside-a-drawer would just add an extra
+tap for no space benefit.
+
+`LanguageSwitcher` gained a `compact?: boolean` prop — short labels ("English" instead of "English
+(EN)") for header use, full labels kept for the mobile drawer where there's room. Still a native
+`<select>`, not the hand-built `Select`/`DropdownMenu` primitive, per that component's own
+documented rationale: `Select`'s portal renders at `--z-dropdown`, which loses to a `Modal`/
+`Drawer`'s `--z-modal` backdrop regardless of DOM order when nested inside one — a real bug class
+already hit once this session (see the `DropdownMenu`-in-`Modal` note in frontend/CLAUDE.md) that
+a header redesign shouldn't reintroduce.
+
+`AppShell`'s header (`frontend/src/components/app-shell.tsx`) now groups controls into two visual
+clusters instead of one flat row: "act on the page right now" (notifications, cart) stays first, a
+`aria-hidden` 1px divider separates it from "about me/this session" (language, theme, account),
+and `AuthStatus` was reordered to trail that second cluster — the same left-to-right reading order
+a well-organized toolbar uses (transient page actions, then session-level controls), rather than
+just shrinking every control's padding and hoping it reads as organized on its own.
+
+**Verification.** The local dev database had no seeded restaurants/stores/products, so the grid
+column counts were first confirmed against the loading-skeleton state (correct at all three
+breakpoints), then a throwaway script inserted real-shaped test restaurants/stores/products
+(including deliberately long names and multi-word cuisine lists) directly into the local MongoDB
+via the `mongodb` driver — bypassing the API only to seed data fast, not to skip validation of the
+rendered output — screenshotted every grid and the header at large/medium/mobile widths and in
+dark mode via the established Playwright-from-npx-cache technique, confirmed 5/3/1 columns render
+correctly with no truncation/overflow distortion even on the longest test names, then deleted the
+seeded documents before finishing (local MongoDB only, never touches the production database).
+`tsc --noEmit`/`eslint`/production `build` clean on both sides; new `AuthStatus.myAccount` key
+shipped in all 6 languages, key parity verified.

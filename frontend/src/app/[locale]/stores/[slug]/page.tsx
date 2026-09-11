@@ -47,41 +47,39 @@ function ProductCard({ product, currency, storeIsOpen }: { product: Product; cur
   }
 
   return (
-    <div className="flex flex-col gap-3 overflow-hidden rounded-lg border border-border">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border transition-shadow duration-150 hover:border-border-strong hover:shadow-md">
       {product.imageUrl && (
         // A product photo doesn't warrant next/image's layout machinery here.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={product.imageUrl} alt="" className="h-40 w-full object-cover" />
+        <img src={product.imageUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
       )}
-      <div className="flex flex-col gap-3 p-4 pt-0 first:pt-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="font-medium text-text">
-              {product.name}
-              {product.unit ? <span className="text-text-muted"> · {product.unit}</span> : null}
-            </span>
-            {product.description && <span className="text-sm text-text-muted">{product.description}</span>}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            {product.discountedPrice != null ? (
-              <>
-                <span className="text-xs text-text-muted line-through">
-                  {formatMoney(product.price, currency, locale)}
-                </span>
-                <span className="font-semibold text-danger">
-                  {formatMoney(product.discountedPrice, currency, locale)}
-                </span>
-              </>
-            ) : (
-              <span className="font-semibold text-text">{formatMoney(product.price, currency, locale)}</span>
-            )}
-          </div>
+      <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="line-clamp-2 text-sm font-medium text-text">
+            {product.name}
+            {product.unit ? <span className="text-text-muted"> · {product.unit}</span> : null}
+          </span>
+          {product.description && (
+            <span className="line-clamp-1 text-xs text-text-muted">{product.description}</span>
+          )}
         </div>
+        {product.discountedPrice != null ? (
+          <div className="flex flex-wrap items-baseline gap-1.5">
+            <span className="text-sm font-semibold text-danger">
+              {formatMoney(product.discountedPrice, currency, locale)}
+            </span>
+            <span className="text-xs text-text-muted line-through">
+              {formatMoney(product.price, currency, locale)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm font-semibold text-text">{formatMoney(product.price, currency, locale)}</span>
+        )}
         {storeIsOpen && (
           <Button
             variant="outline"
             size="sm"
-            className="self-start"
+            className="mt-auto w-full"
             disabled={!product.isAvailable || outOfStock}
             isLoading={isLoading}
             onClick={() => void add()}
@@ -130,7 +128,7 @@ function CategorySection({
         {category.name}
       </Heading>
       {ownProducts.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {ownProducts.map((product) => (
             <ProductCard key={product._id} product={product} currency={currency} storeIsOpen={storeIsOpen} />
           ))}

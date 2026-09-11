@@ -2,6 +2,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/cn";
 import type { Store } from "@/lib/redux/restaurant-types";
 import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 
@@ -33,14 +34,14 @@ export function StoreCard({
 }) {
   const t = useTranslations("StoreCard");
   const locale = useLocale();
-  const icon = store.type === "groceries" ? <BasketIcon className="size-10" /> : <PillIcon className="size-10" />;
+  const icon = store.type === "groceries" ? <BasketIcon className="size-8" /> : <PillIcon className="size-8" />;
   const scheduleStatus = getOpenStatus(store.openingHours, store.country);
   const { label: openLabel, isOpenNow } = describeOpenStatus(store.isOpen, scheduleStatus, locale, t);
 
   return (
-    <Card className="relative h-full overflow-hidden transition-colors duration-150 hover:border-border-strong">
+    <Card className="relative h-full overflow-hidden transition-shadow duration-150 hover:border-border-strong hover:shadow-md">
       <Link href={`/stores/${store.slug}`} className="block h-full">
-        <div className="relative h-36 w-full bg-secondary">
+        <div className="relative h-24 w-full bg-secondary sm:h-28">
           {store.coverUrl ? (
             // A store card photo doesn't warrant next/image's layout machinery here.
             // eslint-disable-next-line @next/next/no-img-element
@@ -53,13 +54,13 @@ export function StoreCard({
             <img
               src={store.logoUrl}
               alt=""
-              className="absolute -bottom-5 left-4 size-12 rounded-full border-2 border-surface object-cover shadow-sm"
+              className="absolute -bottom-4 left-3 size-9 rounded-full border-2 border-surface object-cover shadow-sm"
             />
           )}
         </div>
-        <CardHeader className={store.logoUrl ? "pt-8" : undefined}>
-          <CardTitle>{store.name}</CardTitle>
-          <CardDescription>
+        <CardHeader className={cn("gap-0.5 p-3", store.logoUrl && "pt-6")}>
+          <CardTitle className="truncate text-sm font-semibold">{store.name}</CardTitle>
+          <CardDescription className="truncate text-xs">
             ⭐ {store.avgRating.toFixed(1)}
             {store.estimatedDeliveryMinutes
               ? ` • ${t("estimatedMinutes", { minutes: store.estimatedDeliveryMinutes })}`
@@ -67,9 +68,9 @@ export function StoreCard({
             {distanceKm != null ? ` • ${t("distanceAway", { distance: distanceKm })}` : ""}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
+        <CardContent className="flex flex-wrap items-center gap-1.5 p-3 pt-2">
           <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
-          {store.tags.slice(0, 3).map((tag) => (
+          {store.tags.slice(0, 1).map((tag) => (
             <Badge key={tag} variant="primary">
               {tag}
             </Badge>

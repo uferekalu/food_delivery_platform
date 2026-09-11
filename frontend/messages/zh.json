@@ -80,7 +80,8 @@
     "logOut": "退出登录",
     "logIn": "登录",
     "signUp": "注册",
-    "messages": "消息"
+    "messages": "消息",
+    "myAccount": "我的账户"
   },
   "NotificationBell": {
     "justNow": "刚刚",

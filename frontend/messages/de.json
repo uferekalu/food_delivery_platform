@@ -80,7 +80,8 @@
     "logOut": "Abmelden",
     "logIn": "Anmelden",
     "signUp": "Registrieren",
-    "messages": "Nachrichten"
+    "messages": "Nachrichten",
+    "myAccount": "Mein Konto"
   },
   "NotificationBell": {
     "justNow": "gerade eben",
