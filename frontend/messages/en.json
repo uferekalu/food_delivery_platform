@@ -113,7 +113,8 @@
     "closed": "Closed",
     "opensAt": "Opens at {time}",
     "closedUntilTomorrow": "Closed until tomorrow",
-    "closedUntilDay": "Closed until {day}"
+    "closedUntilDay": "Closed until {day}",
+    "sponsored": "Sponsored"
   },
   "FavoriteButton": {
     "removeFromFavorites": "Remove from favorites",
@@ -231,7 +232,9 @@
     "faq11Question": "Can I use the app in my own language?",
     "faq11Answer": "Yes — switch between six languages at any time using the language selector in the header.",
     "faq12Question": "Do I need an account to get help?",
-    "faq12Answer": "No — the support chat works for guests too, and your conversation is saved for the length of your visit even if you're not signed in."
+    "faq12Answer": "No — the support chat works for guests too, and your conversation is saved for the length of your visit even if you're not signed in.",
+    "sponsored": "Sponsored",
+    "sponsoredDescription": "Featured businesses on the platform right now"
   },
   "LoginPage": {
     "enterValidEmail": "Enter a valid email address",
@@ -1552,7 +1555,8 @@
     "closed": "Closed",
     "opensAt": "Opens at {time}",
     "closedUntilTomorrow": "Closed until tomorrow",
-    "closedUntilDay": "Closed until {day}"
+    "closedUntilDay": "Closed until {day}",
+    "sponsored": "Sponsored"
   },
   "StoreDetailPage": {
     "storeNotFound": "Store not found",

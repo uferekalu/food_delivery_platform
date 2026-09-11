@@ -69,6 +69,9 @@ export function StoreCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-1.5 p-3 pt-2">
+          {/* Sponsored listings (docs/ROADMAP.md FDP-126) — see RestaurantCard's identical
+              comment for the full reasoning. */}
+          {store.isSponsored && <Badge variant="warning">{t("sponsored")}</Badge>}
           <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           {store.tags.slice(0, 1).map((tag) => (
             <Badge key={tag} variant="primary">

@@ -18,7 +18,7 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useListStoresQuery } from "@/lib/redux/services/stores-api";
 import { useGetMyOrdersQuery } from "@/lib/redux/services/orders-api";
-import type { OrderStatus } from "@/lib/redux/restaurant-types";
+import type { OrderStatus, Restaurant, Store } from "@/lib/redux/restaurant-types";
 
 // Only these statuses represent an order genuinely still in flight — mirrors the same set on
 // orders/[id]/page.tsx's ACTIVE_DELIVERY_STATUSES plus the earlier kitchen-side statuses, since
@@ -157,6 +157,20 @@ function PinIcon() {
   );
 }
 
+function TagIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="size-4 shrink-0">
+      <path
+        d="M10.5 3H4a1 1 0 0 0-1 1v6.5a1 1 0 0 0 .29.71l7.5 7.5a1 1 0 0 0 1.42 0l6.5-6.5a1 1 0 0 0 0-1.42l-7.5-7.5A1 1 0 0 0 10.5 3Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="7" cy="7" r="1.25" fill="currentColor" />
+    </svg>
+  );
+}
+
 function ArrowIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5">
@@ -261,6 +275,29 @@ export default function Home() {
     limit: 50,
   });
   const topPharmacies = pharmacyData?.items.slice(0, 8) ?? [];
+
+  // Sponsored-listing ad campaigns (docs/ROADMAP.md FDP-126) — a dedicated rail up top, leading
+  // with paid placements before any organic content, matching Glovo/Chowdeck's own homepage
+  // pattern. Reuses the existing GET /restaurants and GET /stores endpoints via `sponsoredOnly`
+  // (FDP-124) rather than a parallel endpoint — three small requests (restaurants + both store
+  // verticals), each already deduped against the marketplace's real currently-live campaigns at
+  // the database level, not client-side guessing.
+  const { data: sponsoredRestaurantsData } = useListRestaurantsQuery({ sponsoredOnly: true, limit: 8 });
+  const { data: sponsoredGroceriesData } = useListStoresQuery({
+    type: "groceries",
+    sponsoredOnly: true,
+    limit: 8,
+  });
+  const { data: sponsoredPharmacyData } = useListStoresQuery({
+    type: "pharmacy_beauty",
+    sponsoredOnly: true,
+    limit: 8,
+  });
+  const sponsoredItems: ({ kind: "restaurant"; data: Restaurant } | { kind: "store"; data: Store })[] = [
+    ...(sponsoredRestaurantsData?.items ?? []).map((r) => ({ kind: "restaurant" as const, data: r })),
+    ...(sponsoredGroceriesData?.items ?? []).map((s) => ({ kind: "store" as const, data: s })),
+    ...(sponsoredPharmacyData?.items ?? []).map((s) => ({ kind: "store" as const, data: s })),
+  ];
 
   const deliveryMinutes = (data?.items ?? [])
     .map((r) => r.estimatedDeliveryMinutes)
@@ -440,6 +477,38 @@ export default function Home() {
           </div>
         </Container>
       </div>
+
+      {/* Sponsored rail (docs/ROADMAP.md FDP-126) — the very first content section, ahead of
+          "Top restaurants," mixing restaurants and both store verticals in one rail exactly like
+          Glovo/Chowdeck's own "Featured"/"Sponsored" placement at the top of the feed. Renders
+          nothing at all when there are no currently-active campaigns (no loading skeleton either
+          — unlike the organic rails below, this section's presence is itself the signal, so a
+          skeleton here would imply sponsored content is coming when it may simply not exist
+          today), so an empty sponsored slate never leaves a dangling empty section. */}
+      {sponsoredItems.length > 0 && (
+        <section className="bg-warning-bg/40">
+          <Container className="flex flex-col gap-6 py-10">
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded-full bg-warning text-neutral-0">
+                <TagIcon />
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <h2 className="text-xl font-bold text-text">{t("sponsored")}</h2>
+                <p className="text-sm text-text-muted">{t("sponsoredDescription")}</p>
+              </div>
+            </div>
+            <Carousel aria-label={t("sponsored")} itemClassName="w-72">
+              {sponsoredItems.map((item) =>
+                item.kind === "restaurant" ? (
+                  <RestaurantCard key={`r-${item.data._id}`} restaurant={item.data} />
+                ) : (
+                  <StoreCard key={`s-${item.data._id}`} store={item.data} />
+                ),
+              )}
+            </Carousel>
+          </Container>
+        </section>
+      )}
 
       {/* Top restaurants comes right after the hero — an auto-advancing carousel rather than a
           static grid — so the thing customers actually want (real restaurants to order from) is

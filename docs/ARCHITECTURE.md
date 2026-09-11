@@ -2656,3 +2656,77 @@ No new backend code this ticket (the backend surface was already complete and te
 frontend verification was entirely live-browser, not component tests, given the nature of what
 needed proving (a real cross-origin redirect to a live payment provider) — `tsc --noEmit`/
 `eslint`/production `build` clean on both sides, plus the Playwright walkthrough described above.
+
+## 48. Sponsored-listing ad campaigns, part 3: customer-facing surface (docs/ROADMAP.md FDP-126)
+
+Closes the 3-ticket epic: §46 built the backend and admin tooling to create/price a campaign, §47
+let a vendor actually pay for one, and this ticket is the entire point of paying — where a
+sponsored vendor becomes visible to customers.
+
+### The badge: leads the row, a distinct color from every other badge
+
+`RestaurantCard`/`StoreCard` each gain one line — a `Badge variant="warning"` reading "Sponsored,"
+rendered first in the existing badge row whenever `restaurant.isSponsored`/`store.isSponsored` is
+true, ahead of even the open/closed badge. `warning` (an amber token, already used elsewhere for
+things like `PENDING_PAYMENT` order status) was chosen deliberately over reusing `primary`
+(already the cuisine/tag badge's own color) specifically so a sponsored card doesn't visually
+blend into a card's already-brand-colored badge — the same "label is the single most prominent
+badge, and it reads as visually distinct from ordinary category tags" treatment Glovo/Chowdeck
+both use on their own boosted listings. No new design token was added — `warning`/`warning-bg`
+already existed in `tokens.css` for the order-status use case above, reused as-is.
+
+### The homepage rail: real Carousel reuse, three requests, no new endpoint
+
+A new "Sponsored" section in `frontend/src/app/[locale]/page.tsx`, positioned as the very first
+content section — ahead of "Top restaurants" — matching where Glovo/Chowdeck place their own
+featured/sponsored rail relative to organic content. Reuses the existing `Carousel` component
+(`frontend/src/components/ui/carousel.tsx`, already used by every other homepage rail) rather than
+building new horizontal-scroll machinery, and reuses `GET /restaurants`/`GET /stores` with the
+`sponsoredOnly` param §46 already added, rather than a new endpoint — three small requests (one
+for restaurants, one for each store vertical), each already filtered to genuinely-live campaigns
+at the database level via the `isSponsored` field, not a client-side "is this one sponsored?"
+check. Results are merged into one mixed array
+(`{ kind: 'restaurant'; data: Restaurant } | { kind: 'store'; data: Store }`) and rendered through
+a single `Carousel`, mixing restaurant and store cards side by side in one rail — the real Glovo/
+Chowdeck sponsored rail itself mixes business types this way, not separate rails per vertical.
+
+Deliberately renders **nothing** — not even a loading skeleton — when there are currently no
+sponsored campaigns, unlike the "Top restaurants"/"Groceries"/"Pharmacy & more" rails below it
+which all show skeletons while loading. The reasoning: those organic rails are things the
+homepage *always* has content for eventually (the marketplace has restaurants), so a skeleton
+communicates "this is loading," not "this might not exist." A sponsored rail is fundamentally
+different — on any given day there may genuinely be zero active campaigns, and a skeleton would
+misleadingly imply sponsored content is imminent when it may simply not exist right now. The
+section's presence is itself the signal, so it either renders fully formed or not at all.
+
+### Verified under real data, not just unit tests
+
+The state that actually proves this feature works end-to-end: a sponsored restaurant with a
+*lower* rating (4.5★) needs to visibly outrank a non-sponsored restaurant with a *higher* rating
+(4.9★) in every discovery listing. Seeded both directly into local MongoDB, confirmed live in a
+real browser that "Top restaurants" (sorted by `rating`) still shows the sponsored, lower-rated
+one first — the exact behavior §46's `restaurants.service.spec.ts` unit test already asserted, now
+also confirmed holding through the real Next.js data-fetching/rendering path, not just the backend
+query in isolation. Also confirmed the badge itself renders correctly (leading the row, amber,
+distinct from the primary-colored cuisine badge next to it) and the homepage rail renders with the
+correct heading/description copy — at desktop and mobile widths, and in dark mode.
+
+### Testing
+
+No new backend code (the `sponsoredOnly` filter and `isSponsored` sort were already built and
+tested in §46) — this ticket's verification was entirely live-browser, the same posture §47 took
+for its own real-payment-provider check, since what needed proving here (real sort behavior under
+real data, real visual rendering of a new badge/section) isn't something a component-level test
+would have caught with any more confidence than direct observation did. `tsc --noEmit`/`eslint`/
+production `build` clean on both sides.
+
+### The epic, in full
+
+FDP-124/125/126 together: an admin picks a restaurant, grocery, or pharmacy vendor and a period
+(quick-select 7/14/30 days or custom), the vendor is charged through a real Stripe/Paystack/
+Flutterwave checkout (or an admin-recorded offline payment) to activate it, and once live it
+surfaces to every customer as a leading "Sponsored" badge across every discovery listing (sorted
+to the top regardless of rating/price/newest) plus a dedicated homepage rail — the same shape
+Glovo/Chowdeck's own sponsored-listing ad products use, built entirely by reusing this app's
+existing payment-adapter, cron, denormalization, and carousel patterns rather than introducing new
+ones.
