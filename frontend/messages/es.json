@@ -518,6 +518,12 @@
     "CANCELLED": "Cancelado",
     "REFUNDED": "Reembolsado"
   },
+  "OrderPaymentStatus": {
+    "pending": "Pendiente",
+    "succeeded": "Pagado",
+    "failed": "Fallido",
+    "refunded": "Reembolsado"
+  },
   "PayoutStatus": {
     "pending": "Pendiente",
     "processing": "En proceso",
@@ -1078,7 +1084,19 @@
     "salesByDay": "Ventas por día",
     "date": "Fecha",
     "restaurantNotFound": "Restaurante no encontrado",
-    "mayNotExistOrNoAccess": "Puede que no exista, o que no tengas acceso a él."
+    "mayNotExistOrNoAccess": "Puede que no exista, o que no tengas acceso a él.",
+    "advertising": "Publicidad",
+    "advertisingDescription": "Campañas publicitarias que has pagado, para documentar el gasto en publicidad junto a tus ventas.",
+    "noAdSpendInRange": "Sin gasto publicitario en este rango",
+    "adSpendAppearsHere": "Las campañas publicitarias que pagues aparecerán aquí.",
+    "campaignPeriod": "Periodo de campaña",
+    "amount": "Importe",
+    "status": "Estado",
+    "payment": "Pago",
+    "totalAdSpend": "Gasto publicitario total",
+    "adPaymentStatus_pending": "Pendiente",
+    "adPaymentStatus_succeeded": "Pagado",
+    "adPaymentStatus_failed": "Fallido"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1187,7 +1205,30 @@
     "usersByRole": "Usuarios por rol",
     "riders": "Repartidores",
     "verified": "Verificado",
-    "pending": "Pendiente"
+    "pending": "Pendiente",
+    "orderTransactions": "Transacciones de pedidos",
+    "orderTransactionsDescription": "Todos los pedidos de todos los proveedores: restaurantes, tiendas de abarrotes y farmacias, para auditoría.",
+    "from": "Desde",
+    "to": "Hasta",
+    "allVendorTypes": "Todos los tipos de proveedor",
+    "storesVendorType": "Abarrotes y farmacias",
+    "vendorType": "Tipo de proveedor",
+    "restaurants": "Restaurantes",
+    "clearFilters": "Borrar filtros",
+    "noTransactionsFound": "No se encontraron transacciones",
+    "tryDifferentFilters": "Prueba con otro rango de fechas o filtro.",
+    "date": "Fecha",
+    "vendor": "Proveedor",
+    "orderNumber": "N.º de pedido",
+    "items": "Artículos",
+    "amount": "Importe",
+    "status": "Estado",
+    "payment": "Pago",
+    "totalCollected": "Total cobrado",
+    "advertisingRevenue": "Ingresos por publicidad",
+    "advertisingRevenueDescription": "Todos los cargos de campañas publicitarias de todos los proveedores, para auditoría.",
+    "noCampaignTransactionsFound": "No se encontraron transacciones de campañas publicitarias",
+    "campaignPeriod": "Periodo de campaña"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Revisar y aprobar",

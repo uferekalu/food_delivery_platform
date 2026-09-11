@@ -518,6 +518,12 @@
     "CANCELLED": "已取消",
     "REFUNDED": "已退款"
   },
+  "OrderPaymentStatus": {
+    "pending": "待处理",
+    "succeeded": "已支付",
+    "failed": "失败",
+    "refunded": "已退款"
+  },
   "PayoutStatus": {
     "pending": "待处理",
     "processing": "处理中",
@@ -1078,7 +1084,19 @@
     "salesByDay": "按日期统计销售",
     "date": "日期",
     "restaurantNotFound": "未找到该餐厅",
-    "mayNotExistOrNoAccess": "该餐厅可能不存在，或你无权访问。"
+    "mayNotExistOrNoAccess": "该餐厅可能不存在，或你无权访问。",
+    "advertising": "广告",
+    "advertisingDescription": "您已支付的广告活动费用,与您的销售额一并记录。",
+    "noAdSpendInRange": "此时间范围内没有广告支出",
+    "adSpendAppearsHere": "您支付的广告活动将显示在此处。",
+    "campaignPeriod": "广告周期",
+    "amount": "金额",
+    "status": "状态",
+    "payment": "支付",
+    "totalAdSpend": "广告支出总额",
+    "adPaymentStatus_pending": "待处理",
+    "adPaymentStatus_succeeded": "已支付",
+    "adPaymentStatus_failed": "失败"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1187,7 +1205,30 @@
     "usersByRole": "按角色统计的用户",
     "riders": "骑手",
     "verified": "已验证",
-    "pending": "待处理"
+    "pending": "待处理",
+    "orderTransactions": "订单交易",
+    "orderTransactionsDescription": "所有供应商(餐厅、杂货店和药店)的每一笔订单,用于审计。",
+    "from": "起始",
+    "to": "结束",
+    "allVendorTypes": "所有供应商类型",
+    "storesVendorType": "杂货店和药店",
+    "vendorType": "供应商类型",
+    "restaurants": "餐厅",
+    "clearFilters": "清除筛选",
+    "noTransactionsFound": "未找到交易",
+    "tryDifferentFilters": "请尝试其他日期范围或筛选条件。",
+    "date": "日期",
+    "vendor": "供应商",
+    "orderNumber": "订单号",
+    "items": "商品",
+    "amount": "金额",
+    "status": "状态",
+    "payment": "支付",
+    "totalCollected": "已收总额",
+    "advertisingRevenue": "广告收入",
+    "advertisingRevenueDescription": "所有供应商的每一笔广告活动费用,用于审计。",
+    "noCampaignTransactionsFound": "未找到广告活动交易",
+    "campaignPeriod": "广告周期"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "审核并批准",

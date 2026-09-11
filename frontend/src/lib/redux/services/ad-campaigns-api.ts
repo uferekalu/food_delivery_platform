@@ -1,5 +1,14 @@
 import { api } from "../api";
-import type { AdCampaign, AdminAdCampaign, PaymentProvider } from "../restaurant-types";
+import type {
+  AdCampaign,
+  AdminAdCampaign,
+  PaginatedResultWithTotals,
+  PaymentProvider,
+} from "../restaurant-types";
+
+// AdCampaignAdminView is a subset of AdminAdCampaign's shape reused for the paginated
+// admin-wide ledger (docs/ROADMAP.md FDP-128) — same vendor-name-resolved fields.
+type AdCampaignTransaction = AdminAdCampaign;
 
 export interface CreateAdCampaignInput {
   restaurantId?: string;
@@ -8,6 +17,13 @@ export interface CreateAdCampaignInput {
   durationDays: number;
   totalPriceOverride?: number;
   adminNotes?: string;
+}
+
+export interface ListAdCampaignTransactionsParams {
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const adCampaignsApi = api.injectEndpoints({
@@ -21,6 +37,26 @@ export const adCampaignsApi = api.injectEndpoints({
               { type: "AdCampaign" as const, id: "LIST" },
             ]
           : [{ type: "AdCampaign", id: "LIST" }],
+    }),
+
+    // Admin-wide ad-campaign revenue ledger (docs/ROADMAP.md FDP-128) — paginated and
+    // date-filterable, separate from listAdCampaigns above which the existing Ad Campaigns
+    // admin tab (FDP-124) still uses unpaginated.
+    getAdCampaignTransactions: builder.query<
+      PaginatedResultWithTotals<AdCampaignTransaction>,
+      ListAdCampaignTransactionsParams | void
+    >({
+      query: (params) => {
+        const search = new URLSearchParams();
+        if (params) {
+          Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== "") search.set(key, String(value));
+          });
+        }
+        const qs = search.toString();
+        return `/admin/transactions/ad-campaigns${qs ? `?${qs}` : ""}`;
+      },
+      providesTags: [{ type: "AdCampaign", id: "ADMIN_TRANSACTIONS_LIST" }],
     }),
 
     // A vendor's own campaigns across every restaurant/store they own (docs/ROADMAP.md FDP-124).
@@ -88,6 +124,7 @@ export const adCampaignsApi = api.injectEndpoints({
 
 export const {
   useListAdCampaignsQuery,
+  useGetAdCampaignTransactionsQuery,
   useListMyAdCampaignsQuery,
   useGetAdCampaignQuery,
   useCreateAdCampaignMutation,

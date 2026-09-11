@@ -1,5 +1,21 @@
 import { api } from "../api";
-import type { AdminAnalytics, AdminPromoCode, DiscountType, Order, PromoCode } from "../restaurant-types";
+import type {
+  AdminAnalytics,
+  AdminPromoCode,
+  DiscountType,
+  Order,
+  OrderTransaction,
+  PaginatedResultWithTotals,
+  PromoCode,
+} from "../restaurant-types";
+
+export interface ListOrderTransactionsParams {
+  from?: string;
+  to?: string;
+  vendorType?: "restaurant" | "store";
+  page?: number;
+  limit?: number;
+}
 
 export interface CreatePromoCodeInput {
   code: string;
@@ -21,6 +37,25 @@ export const adminApi = api.injectEndpoints({
     getAdminAnalytics: builder.query<AdminAnalytics, void>({
       query: () => "/admin/analytics",
       providesTags: [{ type: "AdminAnalytics", id: "SUMMARY" }],
+    }),
+
+    // Admin-wide order transaction ledger (docs/ROADMAP.md FDP-128) — every order across every
+    // vendor, paginated and date-filterable, for auditing.
+    getOrderTransactions: builder.query<
+      PaginatedResultWithTotals<OrderTransaction>,
+      ListOrderTransactionsParams | void
+    >({
+      query: (params) => {
+        const search = new URLSearchParams();
+        if (params) {
+          Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== "") search.set(key, String(value));
+          });
+        }
+        const qs = search.toString();
+        return `/admin/transactions/orders${qs ? `?${qs}` : ""}`;
+      },
+      providesTags: [{ type: "Order", id: "ADMIN_TRANSACTIONS_LIST" }],
     }),
 
     listPromoCodes: builder.query<AdminPromoCode[], void>({
@@ -91,6 +126,7 @@ export const adminApi = api.injectEndpoints({
 
 export const {
   useGetAdminAnalyticsQuery,
+  useGetOrderTransactionsQuery,
   useListPromoCodesQuery,
   useListMyPromoCodesQuery,
   useCreatePromoCodeMutation,

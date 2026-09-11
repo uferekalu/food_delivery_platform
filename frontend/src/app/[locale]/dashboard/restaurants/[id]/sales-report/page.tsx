@@ -17,6 +17,7 @@ import { useGetMyRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetSalesReportQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
+import { VendorAdSpendSection } from "@/components/vendor-ad-spend-section";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -225,6 +226,8 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
           </Card>
         </>
       )}
+
+      <VendorAdSpendSection vendorType="restaurant" vendorId={restaurant._id} from={from} to={to} />
     </Container>
   );
 }

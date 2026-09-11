@@ -2053,6 +2053,254 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('findAllForAdmin (docs/ROADMAP.md FDP-128)', () => {
+    async function createApprovedStoreFor(currency = 'NGN') {
+      const store = await storesService.create('owner-id', {
+        name: 'Market Square Supermarket',
+        type: 'groceries',
+        currency,
+        country: 'Nigeria',
+        address: validAddress,
+        complianceDocumentUrl: 'https://example.com/doc.pdf',
+        businessRegistrationNumber: 'RC1234567',
+      });
+      return storesService.approve(store._id.toString());
+    }
+
+    it('returns every order across every vendor, paginated, with vendor names resolved', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      const store = await createApprovedStoreFor('NGN');
+
+      await orderModel.create({
+        orderNumber: 'ORD-TX1',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id,
+        items: [{ name: 'Jollof Rice', price: 100, qty: 2 }],
+        subtotal: 200,
+        deliveryFee: 20,
+        serviceFee: 10,
+        tax: 0,
+        discount: 0,
+        total: 230,
+        platformFeeAmount: 30,
+        restaurantPayoutAmount: 170,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-TX2',
+        customerId: userId,
+        sellerType: 'store',
+        storeId: store._id,
+        items: [{ name: 'Fresh Milk 1L', price: 500, qty: 1 }],
+        subtotal: 500,
+        deliveryFee: 50,
+        serviceFee: 25,
+        tax: 0,
+        discount: 0,
+        total: 575,
+        platformFeeAmount: 75,
+        restaurantPayoutAmount: 425,
+        currency: 'NGN',
+        status: 'PLACED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+
+      const result = await ordersService.findAllForAdmin({ page: 1, limit: 20 });
+      expect(result.total).toBe(2);
+      expect(result.totalPages).toBe(1);
+      expect(result.items).toHaveLength(2);
+
+      const restaurantTx = result.items.find((t) => t.orderNumber === 'ORD-TX1');
+      expect(restaurantTx?.vendor).toEqual({
+        type: 'restaurant',
+        id: restaurant._id.toString(),
+        name: 'Burgundy Kitchen',
+      });
+      expect(restaurantTx?.items).toEqual([{ name: 'Jollof Rice', price: 100, qty: 2 }]);
+
+      const storeTx = result.items.find((t) => t.orderNumber === 'ORD-TX2');
+      expect(storeTx?.vendor).toEqual({
+        type: 'store',
+        id: store._id.toString(),
+        name: 'Market Square Supermarket',
+      });
+    });
+
+    it('filters by vendorType', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      const store = await createApprovedStoreFor('NGN');
+      await orderModel.create({
+        orderNumber: 'ORD-VT1',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id,
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-VT2',
+        customerId: userId,
+        sellerType: 'store',
+        storeId: store._id,
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+
+      const restaurantOnly = await ordersService.findAllForAdmin({
+        vendorType: 'restaurant',
+        page: 1,
+        limit: 20,
+      });
+      expect(restaurantOnly.items.map((t) => t.orderNumber)).toEqual(['ORD-VT1']);
+
+      const storeOnly = await ordersService.findAllForAdmin({
+        vendorType: 'store',
+        page: 1,
+        limit: 20,
+      });
+      expect(storeOnly.items.map((t) => t.orderNumber)).toEqual(['ORD-VT2']);
+    });
+
+    it('totalsByCurrency only counts succeeded/refunded payments, grouped by currency, over the whole filtered set not just the current page', async () => {
+      const restaurantNgn = await createApprovedRestaurant('NGN');
+      const restaurantUsd = await createApprovedRestaurant('USD');
+      await orderModel.create({
+        orderNumber: 'ORD-TOT1',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurantNgn._id,
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-TOT2',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurantNgn._id,
+        items: [],
+        subtotal: 50,
+        deliveryFee: 5,
+        serviceFee: 2.5,
+        tax: 0,
+        discount: 0,
+        total: 57.5,
+        platformFeeAmount: 7.5,
+        restaurantPayoutAmount: 42.5,
+        currency: 'NGN',
+        status: 'CANCELLED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'pending', // never collected — excluded from totals
+        deliveryAddress: validAddress,
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-TOT3',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurantUsd._id,
+        items: [],
+        subtotal: 20,
+        deliveryFee: 2,
+        serviceFee: 1,
+        tax: 0,
+        discount: 0,
+        total: 23,
+        platformFeeAmount: 3,
+        restaurantPayoutAmount: 17,
+        currency: 'USD',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'stripe',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+
+      // Page 1 with limit 1 — only 1 order visible on this page, but totals must reflect all 3.
+      const result = await ordersService.findAllForAdmin({ page: 1, limit: 1 });
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(3);
+      expect(result.totalsByCurrency).toEqual({ NGN: 115, USD: 23 });
+    });
+
+    it('does not crash on a legacy-shaped order document with sellerType set but its matching id field missing', async () => {
+      await orderModel.collection.insertOne({
+        orderNumber: 'ORD-LEGACY',
+        customerId: userId,
+        sellerType: 'restaurant',
+        // restaurantId deliberately absent — never written at all.
+        items: [],
+        subtotal: 10,
+        deliveryFee: 1,
+        serviceFee: 0.5,
+        tax: 0,
+        discount: 0,
+        total: 11.5,
+        platformFeeAmount: 1.5,
+        restaurantPayoutAmount: 8.5,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      const result = await ordersService.findAllForAdmin({ page: 1, limit: 20 });
+      const legacy = result.items.find((t) => t.orderNumber === 'ORD-LEGACY');
+      expect(legacy?.vendor.name).toBe('Unknown vendor');
+    });
+  });
+
   describe('rider dispatch (FDP-16)', () => {
     const riderA = 'rider-a-id';
     const riderB = 'rider-b-id';

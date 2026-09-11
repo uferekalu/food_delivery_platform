@@ -8,10 +8,13 @@ import { UsersService } from '../users/users.service';
 import { MenuService } from '../menu/menu.service';
 import { StoresService } from '../stores/stores.service';
 import { ProductsService } from '../stores/products.service';
+import { AdCampaignsService } from '../ad-campaigns/ad-campaigns.service';
 
 describe('AdminService', () => {
   let service: AdminService;
-  let ordersService: jest.Mocked<Pick<OrdersService, 'getAnalyticsSummary'>>;
+  let ordersService: jest.Mocked<
+    Pick<OrdersService, 'getAnalyticsSummary' | 'findAllForAdmin'>
+  >;
   let restaurantsService: jest.Mocked<
     Pick<RestaurantsService, 'countByApproval' | 'approve'>
   >;
@@ -22,15 +25,19 @@ describe('AdminService', () => {
     Pick<StoresService, 'approve' | 'countByApproval'>
   >;
   let productsService: jest.Mocked<Pick<ProductsService, 'getCatalog'>>;
+  let adCampaignsService: jest.Mocked<
+    Pick<AdCampaignsService, 'findAllForAdminPaginated'>
+  >;
 
   beforeEach(async () => {
-    ordersService = { getAnalyticsSummary: jest.fn() };
+    ordersService = { getAnalyticsSummary: jest.fn(), findAllForAdmin: jest.fn() };
     restaurantsService = { countByApproval: jest.fn(), approve: jest.fn() };
     ridersService = { countByVerification: jest.fn() };
     usersService = { countByRole: jest.fn() };
     menuService = { getMenu: jest.fn() };
     storesService = { approve: jest.fn(), countByApproval: jest.fn() };
     productsService = { getCatalog: jest.fn() };
+    adCampaignsService = { findAllForAdminPaginated: jest.fn() };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,6 +49,7 @@ describe('AdminService', () => {
         { provide: MenuService, useValue: menuService },
         { provide: StoresService, useValue: storesService },
         { provide: ProductsService, useValue: productsService },
+        { provide: AdCampaignsService, useValue: adCampaignsService },
       ],
     }).compile();
 
@@ -139,6 +147,48 @@ describe('AdminService', () => {
 
       expect(storesService.approve).toHaveBeenCalledWith('store-1');
       expect(result).toEqual({ isApproved: true });
+    });
+  });
+
+  describe('getOrderTransactions / getAdCampaignTransactions (docs/ROADMAP.md FDP-128)', () => {
+    it('delegates order transactions to OrdersService.findAllForAdmin with the query as-is', async () => {
+      const paginated = {
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+        totalsByCurrency: {},
+      };
+      ordersService.findAllForAdmin.mockResolvedValue(paginated as never);
+
+      const query = { vendorType: 'restaurant' as const, page: 2, limit: 10 };
+      const result = await service.getOrderTransactions(query);
+
+      expect(ordersService.findAllForAdmin).toHaveBeenCalledWith(query);
+      expect(result).toBe(paginated);
+    });
+
+    it('delegates ad-campaign transactions to AdCampaignsService.findAllForAdminPaginated with the query as-is', async () => {
+      const paginated = {
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+        totalsByCurrency: {},
+      };
+      adCampaignsService.findAllForAdminPaginated.mockResolvedValue(
+        paginated as never,
+      );
+
+      const query = { from: '2026-01-01', page: 1, limit: 20 };
+      const result = await service.getAdCampaignTransactions(query);
+
+      expect(adCampaignsService.findAllForAdminPaginated).toHaveBeenCalledWith(
+        query,
+      );
+      expect(result).toBe(paginated);
     });
   });
 });

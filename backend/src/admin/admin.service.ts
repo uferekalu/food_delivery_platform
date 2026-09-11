@@ -6,10 +6,13 @@ import { UsersService } from '../users/users.service';
 import { MenuService } from '../menu/menu.service';
 import { StoresService } from '../stores/stores.service';
 import { ProductsService } from '../stores/products.service';
+import { AdCampaignsService } from '../ad-campaigns/ad-campaigns.service';
 import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
 import type { StoreDocument } from '../stores/schemas/store.schema';
 import type { OrderStatus } from '../orders/schemas/order-status';
 import type { UserRole } from '../users/schemas/user.schema';
+import type { ListOrderTransactionsQueryDto } from '../orders/dto/list-order-transactions-query.dto';
+import type { ListAdCampaignTransactionsQueryDto } from '../ad-campaigns/dto/list-ad-campaign-transactions-query.dto';
 
 export interface AdminAnalytics {
   orders: {
@@ -38,6 +41,7 @@ export class AdminService {
     private readonly menuService: MenuService,
     private readonly storesService: StoresService,
     private readonly productsService: ProductsService,
+    private readonly adCampaignsService: AdCampaignsService,
   ) {}
 
   async getAnalytics(): Promise<AdminAnalytics> {
@@ -99,5 +103,17 @@ export class AdminService {
       );
     }
     return this.storesService.approve(id);
+  }
+
+  /** Thin passthrough (docs/ROADMAP.md FDP-128) — the admin Overview tab's order transaction
+   * ledger. Lives on AdminController rather than OrdersController since it's a cross-cutting
+   * reporting view, not an order-lifecycle operation, matching where getAnalytics already lives. */
+  getOrderTransactions(query: ListOrderTransactionsQueryDto) {
+    return this.ordersService.findAllForAdmin(query);
+  }
+
+  /** Same reasoning as getOrderTransactions above, for ad-campaign revenue. */
+  getAdCampaignTransactions(query: ListAdCampaignTransactionsQueryDto) {
+    return this.adCampaignsService.findAllForAdminPaginated(query);
   }
 }

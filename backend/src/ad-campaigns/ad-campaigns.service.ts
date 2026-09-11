@@ -14,6 +14,7 @@ import {
   AdCampaignStatus,
 } from './schemas/ad-campaign.schema';
 import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
+import type { ListAdCampaignTransactionsQueryDto } from './dto/list-ad-campaign-transactions-query.dto';
 import { canTransition } from './ad-campaign-state-machine';
 import { resolveDailyRate } from './ad-campaign-pricing';
 import { RestaurantsService } from '../restaurants/restaurants.service';
@@ -30,6 +31,7 @@ import type {
   VerifyPaymentResult,
 } from '../payments/adapters/payment-adapter.interface';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
+import type { PaginatedResult } from '../restaurants/restaurants.service';
 
 type VendorType = 'restaurant' | 'store';
 
@@ -284,7 +286,67 @@ export class AdCampaignsService {
       .find()
       .sort({ createdAt: -1 })
       .exec();
+    return this.attachVendorNames(campaigns);
+  }
 
+  /**
+   * Paginated, date-filterable counterpart to findAllForAdmin() above (docs/ROADMAP.md FDP-128)
+   * — powers the admin Overview tab's "Advertising Revenue" transaction ledger. Kept as a
+   * separate method rather than adding page/limit params to findAllForAdmin() itself: that
+   * method's existing caller (the Ad Campaigns admin tab) expects a plain array and every
+   * campaign at once (campaign volume is low enough this has never needed pagination), so
+   * changing its return shape would be a breaking change for no benefit to that caller.
+   * `totalsByCurrency` only counts `paymentStatus: 'succeeded'` campaigns — the same "money
+   * actually collected" definition OrdersService.findAllForAdmin's totals use, computed over the
+   * whole filtered set, not just the current page.
+   */
+  async findAllForAdminPaginated(
+    query: ListAdCampaignTransactionsQueryDto,
+  ): Promise<PaginatedResult<AdCampaignAdminView> & { totalsByCurrency: Record<string, number> }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const filter: Record<string, unknown> = {};
+    if (query.from || query.to) {
+      const createdAt: Record<string, Date> = {};
+      if (query.from) createdAt.$gte = new Date(query.from);
+      if (query.to) createdAt.$lte = new Date(query.to);
+      filter.createdAt = createdAt;
+    }
+
+    const [campaigns, total, revenueRows] = await Promise.all([
+      this.adCampaignModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      this.adCampaignModel.countDocuments(filter).exec(),
+      this.adCampaignModel
+        .aggregate<{ _id: string; total: number }>([
+          { $match: { ...filter, paymentStatus: 'succeeded' } },
+          { $group: { _id: '$currency', total: { $sum: '$totalPrice' } } },
+        ])
+        .exec(),
+    ]);
+
+    const totalsByCurrency: Record<string, number> = {};
+    for (const row of revenueRows) totalsByCurrency[row._id] = row.total;
+
+    const items = await this.attachVendorNames(campaigns);
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      totalsByCurrency,
+    };
+  }
+
+  private async attachVendorNames(
+    campaigns: AdCampaignDocument[],
+  ): Promise<AdCampaignAdminView[]> {
     const restaurantIds = [
       ...new Set(
         campaigns
