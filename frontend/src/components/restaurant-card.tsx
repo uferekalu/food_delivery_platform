@@ -67,6 +67,10 @@ export function RestaurantCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-1.5 p-3 pt-2">
+          {/* Sponsored listings (docs/ROADMAP.md FDP-126) — leads the badge row, ahead of even
+              open/closed, matching how Glovo/Chowdeck both lead a boosted card with its
+              sponsorship label as the single most prominent badge. */}
+          {restaurant.isSponsored && <Badge variant="warning">{t("sponsored")}</Badge>}
           <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           {restaurant.cuisineTypes.slice(0, 1).map((cuisine) => (
             <Badge key={cuisine} variant="primary">

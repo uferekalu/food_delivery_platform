@@ -113,7 +113,8 @@
     "closed": "Geschlossen",
     "opensAt": "Öffnet um {time}",
     "closedUntilTomorrow": "Geschlossen bis morgen",
-    "closedUntilDay": "Geschlossen bis {day}"
+    "closedUntilDay": "Geschlossen bis {day}",
+    "sponsored": "Anzeige"
   },
   "FavoriteButton": {
     "removeFromFavorites": "Aus Favoriten entfernen",
@@ -231,7 +232,9 @@
     "faq11Question": "Kann ich die App in meiner eigenen Sprache nutzen?",
     "faq11Answer": "Ja — wechsle jederzeit zwischen sechs Sprachen über die Sprachauswahl im Header.",
     "faq12Question": "Brauche ich ein Konto, um Hilfe zu bekommen?",
-    "faq12Answer": "Nein — der Support-Chat funktioniert auch für Gäste, und dein Gespräch bleibt für die Dauer deines Besuchs gespeichert, auch ohne Anmeldung."
+    "faq12Answer": "Nein — der Support-Chat funktioniert auch für Gäste, und dein Gespräch bleibt für die Dauer deines Besuchs gespeichert, auch ohne Anmeldung.",
+    "sponsored": "Gesponsert",
+    "sponsoredDescription": "Aktuell hervorgehobene Unternehmen auf der Plattform"
   },
   "LoginPage": {
     "enterValidEmail": "Gib eine gültige E-Mail-Adresse ein",
@@ -1545,7 +1548,8 @@
     "closed": "Geschlossen",
     "opensAt": "Öffnet um {time}",
     "closedUntilTomorrow": "Geschlossen bis morgen",
-    "closedUntilDay": "Geschlossen bis {day}"
+    "closedUntilDay": "Geschlossen bis {day}",
+    "sponsored": "Anzeige"
   },
   "StoreDetailPage": {
     "storeNotFound": "Shop nicht gefunden",
