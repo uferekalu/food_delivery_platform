@@ -665,7 +665,8 @@
     "salesReport": "销售报告",
     "close": "打烊",
     "alsoSellGroceriesOrPharmacy": "还想销售生鲜杂货或药妆产品吗？",
-    "addAStore": "添加店铺"
+    "addAStore": "添加店铺",
+    "advertise": "推广"
   },
   "NewRestaurantPage": {
     "addARestaurant": "添加一家餐厅",
@@ -810,7 +811,8 @@
     "salesReport": "销售报告",
     "close": "打烊",
     "alsoRunARestaurant": "还经营着一家餐厅吗？",
-    "addRestaurant": "添加餐厅"
+    "addRestaurant": "添加餐厅",
+    "advertise": "推广"
   },
   "StoreEarningsPage": {
     "storeNotFound": "未找到该商店",
@@ -1780,5 +1782,36 @@
     "markPaid": "标记为已付款",
     "markedPaid": "广告活动已标记为已付款并已激活",
     "couldNotMarkPaid": "无法将广告活动标记为已付款"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "我的广告活动",
+    "description": "我们的团队会为您设置赞助展示位置，帮助顾客发现您的商家。付款激活广告活动后，您将在整个平台上以赞助商身份展示。",
+    "noCampaignsYet": "暂无广告活动",
+    "adminCreatesDescription": "当为您设置好赞助展示机会时，我们的团队会与您联系。",
+    "status_pending_payment": "待付款",
+    "status_scheduled": "已排期",
+    "status_active": "投放中",
+    "status_ended": "已结束",
+    "status_cancelled": "已取消",
+    "paymentFailed": "付款失败 — 请重试",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "立即付款以激活此广告活动",
+    "cancelReasonLabel": "原因：{reason}",
+    "payNow": "立即付款",
+    "couldNotStartPayment": "无法开始付款",
+    "liveBanner": "此广告活动正在投放中 — 您正以赞助商身份展示"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "正在确认您的付款…",
+    "confirmingPaymentLabel": "正在确认付款",
+    "usuallyTakesAFewSeconds": "通常只需几秒钟。",
+    "paymentNotCompleted": "付款未完成",
+    "paymentCancelledOrFailed": "付款已取消或未成功完成。",
+    "campaignActivated": "您的广告活动已激活",
+    "campaignActivatedDescription": "您的商家现已在整个平台上以赞助商身份展示。",
+    "backToMyCampaigns": "返回我的广告活动",
+    "checkAgain": "重新检查",
+    "couldNotLoadCampaign": "无法加载此广告活动",
+    "loading": "加载中…"
   }
 }

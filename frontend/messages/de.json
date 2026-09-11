@@ -665,7 +665,8 @@
     "salesReport": "Verkaufsbericht",
     "close": "Schließen",
     "alsoSellGroceriesOrPharmacy": "Möchtest du auch Lebensmittel oder Apothekenartikel verkaufen?",
-    "addAStore": "Shop hinzufügen"
+    "addAStore": "Shop hinzufügen",
+    "advertise": "Bewerben"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Ein Restaurant hinzufügen",
@@ -810,7 +811,8 @@
     "salesReport": "Verkaufsbericht",
     "close": "Schließen",
     "alsoRunARestaurant": "Betreibst du auch ein Restaurant?",
-    "addRestaurant": "Restaurant hinzufügen"
+    "addRestaurant": "Restaurant hinzufügen",
+    "advertise": "Bewerben"
   },
   "StoreEarningsPage": {
     "storeNotFound": "Shop nicht gefunden",
@@ -1780,5 +1782,36 @@
     "markPaid": "Als bezahlt markieren",
     "markedPaid": "Kampagne als bezahlt markiert und aktiviert",
     "couldNotMarkPaid": "Kampagne konnte nicht als bezahlt markiert werden"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "Meine Werbekampagnen",
+    "description": "Unser Team richtet gesponserte Platzierungen ein, damit Kunden Ihr Unternehmen entdecken. Bezahlen Sie, um eine Kampagne zu aktivieren, und sie wird als gesponserter Eintrag im gesamten Marktplatz live geschaltet.",
+    "noCampaignsYet": "Noch keine Werbekampagnen",
+    "adminCreatesDescription": "Unser Team meldet sich, sobald eine gesponserte Platzierung für Sie eingerichtet ist.",
+    "status_pending_payment": "Zahlung ausstehend",
+    "status_scheduled": "Geplant",
+    "status_active": "Live",
+    "status_ended": "Beendet",
+    "status_cancelled": "Storniert",
+    "paymentFailed": "Zahlung fehlgeschlagen — erneut versuchen",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "Jetzt bezahlen, um diese Kampagne zu aktivieren",
+    "cancelReasonLabel": "Grund: {reason}",
+    "payNow": "Jetzt bezahlen",
+    "couldNotStartPayment": "Zahlung konnte nicht gestartet werden",
+    "liveBanner": "Diese Kampagne ist live — Sie werden als gesponsert angezeigt"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "Zahlung wird bestätigt…",
+    "confirmingPaymentLabel": "Zahlung wird bestätigt",
+    "usuallyTakesAFewSeconds": "Dies dauert normalerweise nur wenige Sekunden.",
+    "paymentNotCompleted": "Zahlung nicht abgeschlossen",
+    "paymentCancelledOrFailed": "Die Zahlung wurde storniert oder ist fehlgeschlagen.",
+    "campaignActivated": "Ihre Werbekampagne ist aktiv",
+    "campaignActivatedDescription": "Ihr Unternehmen wird jetzt als gesponsert im gesamten Marktplatz angezeigt.",
+    "backToMyCampaigns": "Zurück zu meinen Werbekampagnen",
+    "checkAgain": "Erneut prüfen",
+    "couldNotLoadCampaign": "Diese Werbekampagne konnte nicht geladen werden",
+    "loading": "Wird geladen…"
   }
 }

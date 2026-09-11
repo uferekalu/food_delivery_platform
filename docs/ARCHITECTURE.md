@@ -2600,3 +2600,59 @@ tests passing across 45 suites, plus the full `npm run test:e2e` run described a
 run reported a single suite failing with zero failed tests inside it — a `mongodb-memory-server`
 launch-timeout flake, not a real regression; confirmed by an immediate clean rerun: 45/45 suites,
 685/685 tests). `tsc --noEmit`/`eslint`/production `build` clean on both sides.
+
+## 47. Sponsored-listing ad campaigns, part 2: vendor checkout (docs/ROADMAP.md FDP-125)
+
+Closes the loop §46 deliberately left open: FDP-124 gave admin the ability to create and price a
+campaign, plus an offline "mark paid manually" escape hatch for testing/real negotiated deals, but
+no way for a vendor to actually pay through the app themselves. This ticket is that missing path —
+the genuine "vendor gets charged" flow the original feature request asked for.
+
+### Shape: read-only list + pay, not a create form
+
+`VendorAdCampaignsManager` (`frontend/src/components/vendor-ad-campaigns-manager.tsx`) is
+deliberately asymmetric with `promo-codes-tab.tsx`'s vendor-facing sibling
+(`dashboard/.../promo-codes/page.tsx`): a vendor can create their own promo code, but never their
+own ad campaign — admin alone decides who gets advertised (confirmed in FDP-124's plan-mode
+design). So this component has no create form at all, just `useListMyAdCampaignsQuery()` filtered
+client-side to the current `restaurantId`/`storeId`, rendered as read-only cards with a single
+possible action: "Pay now" on a `pending_payment` row. One shared component parameterized by
+`vendorType: "restaurant" | "store"` backs two near-identical one-line page wrappers
+(`dashboard/restaurants/[id]/advertise/page.tsx`, `dashboard/stores/[id]/advertise/page.tsx`) —
+the same "one component, two thin route wrappers" shape `promo-codes` already established for
+the same restaurant/store duality.
+
+### Reusing the exact order-checkout redirect shape
+
+"Pay now" calls `useInitiateAdCampaignPaymentMutation()` → `POST /ad-campaigns/:id/pay` → the
+backend's `AdCampaignsService.initiateCampaignPayment` (already built in FDP-124, this ticket
+just gives it a caller) → `window.location.href = redirectUrl`. This is the identical shape
+`checkout/page.tsx` already uses for order payment — no new pattern invented. **Verified against a
+real payment provider, not a mock**: seeded a real vendor account and a real `pending_payment`
+campaign against the local backend (which has real Paystack test-mode credentials — see
+`payment_provider_real_creds` in this project's standing references), drove the actual login →
+dashboard → Advertise → Pay now flow via Playwright, and confirmed the browser genuinely landed on
+a live `https://checkout.paystack.com/...` session — not just that a `redirectUrl` string was
+present in a mocked response. This is the strongest form of verification this session's own
+"live verification discipline" standard calls for on a real money-movement path.
+
+### Callback page — poll-plus-verify, no socket
+
+`dashboard/ad-campaigns/[id]/callback/page.tsx` is a trimmed copy of `checkout/callback/page.tsx`:
+`useGetAdCampaignQuery` with `pollingInterval` (skipped once the return trip is a `?cancelled=true`
+one), plus an active `verifyPayment` call fired once on mount so a vendor is never stuck on
+"Confirming your payment…" waiting on a webhook that might not reach this deploy. The one real
+difference from the order-checkout callback: no realtime-gateway socket subscription, since no
+socket event exists for ad campaigns (orders have `order:statusChanged`; nothing analogous was
+built for this feature, and wasn't asked for) — the poll is the *entire* update mechanism here, not
+a fallback running alongside a socket, so `POLL_INTERVAL_MS` doing real work matters more than it
+does on the order-checkout page. Three states verified live in a real browser, light and dark mode:
+the spinner/confirming state, the resolved-active state ("Your ad campaign is active"), and the
+cancelled state (`?cancelled=true`) — each screenshotted before shipping.
+
+### Testing
+
+No new backend code this ticket (the backend surface was already complete and tested in FDP-124);
+frontend verification was entirely live-browser, not component tests, given the nature of what
+needed proving (a real cross-origin redirect to a live payment provider) — `tsc --noEmit`/
+`eslint`/production `build` clean on both sides, plus the Playwright walkthrough described above.

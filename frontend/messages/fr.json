@@ -665,7 +665,8 @@
     "salesReport": "Rapport de ventes",
     "close": "Fermer",
     "alsoSellGroceriesOrPharmacy": "Vous voulez aussi vendre des produits d'épicerie ou de pharmacie ?",
-    "addAStore": "Ajouter une boutique"
+    "addAStore": "Ajouter une boutique",
+    "advertise": "Annoncer"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Ajouter un restaurant",
@@ -810,7 +811,8 @@
     "salesReport": "Rapport de ventes",
     "close": "Fermer",
     "alsoRunARestaurant": "Vous gérez aussi un restaurant ?",
-    "addRestaurant": "Ajouter un restaurant"
+    "addRestaurant": "Ajouter un restaurant",
+    "advertise": "Annoncer"
   },
   "StoreEarningsPage": {
     "storeNotFound": "Boutique introuvable",
@@ -1780,5 +1782,36 @@
     "markPaid": "Marquer comme payé",
     "markedPaid": "Campagne marquée comme payée et activée",
     "couldNotMarkPaid": "Impossible de marquer la campagne comme payée"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "Mes campagnes publicitaires",
+    "description": "Notre équipe met en place des emplacements sponsorisés pour aider les clients à découvrir votre entreprise. Payez pour activer une campagne et elle sera mise en avant comme annonce sponsorisée sur toute la plateforme.",
+    "noCampaignsYet": "Aucune campagne publicitaire pour le moment",
+    "adminCreatesDescription": "Notre équipe vous contactera lorsqu'une opportunité de placement sponsorisé sera mise en place pour vous.",
+    "status_pending_payment": "Paiement en attente",
+    "status_scheduled": "Planifiée",
+    "status_active": "En direct",
+    "status_ended": "Terminée",
+    "status_cancelled": "Annulée",
+    "paymentFailed": "Paiement échoué — réessayez",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "Payez maintenant pour activer cette campagne",
+    "cancelReasonLabel": "Raison : {reason}",
+    "payNow": "Payer maintenant",
+    "couldNotStartPayment": "Impossible de démarrer le paiement",
+    "liveBanner": "Cette campagne est en direct — vous apparaissez comme sponsorisé"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "Confirmation de votre paiement…",
+    "confirmingPaymentLabel": "Confirmation du paiement",
+    "usuallyTakesAFewSeconds": "Cela prend généralement quelques secondes.",
+    "paymentNotCompleted": "Paiement non finalisé",
+    "paymentCancelledOrFailed": "Le paiement a été annulé ou n'a pas abouti.",
+    "campaignActivated": "Votre campagne publicitaire est active",
+    "campaignActivatedDescription": "Votre entreprise apparaît désormais comme sponsorisée sur toute la plateforme.",
+    "backToMyCampaigns": "Retour à mes campagnes publicitaires",
+    "checkAgain": "Vérifier à nouveau",
+    "couldNotLoadCampaign": "Impossible de charger cette campagne publicitaire",
+    "loading": "Chargement…"
   }
 }

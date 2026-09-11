@@ -665,7 +665,8 @@
     "salesReport": "Informe de ventas",
     "close": "Cerrar",
     "alsoSellGroceriesOrPharmacy": "¿También quieres vender productos de supermercado o farmacia?",
-    "addAStore": "Añadir una tienda"
+    "addAStore": "Añadir una tienda",
+    "advertise": "Anunciar"
   },
   "NewRestaurantPage": {
     "addARestaurant": "Agregar un restaurante",
@@ -810,7 +811,8 @@
     "salesReport": "Informe de ventas",
     "close": "Cerrar",
     "alsoRunARestaurant": "¿También tienes un restaurante?",
-    "addRestaurant": "Añadir un restaurante"
+    "addRestaurant": "Añadir un restaurante",
+    "advertise": "Anunciar"
   },
   "StoreEarningsPage": {
     "storeNotFound": "Tienda no encontrada",
@@ -1780,5 +1782,36 @@
     "markPaid": "Marcar como pagado",
     "markedPaid": "Campaña marcada como pagada y activada",
     "couldNotMarkPaid": "No se pudo marcar la campaña como pagada"
+  },
+  "VendorAdCampaignsPage": {
+    "myAdCampaigns": "Mis campañas publicitarias",
+    "description": "Nuestro equipo configura ubicaciones patrocinadas para ayudar a los clientes a descubrir tu negocio. Paga para activar una campaña y se publicará como listado patrocinado en todo el mercado.",
+    "noCampaignsYet": "Aún no hay campañas publicitarias",
+    "adminCreatesDescription": "Nuestro equipo te contactará cuando se configure una oportunidad de ubicación patrocinada para ti.",
+    "status_pending_payment": "Pago pendiente",
+    "status_scheduled": "Programada",
+    "status_active": "En vivo",
+    "status_ended": "Finalizada",
+    "status_cancelled": "Cancelada",
+    "paymentFailed": "Pago fallido — inténtalo de nuevo",
+    "dateRange": "{start} – {end}",
+    "payToActivate": "Paga ahora para activar esta campaña",
+    "cancelReasonLabel": "Motivo: {reason}",
+    "payNow": "Pagar ahora",
+    "couldNotStartPayment": "No se pudo iniciar el pago",
+    "liveBanner": "Esta campaña está en vivo — apareces como patrocinado"
+  },
+  "AdCampaignCallbackPage": {
+    "confirmingPayment": "Confirmando tu pago…",
+    "confirmingPaymentLabel": "Confirmando pago",
+    "usuallyTakesAFewSeconds": "Esto suele tardar unos segundos.",
+    "paymentNotCompleted": "Pago no completado",
+    "paymentCancelledOrFailed": "El pago se canceló o no se completó.",
+    "campaignActivated": "Tu campaña publicitaria está activa",
+    "campaignActivatedDescription": "Tu negocio ahora aparece como patrocinado en todo el mercado.",
+    "backToMyCampaigns": "Volver a mis campañas publicitarias",
+    "checkAgain": "Verificar de nuevo",
+    "couldNotLoadCampaign": "No se pudo cargar esta campaña publicitaria",
+    "loading": "Cargando…"
   }
 }
