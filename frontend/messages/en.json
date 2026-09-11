@@ -518,6 +518,12 @@
     "CANCELLED": "Cancelled",
     "REFUNDED": "Refunded"
   },
+  "OrderPaymentStatus": {
+    "pending": "Pending",
+    "succeeded": "Paid",
+    "failed": "Failed",
+    "refunded": "Refunded"
+  },
   "PayoutStatus": {
     "pending": "Pending",
     "processing": "Processing",
@@ -1078,7 +1084,19 @@
     "salesByDay": "Sales by day",
     "date": "Date",
     "restaurantNotFound": "Restaurant not found",
-    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it."
+    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
+    "advertising": "Advertising",
+    "advertisingDescription": "Ad campaigns you've paid for, so advertising cost is documented alongside your sales.",
+    "noAdSpendInRange": "No ad spend in this range",
+    "adSpendAppearsHere": "Ad campaigns you pay for will appear here.",
+    "campaignPeriod": "Campaign period",
+    "amount": "Amount",
+    "status": "Status",
+    "payment": "Payment",
+    "totalAdSpend": "Total ad spend",
+    "adPaymentStatus_pending": "Pending",
+    "adPaymentStatus_succeeded": "Paid",
+    "adPaymentStatus_failed": "Failed"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1187,7 +1205,30 @@
     "usersByRole": "Users by role",
     "riders": "Riders",
     "verified": "Verified",
-    "pending": "Pending"
+    "pending": "Pending",
+    "orderTransactions": "Order transactions",
+    "orderTransactionsDescription": "Every order across every vendor — restaurants, groceries, and pharmacies — for auditing.",
+    "from": "From",
+    "to": "To",
+    "allVendorTypes": "All vendor types",
+    "storesVendorType": "Groceries & pharmacies",
+    "vendorType": "Vendor type",
+    "restaurants": "Restaurants",
+    "clearFilters": "Clear filters",
+    "noTransactionsFound": "No transactions found",
+    "tryDifferentFilters": "Try a different date range or filter.",
+    "date": "Date",
+    "vendor": "Vendor",
+    "orderNumber": "Order #",
+    "items": "Items",
+    "amount": "Amount",
+    "status": "Status",
+    "payment": "Payment",
+    "totalCollected": "Total collected",
+    "advertisingRevenue": "Advertising revenue",
+    "advertisingRevenueDescription": "Every ad campaign charge across every vendor, for auditing.",
+    "noCampaignTransactionsFound": "No ad campaign transactions found",
+    "campaignPeriod": "Campaign period"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Review & approve",

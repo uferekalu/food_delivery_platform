@@ -5,6 +5,7 @@ import { RidersModule } from '../riders/riders.module';
 import { UsersModule } from '../users/users.module';
 import { MenuModule } from '../menu/menu.module';
 import { StoresModule } from '../stores/stores.module';
+import { AdCampaignsModule } from '../ad-campaigns/ad-campaigns.module';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 
@@ -13,7 +14,10 @@ import { AdminController } from './admin.controller';
   // or stands alone, not the other way around, so AdminModule importing all of them is a
   // diamond, not a cycle. Needed here so restaurant/store approval can require a non-empty
   // menu/catalog without RestaurantsModule/StoresModule <-> MenuModule/ProductsModule becoming
-  // circular (docs/ROADMAP.md FDP-60/FDP-56).
+  // circular (docs/ROADMAP.md FDP-60/FDP-56). AdCampaignsModule is likewise safe (docs/ROADMAP.md
+  // FDP-128) — it imports RestaurantsModule/StoresModule/NotificationsModule/PaymentsModule,
+  // none of which import AdminModule back, needed here for the Overview tab's "Advertising
+  // Revenue" transaction ledger.
   imports: [
     OrdersModule,
     RestaurantsModule,
@@ -21,6 +25,7 @@ import { AdminController } from './admin.controller';
     UsersModule,
     MenuModule,
     StoresModule,
+    AdCampaignsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

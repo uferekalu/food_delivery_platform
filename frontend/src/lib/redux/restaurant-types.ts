@@ -181,6 +181,13 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
+/** A paginated result whose grand total is meaningful only per-currency (docs/ROADMAP.md
+ * FDP-128) — this platform is genuinely multi-currency, so `totalsByCurrency` is never summed
+ * into one blended number, matching AdminAnalytics.orders.revenueByCurrency's same convention. */
+export interface PaginatedResultWithTotals<T> extends PaginatedResult<T> {
+  totalsByCurrency: Record<string, number>;
+}
+
 export interface ModifierOption {
   name: string;
   priceDelta: number;
@@ -548,4 +555,35 @@ export interface Order {
   disputeFlagged: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// Admin-wide order transaction ledger (docs/ROADMAP.md FDP-128) — a flatter, audit-facing view
+// of an order (vendor resolved to a name, not just a raw id) rather than the full Order shape
+// above, which is why this is its own type rather than reusing Order directly.
+export interface OrderTransactionVendor {
+  type: "restaurant" | "store";
+  id: string;
+  name: string;
+}
+
+export interface OrderTransactionItem {
+  name: string;
+  qty: number;
+  price: number;
+}
+
+export interface OrderTransaction {
+  _id: string;
+  orderNumber: string;
+  vendor: OrderTransactionVendor;
+  items: OrderTransactionItem[];
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  platformFeeAmount: number;
+  currency: string;
+  status: OrderStatus;
+  paymentStatus: OrderPaymentStatus;
+  createdAt: string;
+  deliveredAt: string | null;
 }

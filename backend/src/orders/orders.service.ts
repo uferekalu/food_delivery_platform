@@ -35,8 +35,10 @@ import {
   ACTIVE_DELIVERY_STATUSES,
   ORDER_STATUSES,
 } from './schemas/order-status';
-import type { OrderStatus } from './schemas/order-status';
+import type { OrderStatus, OrderPaymentStatus } from './schemas/order-status';
 import type { PaymentProvider } from '../payments/payment-provider';
+import type { ListOrderTransactionsQueryDto } from './dto/list-order-transactions-query.dto';
+import type { PaginatedResult } from '../restaurants/restaurants.service';
 
 // Nearest-rider dispatch (docs/ROADMAP.md FDP-98) only looks this far from the seller — beyond
 // this, dispatching would hand a rider a trip not actually worth taking, and the order is better
@@ -185,6 +187,38 @@ export interface SalesReport {
   itemsMissingCostPrice: string[];
   byItem: SalesReportItemBreakdown[];
   byDay: SalesReportDayBreakdown[];
+}
+
+// Admin-wide order transaction ledger (docs/ROADMAP.md FDP-128) — every order across every
+// vendor, for auditing, not just one seller's own delivered-only sales report. Vendor is a
+// discriminated union (same shape as AdCampaignVendor/PromoCodeScope) so the admin UI can render
+// a name + type-specific badge without a raw restaurantId/storeId meaning nothing at a glance.
+export interface OrderTransactionVendor {
+  type: 'restaurant' | 'store';
+  id: string;
+  name: string;
+}
+
+export interface OrderTransactionItem {
+  name: string;
+  qty: number;
+  price: number;
+}
+
+export interface OrderTransaction {
+  _id: string;
+  orderNumber: string;
+  vendor: OrderTransactionVendor;
+  items: OrderTransactionItem[];
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  platformFeeAmount: number;
+  currency: string;
+  status: OrderStatus;
+  paymentStatus: OrderPaymentStatus;
+  createdAt: Date;
+  deliveredAt: Date | null;
 }
 
 @Injectable()
@@ -1752,5 +1786,135 @@ export class OrdersService {
     for (const row of revenueRows) revenueByCurrency[row._id] = row.total;
 
     return { totalOrders, ordersByStatus, revenueByCurrency };
+  }
+
+  /**
+   * Admin-wide, paginated order transaction ledger (docs/ROADMAP.md FDP-128) — the audit view
+   * `getAnalyticsSummary` above never provided: every individual order across every vendor, not
+   * just aggregate counts. Deliberately returns every order in range regardless of status (not
+   * DELIVERED-only like getSalesReport/getEarningsSummary) — an auditor needs to see cancelled
+   * and failed-payment orders too, each with its own status/paymentStatus badge, not just the
+   * successful ones. `totalsByCurrency` is computed separately from the paginated page (same
+   * `paymentStatus: succeeded|refunded` "money actually collected" definition
+   * `getAnalyticsSummary` already established) so the figure reflects the *entire* filtered set,
+   * not just whichever page is currently displayed — grouped by currency, never summed together,
+   * for the same genuinely-multi-currency reason `getAnalyticsSummary`'s own comment documents.
+   */
+  async findAllForAdmin(
+    query: ListOrderTransactionsQueryDto,
+  ): Promise<PaginatedResult<OrderTransaction> & { totalsByCurrency: Record<string, number> }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const filter: Record<string, unknown> = {};
+    if (query.vendorType) filter.sellerType = query.vendorType;
+    if (query.from || query.to) {
+      const createdAt: Record<string, Date> = {};
+      if (query.from) createdAt.$gte = new Date(query.from);
+      if (query.to) createdAt.$lte = new Date(query.to);
+      filter.createdAt = createdAt;
+    }
+
+    const [orders, total, revenueRows] = await Promise.all([
+      this.orderModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      this.orderModel.countDocuments(filter).exec(),
+      this.orderModel
+        .aggregate<{ _id: string; total: number }>([
+          {
+            $match: {
+              ...filter,
+              paymentStatus: { $in: ['succeeded', 'refunded'] },
+            },
+          },
+          { $group: { _id: '$currency', total: { $sum: '$total' } } },
+        ])
+        .exec(),
+    ]);
+
+    // Batched vendor-name resolution, same Map<id,name> pattern
+    // AdCampaignsService.findAllForAdmin/PromoCodesService.findAll already use — `!= null`
+    // (loose), not `!== null`, for the same legacy-doc safety FDP-114's postmortem documents.
+    const restaurantIds = [
+      ...new Set(
+        orders
+          .filter((o) => o.sellerType === 'restaurant' && o.restaurantId != null)
+          .map((o) => o.restaurantId!.toString()),
+      ),
+    ];
+    const storeIds = [
+      ...new Set(
+        orders
+          .filter((o) => o.sellerType === 'store' && o.storeId != null)
+          .map((o) => o.storeId!.toString()),
+      ),
+    ];
+    const [restaurants, stores] = await Promise.all([
+      restaurantIds.length > 0
+        ? this.restaurantsService.findByIds(restaurantIds)
+        : Promise.resolve([]),
+      storeIds.length > 0
+        ? this.storesService.findByIds(storeIds)
+        : Promise.resolve([]),
+    ]);
+    const restaurantNameById = new Map(
+      restaurants.map((r) => [r._id.toString(), r.name] as const),
+    );
+    const storeNameById = new Map(
+      stores.map((s) => [s._id.toString(), s.name] as const),
+    );
+
+    const items: OrderTransaction[] = orders.map((order) => {
+      let vendor: OrderTransactionVendor;
+      if (order.sellerType === 'store' && order.storeId != null) {
+        const id = order.storeId.toString();
+        vendor = { type: 'store', id, name: storeNameById.get(id) ?? 'Unknown store' };
+      } else if (order.restaurantId != null) {
+        const id = order.restaurantId.toString();
+        vendor = { type: 'restaurant', id, name: restaurantNameById.get(id) ?? 'Unknown restaurant' };
+      } else {
+        vendor = { type: 'restaurant', id: order._id.toString(), name: 'Unknown vendor' };
+      }
+
+      return {
+        _id: order._id.toString(),
+        orderNumber: order.orderNumber,
+        vendor,
+        items: order.items.map((item) => ({
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+        })),
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        total: order.total,
+        platformFeeAmount: order.platformFeeAmount,
+        currency: order.currency,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        // `createdAt` is injected by Mongoose's `timestamps: true` option, not declared on the
+        // `Order` class itself, so it isn't part of `OrderDocument`'s static type — the same gap
+        // `campaign.toObject()`'s spread sidesteps in AdCampaignsService.attachVendorNames; here
+        // a single targeted cast is simpler than a full toObject() spread for one field.
+        createdAt: (order as unknown as { createdAt: Date }).createdAt,
+        deliveredAt: order.deliveredAt,
+      };
+    });
+
+    const totalsByCurrency: Record<string, number> = {};
+    for (const row of revenueRows) totalsByCurrency[row._id] = round2(row.total);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      totalsByCurrency,
+    };
   }
 }

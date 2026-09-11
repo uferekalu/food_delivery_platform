@@ -17,6 +17,7 @@ import { useGetMyStoresQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreSalesReportQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
+import { VendorAdSpendSection } from "@/components/vendor-ad-spend-section";
 import type { Store } from "@/lib/redux/restaurant-types";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -222,6 +223,8 @@ function SalesReportView({ store }: { store: Store }) {
           </Card>
         </>
       )}
+
+      <VendorAdSpendSection vendorType="store" vendorId={store._id} from={from} to={to} />
     </Container>
   );
 }

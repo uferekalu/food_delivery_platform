@@ -1,7 +1,9 @@
-import { Controller, Get, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminService } from './admin.service';
+import { ListOrderTransactionsQueryDto } from '../orders/dto/list-order-transactions-query.dto';
+import { ListAdCampaignTransactionsQueryDto } from '../ad-campaigns/dto/list-ad-campaign-transactions-query.dto';
 
 @ApiTags('admin')
 @Controller('admin')
@@ -12,6 +14,18 @@ export class AdminController {
   @Get('analytics')
   getAnalytics() {
     return this.adminService.getAnalytics();
+  }
+
+  // Auditing view (docs/ROADMAP.md FDP-128) — every order across every vendor, paginated and
+  // date-filterable, distinct from getAnalytics' aggregate-only counters.
+  @Get('transactions/orders')
+  getOrderTransactions(@Query() query: ListOrderTransactionsQueryDto) {
+    return this.adminService.getOrderTransactions(query);
+  }
+
+  @Get('transactions/ad-campaigns')
+  getAdCampaignTransactions(@Query() query: ListAdCampaignTransactionsQueryDto) {
+    return this.adminService.getAdCampaignTransactions(query);
   }
 
   // Moved here from RestaurantsController (docs/ROADMAP.md FDP-60) — approval now requires

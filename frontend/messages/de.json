@@ -518,6 +518,12 @@
     "CANCELLED": "Storniert",
     "REFUNDED": "Erstattet"
   },
+  "OrderPaymentStatus": {
+    "pending": "Ausstehend",
+    "succeeded": "Bezahlt",
+    "failed": "Fehlgeschlagen",
+    "refunded": "Erstattet"
+  },
   "PayoutStatus": {
     "pending": "Ausstehend",
     "processing": "In Bearbeitung",
@@ -1078,7 +1084,19 @@
     "salesByDay": "Verkäufe nach Tag",
     "date": "Datum",
     "restaurantNotFound": "Restaurant nicht gefunden",
-    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf."
+    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
+    "advertising": "Werbung",
+    "advertisingDescription": "Bezahlte Werbekampagnen, damit die Werbekosten zusammen mit Ihren Verkäufen dokumentiert sind.",
+    "noAdSpendInRange": "Keine Werbeausgaben in diesem Zeitraum",
+    "adSpendAppearsHere": "Werbekampagnen, die Sie bezahlen, erscheinen hier.",
+    "campaignPeriod": "Kampagnenzeitraum",
+    "amount": "Betrag",
+    "status": "Status",
+    "payment": "Zahlung",
+    "totalAdSpend": "Werbeausgaben gesamt",
+    "adPaymentStatus_pending": "Ausstehend",
+    "adPaymentStatus_succeeded": "Bezahlt",
+    "adPaymentStatus_failed": "Fehlgeschlagen"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1187,7 +1205,30 @@
     "usersByRole": "Nutzer nach Rolle",
     "riders": "Fahrer",
     "verified": "Verifiziert",
-    "pending": "Ausstehend"
+    "pending": "Ausstehend",
+    "orderTransactions": "Bestelltransaktionen",
+    "orderTransactionsDescription": "Alle Bestellungen aller Anbieter – Restaurants, Lebensmittel- und Apothekengeschäfte – zur Prüfung.",
+    "from": "Von",
+    "to": "Bis",
+    "allVendorTypes": "Alle Anbietertypen",
+    "storesVendorType": "Lebensmittel & Apotheken",
+    "vendorType": "Anbietertyp",
+    "restaurants": "Restaurants",
+    "clearFilters": "Filter zurücksetzen",
+    "noTransactionsFound": "Keine Transaktionen gefunden",
+    "tryDifferentFilters": "Versuchen Sie einen anderen Zeitraum oder Filter.",
+    "date": "Datum",
+    "vendor": "Anbieter",
+    "orderNumber": "Bestell-Nr.",
+    "items": "Artikel",
+    "amount": "Betrag",
+    "status": "Status",
+    "payment": "Zahlung",
+    "totalCollected": "Insgesamt eingenommen",
+    "advertisingRevenue": "Werbeeinnahmen",
+    "advertisingRevenueDescription": "Alle Anzeigenkampagnen-Zahlungen aller Anbieter, zur Prüfung.",
+    "noCampaignTransactionsFound": "Keine Werbekampagnen-Transaktionen gefunden",
+    "campaignPeriod": "Kampagnenzeitraum"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Prüfen & genehmigen",

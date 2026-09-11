@@ -696,4 +696,61 @@ describe('AdCampaignsService', () => {
       });
     });
   });
+
+  describe('findAllForAdminPaginated (docs/ROADMAP.md FDP-128)', () => {
+    it('paginates and totals only succeeded campaigns, grouped by currency, over the whole filtered set', async () => {
+      const restaurantA = await createOwnedRestaurant('owner-tx-1', 'Ad Buyer A');
+      const restaurantB = await createOwnedRestaurant('owner-tx-2', 'Ad Buyer B');
+
+      const campaignA = await service.create(
+        { restaurantId: restaurantA._id.toString(), startDate: new Date().toISOString(), durationDays: 7 },
+        admin,
+      );
+      await service.markPaidManually(campaignA._id.toString(), admin); // succeeded, NGN 35000
+
+      const campaignB = await service.create(
+        { restaurantId: restaurantB._id.toString(), startDate: new Date().toISOString(), durationDays: 7 },
+        admin,
+      );
+      // Left pending_payment on purpose — must not count toward totalsByCurrency.
+      void campaignB;
+
+      const result = await service.findAllForAdminPaginated({ page: 1, limit: 1 });
+      expect(result.total).toBe(2); // both campaigns are listed...
+      expect(result.items).toHaveLength(1); // ...but only 1 fits on this page
+      expect(result.totalsByCurrency).toEqual({ NGN: 35000 }); // totals reflect the whole set, not just the page
+    });
+
+    it('filters by createdAt date range', async () => {
+      const restaurant = await createOwnedRestaurant('owner-tx-3');
+      const inRange = await service.create(
+        { restaurantId: restaurant._id.toString(), startDate: new Date().toISOString(), durationDays: 7 },
+        admin,
+      );
+
+      const restaurant2 = await createOwnedRestaurant('owner-tx-4');
+      const outOfRange = await service.create(
+        { restaurantId: restaurant2._id.toString(), startDate: new Date().toISOString(), durationDays: 7 },
+        admin,
+      );
+      // Mongoose marks `createdAt` immutable by default under `timestamps: true` — a Mongoose
+      // `updateOne`/`$set` on it is silently stripped, so the raw collection driver is required
+      // to actually move a fixture's createdAt into the past for this test.
+      const past = new Date();
+      past.setDate(past.getDate() - 30);
+      await adCampaignModel.collection.updateOne(
+        { _id: outOfRange._id },
+        { $set: { createdAt: past } },
+      );
+
+      const from = new Date();
+      from.setDate(from.getDate() - 1);
+      const result = await service.findAllForAdminPaginated({
+        from: from.toISOString(),
+        page: 1,
+        limit: 20,
+      });
+      expect(result.items.map((c) => c._id.toString())).toEqual([inRange._id.toString()]);
+    });
+  });
 });

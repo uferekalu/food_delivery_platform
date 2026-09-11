@@ -40,5 +40,9 @@ import { PaymentProviderResolver } from '../payments/provider-resolver';
     AdCampaignSchedulerService,
     PaymentProviderResolver,
   ],
+  // Exported so AdminModule can inject AdCampaignsService for the Overview tab's "Advertising
+  // Revenue" transaction ledger (docs/ROADMAP.md FDP-128) — safe for the same non-circular reason
+  // documented above (AdminModule doesn't import anything this module imports back toward it).
+  exports: [AdCampaignsService],
 })
 export class AdCampaignsModule {}

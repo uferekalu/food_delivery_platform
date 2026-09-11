@@ -2825,3 +2825,105 @@ caught with any more confidence than the live Playwright reproductions already p
 reproductions are preserved in this write-up as the record of what was actually verified. Full
 backend suite (685/685 across 45 suites) confirmed still green after the schema change;
 `tsc --noEmit`/`eslint`/production `build` clean on both sides after both fixes.
+
+## 50. Admin-wide transactions ledger + vendor ad-spend documentation (docs/ROADMAP.md FDP-128)
+
+Direct user request, framed explicitly as an auditing need: the admin Overview tab showed only
+aggregate counts (total orders, revenue by currency, orders by status) with no way to see the
+individual transactions behind those numbers — no product names, no per-order vendor/amount/date,
+and ad-campaign revenue wasn't documented anywhere in the admin surface at all. A follow-up request
+arrived mid-implementation: a vendor's own sales-report page should also document the ad-campaign
+spend *that vendor* paid, so advertising cost sits alongside their order revenue for their own
+records.
+
+### Backend: two new paginated, filterable, totaled ledger endpoints
+
+Both live on `AdminController` (`admin/transactions/orders`, `admin/transactions/ad-campaigns`),
+next to the existing `admin/analytics` endpoint — admin-wide cross-vendor views belong there, not
+scattered across `OrdersController`/`AdCampaignsController`, which only ever expose vendor- or
+customer-scoped data.
+
+- **`OrdersService.findAllForAdmin(query)`** (new): every order across every vendor —
+  restaurant, grocery, or pharmacy — row-per-order (not row-per-line-item; each order's `items`
+  array is returned inline so the UI can render a "Item ×qty, Item ×qty" product summary per row
+  without a second query). Filterable by `vendorType` (`restaurant`/`store`) and an inclusive
+  `from`/`to` date range on `createdAt`; paginated (`page`/`limit`, default 20, capped at 100).
+  Vendor names resolved via the same batched `findByIds` → `Map<id, name>` pattern established by
+  `PromoCodesService.findAll`/`AdCampaignsService.findAllForAdmin` (FDP-114/124), with the same
+  `!= null`-guarded fallback to a labeled "Unknown vendor" for any legacy/malformed order missing
+  its `restaurantId`/`storeId` — never a crash on bad historical data.
+  **Totals**: a separate `$match`/`$group`-by-currency aggregate, computed over the *entire*
+  filtered set (not just the current page), following this codebase's established
+  never-sum-across-currencies rule (`getAnalyticsSummary`'s own documented convention) and its
+  established "money actually collected" filter — `paymentStatus: { $in: ['succeeded',
+  'refunded'] }` — the same filter `getAnalyticsSummary` already uses for real platform revenue.
+  Critically, the *list* itself is not filtered by payment status — a `PENDING_PAYMENT` or
+  `CANCELLED` order is still a real auditable event and stays visible in the ledger; only the
+  totals figure narrows to money genuinely collected.
+- **`AdCampaignsService.findAllForAdminPaginated(query)`** (new, separate from the existing
+  unpaginated `findAllForAdmin()`): same shape — paginated, `from`/`to` filterable, totals grouped
+  by currency using `paymentStatus: 'succeeded'` (campaigns have no `refunded` state). Deliberately
+  a *new* method rather than adding pagination params to the existing `findAllForAdmin()`: that
+  method's only caller (the FDP-124 admin "Ad Campaigns" tab) expects a plain unpaginated array and
+  campaign volume has never needed pagination there — changing its return shape would be a breaking
+  change to an already-shipped, already-verified surface for no benefit. The existing method's body
+  was extracted into a shared private `attachVendorNames()` helper so both methods reuse the same
+  vendor-resolution logic without duplicating it.
+- **`AdminService`/`AdminController`**: two new thin passthrough methods/routes
+  (`getOrderTransactions`/`getAdCampaignTransactions`) delegating to the two service methods above.
+  Wiring `AdCampaignsService` into `AdminService`'s constructor required adding `exports:
+  [AdCampaignsService]` to `AdCampaignsModule` — it previously had no `exports` array at all, so
+  `AdminModule` importing `AdCampaignsModule` alone wasn't enough to make the service injectable.
+  Confirmed non-circular via this session's established `mongodb-memory-server`
+  `NestFactory.create(AppModule)` e2e boot check (the FDP-117 postmortem's standing rule for any
+  new cross-module constructor dependency) before trusting `tsc`/`nest build` alone.
+
+**Two real things learned writing the tests for this**:
+1. **`order.createdAt` isn't part of `OrderDocument`'s static type** — it's injected by Mongoose's
+   `timestamps: true`, never declared as an explicit class property on `Order`. Fixed with a
+   targeted cast (`(order as unknown as { createdAt: Date }).createdAt`) rather than a full
+   `.toObject()` spread, since only this one field needed it.
+2. **Mongoose marks `createdAt` immutable by default under `timestamps: true`** — confirmed by
+   reading Mongoose's own source (`baseImmutableCreatedAt` in
+   `mongoose/lib/helpers/timestamps/setupTimestamps.js`). A test that needs to backdate a fixture's
+   `createdAt` (to test date-range filtering) must bypass Mongoose entirely —
+   `adCampaignModel.collection.updateOne(...)` via the raw MongoDB driver, not the Mongoose model's
+   own `.updateOne()`, which silently strips any `$set` on an immutable field with no error.
+
+### Frontend: two new Overview-tab sections, one new vendor sales-report section
+
+- **Admin Overview tab** (`frontend/src/app/[locale]/admin/overview-tab.tsx`): two new `Card`
+  sections appended below the existing stat grid — "Order transactions" (date-range + vendor-type
+  filters, a raw `<table>`-in-`Card` showing date/vendor/order#/item summary/amount/status/payment
+  badges, a totals-by-currency footer, `Pagination`) and "Advertising revenue" (same shape, minus
+  the vendor-type filter, showing campaign period instead of items). Both follow the established
+  raw-HTML-`<table>`-in-`Card` pattern (`sales-report/page.tsx`'s "Sales by item"/"Sales by day"
+  sections) — there's no dedicated `Table` UI primitive in this codebase's hand-built kit, so
+  every data-heavy tabular admin view uses this same shape rather than inventing a new one.
+- **Vendor sales-report ad-spend section** (`frontend/src/components/vendor-ad-spend-section.tsx`,
+  new shared component, rendered from both `dashboard/restaurants/[id]/sales-report/page.tsx` and
+  `dashboard/stores/[id]/sales-report/page.tsx`): the follow-up request — a vendor's own ad-campaign
+  spend documented in their own sales report. Reuses the existing `useListMyAdCampaignsQuery()`
+  hook (already server-side scoped to campaigns the calling vendor owns, FDP-124) rather than a new
+  endpoint, filtering client-side to the current restaurant/store id and the page's existing
+  `from`/`to` date-range state — the same range already driving the order-revenue figures above it,
+  so both figures on the page always describe the same window. Rendered unconditionally (outside
+  the "no delivered orders" empty-state branch), since a vendor can have ad spend with zero
+  delivered orders in a given range and that spend still needs to be visible.
+- New `PaginatedResultWithTotals<T>` type (`restaurant-types.ts`) extends the existing
+  `PaginatedResult<T>` with `totalsByCurrency: Record<string, number>` — shared by both new admin
+  RTK Query endpoints (`getOrderTransactions` in `admin-api.ts`, `getAdCampaignTransactions` in
+  `ad-campaigns-api.ts`).
+
+### i18n and verification
+
+New strings (`AdminOverviewTab`'s ledger section, a new top-level `OrderPaymentStatus` namespace,
+and `SalesReportPage`'s new advertising-section keys) shipped in all 6 languages in the same
+change; JSON validity and full key-parity against `en.json` verified programmatically across all 6
+locale files after each addition. Backend: full previously-failing-suite rerun in isolation
+(`admin.service.spec.ts`/`orders.service.spec.ts`/`ad-campaigns.service.spec.ts`, 120/120) plus
+`reviews.service.spec.ts` (12/12) confirmed the earlier full-suite run's 4 "failures" were the
+already-known `mongodb-memory-server` process-cleanup flake under 45-file concurrent load (see
+`backend/CLAUDE.md`), not real defects — none of the four reproduced when run outside that
+contention. `npm run test:e2e` reran to confirm the `AdminModule`/`AdCampaignsModule` wiring change
+boots cleanly. `tsc --noEmit`/`eslint`/production `build` clean on both sides.
