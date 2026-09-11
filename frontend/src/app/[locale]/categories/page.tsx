@@ -95,14 +95,14 @@ function FoodCategory() {
       {isError && <Alert variant="danger">{t("couldNotLoadRestaurants")}</Alert>}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 w-full" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
       ) : data && data.items.length > 0 ? (
         <>
-          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${isFetching ? "opacity-60" : ""}`}>
+          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5 ${isFetching ? "opacity-60" : ""}`}>
             {data.items.map((restaurant) => (
               <RestaurantCard key={restaurant._id} restaurant={restaurant} />
             ))}
@@ -201,14 +201,14 @@ function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: Re
       {isError && <Alert variant="danger">{t("couldNotLoadStores")}</Alert>}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 w-full" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
       ) : data && data.items.length > 0 ? (
         <>
-          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${isFetching ? "opacity-60" : ""}`}>
+          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5 ${isFetching ? "opacity-60" : ""}`}>
             {data.items.map((store) => (
               <StoreCard key={store._id} store={store} />
             ))}

@@ -16,6 +16,19 @@ const LOCALE_LABELS: Record<AppLocale, string> = {
   zh: "中文 (ZH)",
 };
 
+// Just the language's own name, no "(CODE)" suffix — used in `compact` mode (the header, where
+// space is at a premium) so the closed control reads as a normal-width word instead of a fixed
+// ~144px box; the full "Name (CODE)" form is kept for the mobile drawer, which has room to spare
+// and benefits from the explicit code for anyone unsure which name maps to which language.
+const LOCALE_LABELS_COMPACT: Record<AppLocale, string> = {
+  en: "English",
+  fr: "Français",
+  es: "Español",
+  pt: "Português",
+  de: "Deutsch",
+  zh: "中文",
+};
+
 /** Swaps locale while staying on the same page (docs/ROADMAP.md FDP-55/FDP-70). A native
  * `<select>`, not the hand-built `Select` component — the latter portals its listbox at
  * `--z-dropdown`, which renders invisibly/unclickably when this control sits inside
@@ -37,8 +50,17 @@ const LOCALE_LABELS: Record<AppLocale, string> = {
  * case; this closes the *rapid-input* case the same bug class could reopen). `navigatingRef` is
  * a synchronous guard checked before React even re-renders — `isPending`/`disabled` alone would
  * leave a brief window between the click and the DOM actually reflecting `disabled`. */
-export function LanguageSwitcher({ className }: { className?: string }) {
+export function LanguageSwitcher({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Short "English" instead of "English (EN)" — the header's own header-decluttering pass
+   * (docs/ROADMAP.md FDP-122), not used in the mobile drawer, which has room for the full form. */
+  compact?: boolean;
+}) {
   const t = useTranslations("Layout");
+  const labels = compact ? LOCALE_LABELS_COMPACT : LOCALE_LABELS;
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -77,7 +99,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     >
       {routing.locales.map((option) => (
         <option key={option} value={option}>
-          {LOCALE_LABELS[option]}
+          {labels[option]}
         </option>
       ))}
     </select>

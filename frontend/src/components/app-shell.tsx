@@ -49,13 +49,20 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               "Responsive design" and docs/ROADMAP.md FDP-46. Collapses away entirely at `sm:`
               and up on the homepage, whose hero has its own search box instead (FDP-85). */}
           <HeaderSearchSlot />
-          <div className="ml-auto flex items-center gap-2">
+          {/* Two visually distinct clusters, not one long undifferentiated row (docs/ROADMAP.md
+              FDP-122, direct feedback that the header felt congested on medium/large screens):
+              "things that act on the page right now" (notifications, cart) stay first, a hairline
+              divider separates them from "things about me/this session" (language, theme,
+              account) — the same grouping principle a well-organized toolbar uses, rather than
+              just shrinking every control and hoping it reads as organized on its own. */}
+          <div className="ml-auto flex items-center gap-1.5">
             <NotificationBell />
             <CartDrawer />
-            <div className="hidden items-center gap-3 sm:flex">
-              <AuthStatus />
-              <LanguageSwitcher className="w-36" />
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <div aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
+              <LanguageSwitcher compact className="w-28" />
               <ThemeToggle />
+              <AuthStatus />
             </div>
             <MobileNav />
           </div>
