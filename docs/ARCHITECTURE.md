@@ -2388,3 +2388,41 @@ correctly with no truncation/overflow distortion even on the longest test names,
 seeded documents before finishing (local MongoDB only, never touches the production database).
 `tsc --noEmit`/`eslint`/production `build` clean on both sides; new `AuthStatus.myAccount` key
 shipped in all 6 languages, key parity verified.
+
+## 45. FDP-122 missed one grid: the restaurant-detail menu (docs/ROADMAP.md FDP-123)
+
+Immediate follow-up feedback, screenshot-reported: FDP-122's grid-density pass didn't touch the
+restaurant-detail page's own menu grid (`restaurants/[slug]/page.tsx`). It was still 2 columns
+max, with a tall `h-40` image and unclamped, full-length descriptions — the same problem FDP-122
+had just fixed everywhere else.
+
+The reason it slipped through: `RestaurantCard`, `StoreCard`, and `ProductCard` all live in their
+own component files, so a search for "the card components" found and fixed three of them — but
+this fourth grid's item markup was inlined directly in `restaurants/[slug]/page.tsx` rather than
+factored into a shared component, so it wasn't caught by that search. The actual fix required
+checking every grid in the app individually rather than trusting that "the card components" was a
+complete inventory.
+
+Applied the identical treatment already established by FDP-122's other three cards:
+`grid-cols-1 sm:grid-cols-2` → `grid-cols-1 sm:grid-cols-3 lg:grid-cols-5`; image `h-40` →
+`h-24 sm:h-28`; item name gets `line-clamp-2`, description `line-clamp-1`; the price row matches
+`ProductCard`'s exact pattern (struck-through original + discounted price when set); "Add to cart"
+pinned to the card's bottom via `mt-auto` so every card in a row lines up regardless of how many
+lines the name/description wrapped to.
+
+One deliberate drop: the previous card showed a preview of the item's first modifier group (name
++ a "required" flag). At the new, much smaller card size there wasn't room to show it without
+truncating into something misleading (a partial group name with no indication more groups or
+options exist). Removed it entirely rather than force it in — `ItemDetailModal` already shows the
+full modifier detail the moment a customer clicks "Add to cart" to customize the item, so the card
+preview was decorative, not load-bearing information a customer needed to make the tap-to-view
+decision.
+
+Verified with real seeded data: a throwaway restaurant + one menu category + 6 items (including a
+deliberately long name — "Grilled Jerk Chicken Wings with Spicy Mango Salsa" — and long
+descriptions, to stress-test the `line-clamp` treatment) inserted directly into local MongoDB via
+the same throwaway-script technique FDP-122 used, then removed after use. Screenshotted at large/
+medium/mobile widths and in dark mode — confirmed 5/3/1 columns, no distortion, real food photos
+rendering correctly (this grid uses a plain `<img>`, not `next/image`, so no `remotePatterns`
+allowlist issue the way FDP-122's own seed images hit against `res.cloudinary.com`-only). `tsc
+--noEmit`/`eslint`/production `build` clean.
