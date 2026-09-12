@@ -18,6 +18,7 @@ import { OrdersService, round2 } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
+import { ListSalesReportTransactionsQueryDto } from './dto/list-sales-report-transactions-query.dto';
 import { ReorderDto } from './dto/reorder.dto';
 
 /**
@@ -49,6 +50,14 @@ export class OrdersController {
   @Get('mine')
   findMine(@CurrentUser() user: AccessTokenPayload) {
     return this.ordersService.findMine(user.sub);
+  }
+
+  // Declared before `:id` for the same reason as every other literal segment in this controller.
+  // No @Roles() restriction — both an admin and any vendor need this reference table, and it's
+  // non-sensitive (docs/ROADMAP.md FDP-129).
+  @Get('fee-schedule')
+  getFeeSchedule() {
+    return this.ordersService.getFeeSchedule();
   }
 
   // Declared before `:id` — a literal path segment ("restaurant") would otherwise never be
@@ -136,6 +145,47 @@ export class OrdersController {
     );
   }
 
+  /** Paginated per-order fee breakdown backing the sales report page's new "Order transactions"
+   * section (docs/ROADMAP.md FDP-129) — same date range as the aggregated report above it, but
+   * detailed per order (subtotal/delivery fee/service fee/tax/discount/platform fee, each with
+   * its effective rate) so a vendor can see exactly what was deducted from every order. */
+  @Roles('restaurant_owner', 'admin')
+  @Get('restaurant/:restaurantId/sales-report/transactions')
+  getSalesReportTransactions(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('restaurantId') restaurantId: string,
+    @Query() query: ListSalesReportTransactionsQueryDto,
+  ) {
+    return this.ordersService.getSalesReportTransactions(
+      user,
+      'restaurant',
+      restaurantId,
+      query.from ? new Date(query.from) : undefined,
+      parseRangeTo(query.to),
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
+  }
+
+  // Store-catalog counterpart of `restaurant/:restaurantId/sales-report/transactions` above.
+  @Roles('restaurant_owner', 'admin')
+  @Get('store/:storeId/sales-report/transactions')
+  getStoreSalesReportTransactions(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+    @Query() query: ListSalesReportTransactionsQueryDto,
+  ) {
+    return this.ordersService.getSalesReportTransactions(
+      user,
+      'store',
+      storeId,
+      query.from ? new Date(query.from) : undefined,
+      parseRangeTo(query.to),
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
+  }
+
   /** Order-level CSV export backing the sales report page's "Download CSV" button — one row per
    * DELIVERED order in range, so an owner can reconcile in Excel/Sheets rather than only reading
    * the aggregated numbers on screen. */
@@ -195,6 +245,7 @@ export class OrdersController {
       'Delivery fee',
       'Service fee',
       'Discount',
+      'Tax',
       'Total',
       'Platform fee',
       'Seller payout',
@@ -215,6 +266,7 @@ export class OrdersController {
         order.deliveryFee,
         order.serviceFee,
         order.discount,
+        order.tax,
         order.total,
         order.platformFeeAmount,
         order.restaurantPayoutAmount,

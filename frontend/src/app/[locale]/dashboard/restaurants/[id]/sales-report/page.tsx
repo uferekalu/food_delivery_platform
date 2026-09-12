@@ -18,6 +18,7 @@ import { useGetSalesReportQuery } from "@/lib/redux/services/orders-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import { VendorAdSpendSection } from "@/components/vendor-ad-spend-section";
+import { VendorOrderTransactionsSection } from "@/components/vendor-order-transactions-section";
 import type { Restaurant } from "@/lib/redux/restaurant-types";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -150,6 +151,10 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
               />
               <Stat label={t("orders")} value={String(data.totals.orders)} />
               <Stat label={t("avgOrderValue")} value={money(data.totals.avgOrderValue)} />
+              <Stat label={t("deliveryFee")} value={money(data.totals.deliveryFeeTotal)} />
+              <Stat label={t("serviceFee")} value={money(data.totals.serviceFeeTotal)} />
+              <Stat label={t("tax")} value={money(data.totals.taxTotal)} />
+              <Stat label={t("discount")} value={money(data.totals.discountTotal)} />
               <Stat label={t("platformFee")} value={money(data.totals.platformFeeTotal)} />
               <Stat label={t("netPayout")} value={money(data.totals.netEarned)} />
             </CardContent>
@@ -227,6 +232,7 @@ function SalesReportView({ restaurant }: { restaurant: Restaurant }) {
         </>
       )}
 
+      <VendorOrderTransactionsSection sellerType="restaurant" sellerId={restaurant._id} from={from} to={to} />
       <VendorAdSpendSection vendorType="restaurant" vendorId={restaurant._id} from={from} to={to} />
     </Container>
   );

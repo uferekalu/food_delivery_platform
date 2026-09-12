@@ -1096,7 +1096,20 @@
     "totalAdSpend": "Gasto total com anúncios",
     "adPaymentStatus_pending": "Pendente",
     "adPaymentStatus_succeeded": "Pago",
-    "adPaymentStatus_failed": "Falhou"
+    "adPaymentStatus_failed": "Falhou",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Taxa de entrega",
+    "serviceFee": "Taxa de serviço",
+    "tax": "Imposto",
+    "discount": "Desconto",
+    "payoutToVendor": "Repasse ao fornecedor",
+    "total": "Total",
+    "ofOrderTotal": "do total do pedido",
+    "orderTransactions": "Transações de pedidos",
+    "orderTransactionsDescription": "Cada pedido entregue neste período, com o detalhamento exato das taxas por trás de cada um — para que nada sobre o que foi cobrado ou pago seja um mistério.",
+    "orderNumber": "N.º do pedido",
+    "items": "Itens",
+    "totalPayoutThisPage": "Repasse total (esta página)"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "Receita de anúncios",
     "advertisingRevenueDescription": "Todas as cobranças de campanhas publicitárias de todos os fornecedores, para auditoria.",
     "noCampaignTransactionsFound": "Nenhuma transação de campanha publicitária encontrada",
-    "campaignPeriod": "Período da campanha"
+    "campaignPeriod": "Período da campanha",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Taxa de entrega",
+    "serviceFee": "Taxa de serviço",
+    "tax": "Imposto",
+    "discount": "Desconto",
+    "platformFee": "Taxa da plataforma",
+    "payoutToVendor": "Repasse ao fornecedor",
+    "total": "Total",
+    "ofOrderTotal": "do total do pedido"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Revisar e aprovar",
@@ -1858,5 +1880,13 @@
     "checkAgain": "Verificar novamente",
     "couldNotLoadCampaign": "Não foi possível carregar esta campanha publicitária",
     "loading": "Carregando…"
+  },
+  "FeeScheduleInfo": {
+    "title": "Como essas taxas funcionam",
+    "platformCommissionLine": "Comissão da plataforma: {pct}% do subtotal de comida de cada pedido, deduzida do que é repassado ao fornecedor — fixada por pedido, então uma mudança de taxa posterior nunca reescreve pedidos antigos.",
+    "serviceFeeLine": "Taxa de serviço: {pct}% do subtotal, uma cobrança separada somada ao que o cliente paga — é receita da plataforma, não parte do repasse ao fornecedor.",
+    "deliveryFeeLine": "Taxa de entrega: calculada pela distância e zona de entrega de cada pedido, não é uma porcentagem fixa — sua participação no total do pedido é mostrada apenas como contexto, não como uma taxa.",
+    "taxLineIntro": "O imposto (IVA/imposto sobre vendas) varia por moeda:",
+    "note": "Cada porcentagem mostrada por transação abaixo reflete o que foi realmente aplicado a esse pedido específico, mesmo que essas taxas mudem depois."
   }
 }

@@ -1,5 +1,13 @@
 import { api } from "../api";
-import type { Address, Cart, Order, OrderStatus } from "../restaurant-types";
+import type {
+  Address,
+  Cart,
+  FeeSchedule,
+  Order,
+  OrderStatus,
+  OrderTransaction,
+  PaginatedResult,
+} from "../restaurant-types";
 
 // "Buy again" (docs/ROADMAP.md FDP-97).
 export interface ReorderResult {
@@ -70,6 +78,7 @@ export interface SalesReport {
     revenue: number;
     deliveryFeeTotal: number;
     serviceFeeTotal: number;
+    taxTotal: number;
     discountTotal: number;
     platformFeeTotal: number;
     netEarned: number;
@@ -84,11 +93,38 @@ export interface SalesReport {
   byDay: SalesReportDayBreakdown[];
 }
 
+// Paginated per-order fee breakdown backing the sales report page's "Order transactions" section
+// (docs/ROADMAP.md FDP-129) — same date range as SalesReportQuery/StoreSalesReportQuery above.
+export interface SalesReportTransactionsQuery {
+  restaurantId: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface StoreSalesReportTransactionsQuery {
+  storeId: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
 function salesReportQueryString({ from, to }: { from?: string; to?: string }): string {
   const params = new URLSearchParams();
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+function paginatedQueryString(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") search.set(key, String(value));
+  });
+  const qs = search.toString();
   return qs ? `?${qs}` : "";
 }
 
@@ -155,6 +191,35 @@ export const ordersApi = api.injectEndpoints({
       providesTags: (_result, _error, { storeId }) => [{ type: "Order", id: `SALES-REPORT-${storeId}` }],
     }),
 
+    // Reference figures for the "how fees work" blurb shown before both the admin ledger and a
+    // vendor's sales-report transactions list (docs/ROADMAP.md FDP-129) — shared by every
+    // consumer so it never drifts from the actual constants real orders are computed from.
+    getFeeSchedule: builder.query<FeeSchedule, void>({
+      query: () => "/orders/fee-schedule",
+    }),
+
+    getSalesReportTransactions: builder.query<
+      PaginatedResult<OrderTransaction>,
+      SalesReportTransactionsQuery
+    >({
+      query: ({ restaurantId, ...params }) =>
+        `/orders/restaurant/${restaurantId}/sales-report/transactions${paginatedQueryString(params)}`,
+      providesTags: (_result, _error, { restaurantId }) => [
+        { type: "Order", id: `SALES-REPORT-TX-${restaurantId}` },
+      ],
+    }),
+
+    getStoreSalesReportTransactions: builder.query<
+      PaginatedResult<OrderTransaction>,
+      StoreSalesReportTransactionsQuery
+    >({
+      query: ({ storeId, ...params }) =>
+        `/orders/store/${storeId}/sales-report/transactions${paginatedQueryString(params)}`,
+      providesTags: (_result, _error, { storeId }) => [
+        { type: "Order", id: `SALES-REPORT-TX-${storeId}` },
+      ],
+    }),
+
     reorder: builder.mutation<ReorderResult, { orderId: string; replace?: boolean }>({
       query: ({ orderId, replace }) => ({
         url: `/orders/${orderId}/reorder`,
@@ -186,8 +251,11 @@ export const {
   useGetStoreOrdersQuery,
   useGetRestaurantEarningsQuery,
   useGetSalesReportQuery,
+  useGetFeeScheduleQuery,
+  useGetSalesReportTransactionsQuery,
   useGetStoreEarningsQuery,
   useGetStoreSalesReportQuery,
+  useGetStoreSalesReportTransactionsQuery,
   useUpdateOrderStatusMutation,
   useReorderMutation,
 } = ordersApi;

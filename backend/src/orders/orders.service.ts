@@ -29,7 +29,7 @@ import {
   PayoutClawbackDocument,
 } from '../payouts/schemas/payout-clawback.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { TaxResolver } from './tax-resolver';
+import { TaxResolver, TAX_RATE_TABLE } from './tax-resolver';
 import { canOwnerTransition, canRiderTransition } from './order-state-machine';
 import {
   ACTIVE_DELIVERY_STATUSES,
@@ -117,8 +117,10 @@ const ACTIVE_SELLER_STATUSES: OrderStatus[] = [
 
 // deliveryFee is real distance-based DeliveryZone pricing as of FDP-15 (see
 // DeliveryZonesService.calculateFee) — this flat rate only applies to serviceFee, which is a
-// platform fee unrelated to distance.
-const SERVICE_FEE_RATE = 0.05;
+// platform fee unrelated to distance. Exported so getFeeSchedule (docs/ROADMAP.md FDP-129) can
+// surface it to the admin/vendor "how fees work" reference blurb without a second copy of the
+// number.
+export const SERVICE_FEE_RATE = 0.05;
 
 // Order statuses from which a captured payment can still be reversed (docs/ROADMAP.md FDP-65).
 // DELIVERED is the normal post-delivery dispute/refund case. CANCELLED was added after finding
@@ -173,6 +175,7 @@ export interface SalesReport {
     revenue: number;
     deliveryFeeTotal: number;
     serviceFeeTotal: number;
+    taxTotal: number;
     discountTotal: number;
     platformFeeTotal: number;
     netEarned: number;
@@ -205,6 +208,17 @@ export interface OrderTransactionItem {
   price: number;
 }
 
+// Categorical per-order fee breakdown (docs/ROADMAP.md FDP-129) — direct user feedback that the
+// admin ledger and vendor sales report needed to show exactly what was charged and why, not just
+// a bare total. `*RatePct` fields are the EFFECTIVE rate actually applied to this specific order
+// (derived from its own stored amounts: e.g. `platformFeeAmount / subtotal * 100`), not the
+// platform's current global constant — this matters because platformFeeAmount/serviceFee/tax are
+// all snapshotted onto the order at creation time and never rewritten, so an order placed before
+// a later rate change must keep showing the rate that was actually applied to IT, not today's
+// rate. `deliveryFeeSharePct` is different in kind from the other three: deliveryFee is real
+// distance/zone-based pricing (DeliveryZonesService.calculateFee), not a percentage of anything —
+// this is its share of that order's total, shown for proportion/context only, never labelled as a
+// "delivery fee rate".
 export interface OrderTransaction {
   _id: string;
   orderNumber: string;
@@ -212,13 +226,35 @@ export interface OrderTransaction {
   items: OrderTransactionItem[];
   subtotal: number;
   deliveryFee: number;
+  serviceFee: number;
+  tax: number;
+  discount: number;
   total: number;
   platformFeeAmount: number;
+  /** What the vendor is actually paid for this order (subtotal minus platformFeeAmount) — same
+   * field Order.restaurantPayoutAmount already tracks, surfaced here under a seller-neutral name
+   * for the ledger/report UI. */
+  payoutAmount: number;
+  platformFeeRatePct: number;
+  serviceFeeRatePct: number;
+  taxRatePct: number;
+  deliveryFeeSharePct: number;
   currency: string;
   status: OrderStatus;
   paymentStatus: OrderPaymentStatus;
   createdAt: Date;
   deliveredAt: Date | null;
+}
+
+// Reference figures for the "how fees work" explanation shown before both the admin transactions
+// ledger and a vendor's sales-report transactions list (docs/ROADMAP.md FDP-129) — a single
+// source so that blurb never drifts from the actual constants used to compute real orders.
+export interface FeeSchedule {
+  platformCommissionRatePct: number;
+  serviceFeeRatePct: number;
+  /** Currency code -> VAT/sales-tax percentage, only for currencies TaxResolver has a real rate
+   * for (see TAX_RATE_TABLE's own doc comment for why USD/EUR are absent rather than 0). */
+  taxRatesByCurrency: Record<string, number>;
 }
 
 @Injectable()
@@ -1415,6 +1451,7 @@ export class OrdersService {
     requester: AccessTokenPayload,
   ): Promise<{
     _id: { toString(): string };
+    name: string;
     currency: string;
     payoutAccounts: { status: string }[];
   }> {
@@ -1527,6 +1564,7 @@ export class OrdersService {
           revenue: number;
           deliveryFeeTotal: number;
           serviceFeeTotal: number;
+          taxTotal: number;
           discountTotal: number;
           platformFeeTotal: number;
           netEarned: number;
@@ -1561,6 +1599,7 @@ export class OrdersService {
                   revenue: { $sum: '$subtotal' },
                   deliveryFeeTotal: { $sum: '$deliveryFee' },
                   serviceFeeTotal: { $sum: '$serviceFee' },
+                  taxTotal: { $sum: '$tax' },
                   discountTotal: { $sum: '$discount' },
                   platformFeeTotal: { $sum: '$platformFeeAmount' },
                   netEarned: { $sum: '$restaurantPayoutAmount' },
@@ -1684,6 +1723,7 @@ export class OrdersService {
         revenue: round2(revenue),
         deliveryFeeTotal: round2(totals?.deliveryFeeTotal ?? 0),
         serviceFeeTotal: round2(totals?.serviceFeeTotal ?? 0),
+        taxTotal: round2(totals?.taxTotal ?? 0),
         discountTotal: round2(totals?.discountTotal ?? 0),
         platformFeeTotal: round2(totals?.platformFeeTotal ?? 0),
         netEarned: round2(totals?.netEarned ?? 0),
@@ -1750,6 +1790,62 @@ export class OrdersService {
     return match;
   }
 
+  /** Vendor-scoped counterpart of `findAllForAdmin` below (docs/ROADMAP.md FDP-129) — the same
+   * per-order fee breakdown, paginated, so a restaurant/store owner can see exactly what was
+   * deducted from every one of their own delivered orders rather than only the aggregated stats
+   * `getSalesReport` shows. Reuses `deliveredOrdersMatch` (DELIVERED-only, `deliveredAt`-ranged)
+   * so this list always covers the exact same orders the sales report's stat cards/breakdowns
+   * above it already summarize — a vendor comparing the two never sees a mismatched order count. */
+  async getSalesReportTransactions(
+    requester: AccessTokenPayload,
+    sellerType: 'restaurant' | 'store',
+    sellerId: string,
+    from: Date | undefined,
+    to: Date | undefined,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<OrderTransaction>> {
+    const seller = await this.findSellerOrThrow(
+      sellerType,
+      sellerId,
+      requester,
+    );
+    const match = this.deliveredOrdersMatch(
+      sellerType,
+      seller._id.toString(),
+      from,
+      to,
+    );
+
+    const [orders, total] = await Promise.all([
+      this.orderModel
+        .find(match)
+        .sort({ deliveredAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      this.orderModel.countDocuments(match).exec(),
+    ]);
+
+    const vendor: OrderTransactionVendor = {
+      type: sellerType,
+      id: seller._id.toString(),
+      name: seller.name,
+    };
+    const items: OrderTransaction[] = orders.map((order) => ({
+      ...this.toOrderTransactionCore(order),
+      vendor,
+    }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
   /** Platform-wide order stats for the admin analytics overview (docs/ROADMAP.md FDP-20) — one
    * aggregation covering both the status breakdown and revenue. Revenue is grouped by currency
    * rather than summed into one number: this platform is genuinely multi-currency (NGN/USD/...
@@ -1788,6 +1884,83 @@ export class OrdersService {
     return { totalOrders, ordersByStatus, revenueByCurrency };
   }
 
+  /** Reference figures for the "how fees work" explanation shown before the admin transactions
+   * ledger and a vendor's sales-report transactions list (docs/ROADMAP.md FDP-129) — reads the
+   * same constants real orders are computed from (PLATFORM_COMMISSION_RATE, SERVICE_FEE_RATE,
+   * TAX_RATE_TABLE), so the blurb can never drift out of sync with what's actually charged. No
+   * `@Roles()` restriction on the controller route — both an admin and any vendor need this, and
+   * it's non-sensitive (a fixed reference table, not per-order/per-user data). */
+  getFeeSchedule(): FeeSchedule {
+    const taxRatesByCurrency: Record<string, number> = {};
+    for (const [currency, rate] of Object.entries(TAX_RATE_TABLE)) {
+      taxRatesByCurrency[currency] = round2(rate * 100);
+    }
+    return {
+      platformCommissionRatePct: round2(PLATFORM_COMMISSION_RATE * 100),
+      serviceFeeRatePct: round2(SERVICE_FEE_RATE * 100),
+      taxRatesByCurrency,
+    };
+  }
+
+  /** Builds every `OrderTransaction` field except `vendor` (the one thing that differs between
+   * the admin-wide ledger, which resolves a batch of different vendors, and the vendor-scoped
+   * sales-report list, which already knows its single vendor) — shared by `findAllForAdmin` and
+   * `getSalesReportTransactions` so the fee-percentage math below exists in exactly one place.
+   * See `OrderTransaction`'s own doc comment for why every `*RatePct` is derived from THIS
+   * order's own stored amounts rather than the platform's current global rate constants. */
+  private toOrderTransactionCore(
+    order: OrderDocument,
+  ): Omit<OrderTransaction, 'vendor'> {
+    const taxableBase = round2(
+      order.subtotal + order.deliveryFee + order.serviceFee - order.discount,
+    );
+    const platformFeeRatePct =
+      order.subtotal > 0
+        ? round2((order.platformFeeAmount / order.subtotal) * 100)
+        : round2(PLATFORM_COMMISSION_RATE * 100);
+    const serviceFeeRatePct =
+      order.subtotal > 0
+        ? round2((order.serviceFee / order.subtotal) * 100)
+        : round2(SERVICE_FEE_RATE * 100);
+    const taxRatePct =
+      taxableBase > 0
+        ? round2((order.tax / taxableBase) * 100)
+        : round2(this.taxResolver.getRate(order.currency) * 100);
+    const deliveryFeeSharePct =
+      order.total > 0 ? round2((order.deliveryFee / order.total) * 100) : 0;
+
+    return {
+      _id: order._id.toString(),
+      orderNumber: order.orderNumber,
+      items: order.items.map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+      })),
+      subtotal: order.subtotal,
+      deliveryFee: order.deliveryFee,
+      serviceFee: order.serviceFee,
+      tax: order.tax,
+      discount: order.discount,
+      total: order.total,
+      platformFeeAmount: order.platformFeeAmount,
+      payoutAmount: order.restaurantPayoutAmount,
+      platformFeeRatePct,
+      serviceFeeRatePct,
+      taxRatePct,
+      deliveryFeeSharePct,
+      currency: order.currency,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      // `createdAt` is injected by Mongoose's `timestamps: true` option, not declared on the
+      // `Order` class itself, so it isn't part of `OrderDocument`'s static type — the same gap
+      // `campaign.toObject()`'s spread sidesteps in AdCampaignsService.attachVendorNames; here
+      // a single targeted cast is simpler than a full toObject() spread for one field.
+      createdAt: (order as unknown as { createdAt: Date }).createdAt,
+      deliveredAt: order.deliveredAt,
+    };
+  }
+
   /**
    * Admin-wide, paginated order transaction ledger (docs/ROADMAP.md FDP-128) — the audit view
    * `getAnalyticsSummary` above never provided: every individual order across every vendor, not
@@ -1800,9 +1973,11 @@ export class OrdersService {
    * not just whichever page is currently displayed — grouped by currency, never summed together,
    * for the same genuinely-multi-currency reason `getAnalyticsSummary`'s own comment documents.
    */
-  async findAllForAdmin(
-    query: ListOrderTransactionsQueryDto,
-  ): Promise<PaginatedResult<OrderTransaction> & { totalsByCurrency: Record<string, number> }> {
+  async findAllForAdmin(query: ListOrderTransactionsQueryDto): Promise<
+    PaginatedResult<OrderTransaction> & {
+      totalsByCurrency: Record<string, number>;
+    }
+  > {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -1842,7 +2017,9 @@ export class OrdersService {
     const restaurantIds = [
       ...new Set(
         orders
-          .filter((o) => o.sellerType === 'restaurant' && o.restaurantId != null)
+          .filter(
+            (o) => o.sellerType === 'restaurant' && o.restaurantId != null,
+          )
           .map((o) => o.restaurantId!.toString()),
       ),
     ];
@@ -1872,41 +2049,32 @@ export class OrdersService {
       let vendor: OrderTransactionVendor;
       if (order.sellerType === 'store' && order.storeId != null) {
         const id = order.storeId.toString();
-        vendor = { type: 'store', id, name: storeNameById.get(id) ?? 'Unknown store' };
+        vendor = {
+          type: 'store',
+          id,
+          name: storeNameById.get(id) ?? 'Unknown store',
+        };
       } else if (order.restaurantId != null) {
         const id = order.restaurantId.toString();
-        vendor = { type: 'restaurant', id, name: restaurantNameById.get(id) ?? 'Unknown restaurant' };
+        vendor = {
+          type: 'restaurant',
+          id,
+          name: restaurantNameById.get(id) ?? 'Unknown restaurant',
+        };
       } else {
-        vendor = { type: 'restaurant', id: order._id.toString(), name: 'Unknown vendor' };
+        vendor = {
+          type: 'restaurant',
+          id: order._id.toString(),
+          name: 'Unknown vendor',
+        };
       }
 
-      return {
-        _id: order._id.toString(),
-        orderNumber: order.orderNumber,
-        vendor,
-        items: order.items.map((item) => ({
-          name: item.name,
-          qty: item.qty,
-          price: item.price,
-        })),
-        subtotal: order.subtotal,
-        deliveryFee: order.deliveryFee,
-        total: order.total,
-        platformFeeAmount: order.platformFeeAmount,
-        currency: order.currency,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        // `createdAt` is injected by Mongoose's `timestamps: true` option, not declared on the
-        // `Order` class itself, so it isn't part of `OrderDocument`'s static type — the same gap
-        // `campaign.toObject()`'s spread sidesteps in AdCampaignsService.attachVendorNames; here
-        // a single targeted cast is simpler than a full toObject() spread for one field.
-        createdAt: (order as unknown as { createdAt: Date }).createdAt,
-        deliveredAt: order.deliveredAt,
-      };
+      return { ...this.toOrderTransactionCore(order), vendor };
     });
 
     const totalsByCurrency: Record<string, number> = {};
-    for (const row of revenueRows) totalsByCurrency[row._id] = round2(row.total);
+    for (const row of revenueRows)
+      totalsByCurrency[row._id] = round2(row.total);
 
     return {
       items,

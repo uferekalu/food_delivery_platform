@@ -1096,7 +1096,20 @@
     "totalAdSpend": "Total ad spend",
     "adPaymentStatus_pending": "Pending",
     "adPaymentStatus_succeeded": "Paid",
-    "adPaymentStatus_failed": "Failed"
+    "adPaymentStatus_failed": "Failed",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Delivery fee",
+    "serviceFee": "Service fee",
+    "tax": "Tax",
+    "discount": "Discount",
+    "payoutToVendor": "Vendor payout",
+    "total": "Total",
+    "ofOrderTotal": "of order total",
+    "orderTransactions": "Order transactions",
+    "orderTransactionsDescription": "Every delivered order in this range, with the exact fee breakdown behind each one — so nothing about what you were charged or paid is a mystery.",
+    "orderNumber": "Order #",
+    "items": "Items",
+    "totalPayoutThisPage": "Total payout (this page)"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "Advertising revenue",
     "advertisingRevenueDescription": "Every ad campaign charge across every vendor, for auditing.",
     "noCampaignTransactionsFound": "No ad campaign transactions found",
-    "campaignPeriod": "Campaign period"
+    "campaignPeriod": "Campaign period",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Delivery fee",
+    "serviceFee": "Service fee",
+    "tax": "Tax",
+    "discount": "Discount",
+    "platformFee": "Platform fee",
+    "payoutToVendor": "Vendor payout",
+    "total": "Total",
+    "ofOrderTotal": "of order total"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Review & approve",
@@ -1858,5 +1880,13 @@
     "checkAgain": "Check again",
     "couldNotLoadCampaign": "Couldn't load this ad campaign",
     "loading": "Loading…"
+  },
+  "FeeScheduleInfo": {
+    "title": "How these fees work",
+    "platformCommissionLine": "Platform commission: {pct}% of each order's food subtotal, deducted from what the vendor is paid out — locked in per order, so a later rate change never rewrites past orders.",
+    "serviceFeeLine": "Service fee: {pct}% of subtotal, a separate charge added to what the customer pays — this is platform revenue, not part of the vendor's payout.",
+    "deliveryFeeLine": "Delivery fee: calculated per delivery distance and zone for each order, not a fixed percentage — its share of that order's total is shown for context, not as a rate.",
+    "taxLineIntro": "Tax (VAT/sales tax) varies by currency:",
+    "note": "Every percentage shown per transaction below reflects what was actually applied to that specific order, even if these rates change later."
   }
 }

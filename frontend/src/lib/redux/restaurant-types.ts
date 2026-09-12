@@ -572,6 +572,12 @@ export interface OrderTransactionItem {
   price: number;
 }
 
+// Categorical per-order fee breakdown (docs/ROADMAP.md FDP-129) — every `*RatePct` is the
+// EFFECTIVE rate actually applied to this specific order (derived server-side from its own
+// stored amounts), not today's global rate constant, since fees are snapshotted at order-creation
+// time and never rewritten. `deliveryFeeSharePct` is different in kind: delivery fee is real
+// distance/zone-based pricing, not a percentage of anything — this is its share of the order's
+// total, shown for proportion/context only.
 export interface OrderTransaction {
   _id: string;
   orderNumber: string;
@@ -579,11 +585,28 @@ export interface OrderTransaction {
   items: OrderTransactionItem[];
   subtotal: number;
   deliveryFee: number;
+  serviceFee: number;
+  tax: number;
+  discount: number;
   total: number;
   platformFeeAmount: number;
+  /** What the vendor is actually paid for this order (subtotal minus platformFeeAmount). */
+  payoutAmount: number;
+  platformFeeRatePct: number;
+  serviceFeeRatePct: number;
+  taxRatePct: number;
+  deliveryFeeSharePct: number;
   currency: string;
   status: OrderStatus;
   paymentStatus: OrderPaymentStatus;
   createdAt: string;
   deliveredAt: string | null;
+}
+
+// Reference figures for the "how fees work" explanation shown before both the admin transactions
+// ledger and a vendor's sales-report transactions list (docs/ROADMAP.md FDP-129).
+export interface FeeSchedule {
+  platformCommissionRatePct: number;
+  serviceFeeRatePct: number;
+  taxRatesByCurrency: Record<string, number>;
 }

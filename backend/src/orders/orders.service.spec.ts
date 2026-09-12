@@ -1065,6 +1065,9 @@ describe('OrdersService', () => {
         { date: '2026-01-01', orders: 2, revenue: 35, cogs: 8, profit: 27 },
         { date: '2026-01-02', orders: 1, revenue: 10, cogs: 4, profit: 6 },
       ]);
+      // Zero here only because seedDeliveredOrders' orders all have tax: 0 — see the dedicated
+      // getSalesReportTransactions tests below for a non-zero tax figure.
+      expect(report.totals.taxTotal).toBe(0);
     });
 
     it('narrows to the given date range on deliveredAt', async () => {
@@ -1100,6 +1103,7 @@ describe('OrdersService', () => {
         revenue: 0,
         deliveryFeeTotal: 0,
         serviceFeeTotal: 0,
+        taxTotal: 0,
         discountTotal: 0,
         platformFeeTotal: 0,
         netEarned: 0,
@@ -1149,6 +1153,282 @@ describe('OrdersService', () => {
       expect(orders[1].deliveredAt!.getTime()).toBeLessThan(
         orders[2].deliveredAt!.getTime(),
       );
+    });
+  });
+
+  describe('getSalesReportTransactions (docs/ROADMAP.md FDP-129)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+
+    it('returns paginated DELIVERED orders for the seller with a full per-order fee breakdown', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      await orderModel.create({
+        orderNumber: 'ORD-VTX1',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id.toString(),
+        items: [{ name: 'Jollof Rice', price: 100, qty: 2 }],
+        subtotal: 200,
+        deliveryFee: 20,
+        serviceFee: 10,
+        tax: 17.25,
+        discount: 0,
+        total: 247.25,
+        platformFeeAmount: 30,
+        restaurantPayoutAmount: 170,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+        deliveredAt: new Date(),
+      });
+      // Not DELIVERED — must never appear in this list, same convention as getSalesReportOrders.
+      await orderModel.create({
+        orderNumber: 'ORD-VTX2',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id.toString(),
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'PLACED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+      });
+
+      const result = await ordersService.getSalesReportTransactions(
+        owner,
+        'restaurant',
+        restaurant._id.toString(),
+        undefined,
+        undefined,
+        1,
+        20,
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      const tx = result.items[0];
+      expect(tx.orderNumber).toBe('ORD-VTX1');
+      expect(tx.vendor).toEqual({
+        type: 'restaurant',
+        id: restaurant._id.toString(),
+        name: 'Burgundy Kitchen',
+      });
+      expect(tx.subtotal).toBe(200);
+      expect(tx.deliveryFee).toBe(20);
+      expect(tx.serviceFee).toBe(10);
+      expect(tx.tax).toBe(17.25);
+      expect(tx.discount).toBe(0);
+      expect(tx.total).toBe(247.25);
+      expect(tx.platformFeeAmount).toBe(30);
+      expect(tx.payoutAmount).toBe(170);
+      // Derived from THIS order's own stored amounts, not the platform's current global rate —
+      // see OrderTransaction's doc comment. 30/200*100, 10/200*100, 17.25/230*100 (taxable base
+      // = subtotal + deliveryFee + serviceFee - discount = 230), 20/247.25*100.
+      expect(tx.platformFeeRatePct).toBe(15);
+      expect(tx.serviceFeeRatePct).toBe(5);
+      expect(tx.taxRatePct).toBe(7.5);
+      expect(tx.deliveryFeeSharePct).toBeCloseTo(8.09, 1);
+    });
+
+    it("computes *RatePct fields from the order's own amounts, not today's global rate — a historical order keeps its original rate even if the constants change later", async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      // platformFeeAmount is 10% of subtotal here, not the current 15% PLATFORM_COMMISSION_RATE —
+      // simulating an order placed under a since-changed rate.
+      await orderModel.create({
+        orderNumber: 'ORD-HIST1',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id.toString(),
+        items: [],
+        subtotal: 1000,
+        deliveryFee: 50,
+        serviceFee: 30,
+        tax: 0,
+        discount: 0,
+        total: 1080,
+        platformFeeAmount: 100,
+        restaurantPayoutAmount: 900,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+        deliveredAt: new Date(),
+      });
+
+      const result = await ordersService.getSalesReportTransactions(
+        owner,
+        'restaurant',
+        restaurant._id.toString(),
+        undefined,
+        undefined,
+        1,
+        20,
+      );
+
+      expect(result.items[0].platformFeeRatePct).toBe(10);
+    });
+
+    it('narrows to the given date range on deliveredAt, same as getSalesReportOrders', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      await orderModel.create({
+        orderNumber: 'ORD-VTX-IN-RANGE',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id.toString(),
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+        deliveredAt: new Date('2026-01-02T10:00:00.000Z'),
+      });
+      await orderModel.create({
+        orderNumber: 'ORD-VTX-OUT-OF-RANGE',
+        customerId: userId,
+        sellerType: 'restaurant',
+        restaurantId: restaurant._id.toString(),
+        items: [],
+        subtotal: 100,
+        deliveryFee: 10,
+        serviceFee: 5,
+        tax: 0,
+        discount: 0,
+        total: 115,
+        platformFeeAmount: 15,
+        restaurantPayoutAmount: 85,
+        currency: 'NGN',
+        status: 'DELIVERED',
+        statusHistory: [],
+        paymentProvider: 'paystack',
+        paymentStatus: 'succeeded',
+        deliveryAddress: validAddress,
+        deliveredAt: new Date('2026-01-05T10:00:00.000Z'),
+      });
+
+      const result = await ordersService.getSalesReportTransactions(
+        owner,
+        'restaurant',
+        restaurant._id.toString(),
+        new Date('2026-01-01T00:00:00.000Z'),
+        new Date('2026-01-02T23:59:59.999Z'),
+        1,
+        20,
+      );
+
+      expect(result.items.map((t) => t.orderNumber)).toEqual([
+        'ORD-VTX-IN-RANGE',
+      ]);
+    });
+
+    it('paginates', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      for (let i = 0; i < 3; i++) {
+        await orderModel.create({
+          orderNumber: `ORD-VTX-PAGE-${i}`,
+          customerId: userId,
+          sellerType: 'restaurant',
+          restaurantId: restaurant._id.toString(),
+          items: [],
+          subtotal: 100,
+          deliveryFee: 10,
+          serviceFee: 5,
+          tax: 0,
+          discount: 0,
+          total: 115,
+          platformFeeAmount: 15,
+          restaurantPayoutAmount: 85,
+          currency: 'NGN',
+          status: 'DELIVERED',
+          statusHistory: [],
+          paymentProvider: 'paystack',
+          paymentStatus: 'succeeded',
+          deliveryAddress: validAddress,
+          deliveredAt: new Date(),
+        });
+      }
+
+      const result = await ordersService.getSalesReportTransactions(
+        owner,
+        'restaurant',
+        restaurant._id.toString(),
+        undefined,
+        undefined,
+        1,
+        2,
+      );
+
+      expect(result.total).toBe(3);
+      expect(result.totalPages).toBe(2);
+      expect(result.items).toHaveLength(2);
+    });
+
+    it('rejects a requester who does not own the restaurant', async () => {
+      const restaurant = await createApprovedRestaurant('NGN');
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.getSalesReportTransactions(
+          intruder,
+          'restaurant',
+          restaurant._id.toString(),
+          undefined,
+          undefined,
+          1,
+          20,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('getFeeSchedule (docs/ROADMAP.md FDP-129)', () => {
+    it('returns the current platform commission, service fee, and per-currency tax rates as percentages', () => {
+      const schedule = ordersService.getFeeSchedule();
+
+      expect(schedule.platformCommissionRatePct).toBe(15);
+      expect(schedule.serviceFeeRatePct).toBe(5);
+      expect(schedule.taxRatesByCurrency).toEqual({
+        NGN: 7.5,
+        GHS: 15,
+        KES: 16,
+        ZAR: 15,
+        UGX: 18,
+        GBP: 20,
+      });
+      // USD/EUR deliberately absent — TaxResolver/TAX_RATE_TABLE's own doc comment explains why
+      // (no single accurate national rate for either).
+      expect(schedule.taxRatesByCurrency.USD).toBeUndefined();
     });
   });
 
@@ -2114,18 +2394,35 @@ describe('OrdersService', () => {
         deliveryAddress: validAddress,
       });
 
-      const result = await ordersService.findAllForAdmin({ page: 1, limit: 20 });
+      const result = await ordersService.findAllForAdmin({
+        page: 1,
+        limit: 20,
+      });
       expect(result.total).toBe(2);
       expect(result.totalPages).toBe(1);
       expect(result.items).toHaveLength(2);
 
-      const restaurantTx = result.items.find((t) => t.orderNumber === 'ORD-TX1');
+      const restaurantTx = result.items.find(
+        (t) => t.orderNumber === 'ORD-TX1',
+      );
       expect(restaurantTx?.vendor).toEqual({
         type: 'restaurant',
         id: restaurant._id.toString(),
         name: 'Burgundy Kitchen',
       });
-      expect(restaurantTx?.items).toEqual([{ name: 'Jollof Rice', price: 100, qty: 2 }]);
+      expect(restaurantTx?.items).toEqual([
+        { name: 'Jollof Rice', price: 100, qty: 2 },
+      ]);
+      // Categorical fee breakdown (docs/ROADMAP.md FDP-129) — every field the admin ledger now
+      // shows per transaction, plus each *RatePct derived from this order's own stored amounts.
+      expect(restaurantTx?.serviceFee).toBe(10);
+      expect(restaurantTx?.tax).toBe(0);
+      expect(restaurantTx?.discount).toBe(0);
+      expect(restaurantTx?.payoutAmount).toBe(170);
+      expect(restaurantTx?.platformFeeRatePct).toBe(15); // 30 / 200 * 100
+      expect(restaurantTx?.serviceFeeRatePct).toBe(5); // 10 / 200 * 100
+      expect(restaurantTx?.taxRatePct).toBe(0);
+      expect(restaurantTx?.deliveryFeeSharePct).toBeCloseTo(8.7, 1); // 20 / 230 * 100
 
       const storeTx = result.items.find((t) => t.orderNumber === 'ORD-TX2');
       expect(storeTx?.vendor).toEqual({
@@ -2186,7 +2483,9 @@ describe('OrdersService', () => {
         page: 1,
         limit: 20,
       });
-      expect(restaurantOnly.items.map((t) => t.orderNumber)).toEqual(['ORD-VT1']);
+      expect(restaurantOnly.items.map((t) => t.orderNumber)).toEqual([
+        'ORD-VT1',
+      ]);
 
       const storeOnly = await ordersService.findAllForAdmin({
         vendorType: 'store',
@@ -2293,9 +2592,12 @@ describe('OrdersService', () => {
         deliveryAddress: validAddress,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as never);
+      });
 
-      const result = await ordersService.findAllForAdmin({ page: 1, limit: 20 });
+      const result = await ordersService.findAllForAdmin({
+        page: 1,
+        limit: 20,
+      });
       const legacy = result.items.find((t) => t.orderNumber === 'ORD-LEGACY');
       expect(legacy?.vendor.name).toBe('Unknown vendor');
     });

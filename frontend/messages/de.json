@@ -1096,7 +1096,20 @@
     "totalAdSpend": "Werbeausgaben gesamt",
     "adPaymentStatus_pending": "Ausstehend",
     "adPaymentStatus_succeeded": "Bezahlt",
-    "adPaymentStatus_failed": "Fehlgeschlagen"
+    "adPaymentStatus_failed": "Fehlgeschlagen",
+    "subtotal": "Zwischensumme",
+    "deliveryFee": "Liefergebühr",
+    "serviceFee": "Servicegebühr",
+    "tax": "Steuer",
+    "discount": "Rabatt",
+    "payoutToVendor": "Auszahlung an Anbieter",
+    "total": "Gesamt",
+    "ofOrderTotal": "des Bestellgesamtbetrags",
+    "orderTransactions": "Bestelltransaktionen",
+    "orderTransactionsDescription": "Jede gelieferte Bestellung in diesem Zeitraum, mit der genauen Gebührenaufschlüsselung dahinter — damit nichts an Ihren Gebühren oder Zahlungen unklar bleibt.",
+    "orderNumber": "Bestell-Nr.",
+    "items": "Artikel",
+    "totalPayoutThisPage": "Gesamtauszahlung (diese Seite)"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "Werbeeinnahmen",
     "advertisingRevenueDescription": "Alle Anzeigenkampagnen-Zahlungen aller Anbieter, zur Prüfung.",
     "noCampaignTransactionsFound": "Keine Werbekampagnen-Transaktionen gefunden",
-    "campaignPeriod": "Kampagnenzeitraum"
+    "campaignPeriod": "Kampagnenzeitraum",
+    "subtotal": "Zwischensumme",
+    "deliveryFee": "Liefergebühr",
+    "serviceFee": "Servicegebühr",
+    "tax": "Steuer",
+    "discount": "Rabatt",
+    "platformFee": "Plattformgebühr",
+    "payoutToVendor": "Auszahlung an Anbieter",
+    "total": "Gesamt",
+    "ofOrderTotal": "des Bestellgesamtbetrags"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Prüfen & genehmigen",
@@ -1858,5 +1880,13 @@
     "checkAgain": "Erneut prüfen",
     "couldNotLoadCampaign": "Diese Werbekampagne konnte nicht geladen werden",
     "loading": "Wird geladen…"
+  },
+  "FeeScheduleInfo": {
+    "title": "So funktionieren diese Gebühren",
+    "platformCommissionLine": "Plattformprovision: {pct}% der Speise-Zwischensumme jeder Bestellung, abgezogen von der Auszahlung an den Anbieter — pro Bestellung festgelegt, sodass eine spätere Ratenänderung frühere Bestellungen nie neu berechnet.",
+    "serviceFeeLine": "Servicegebühr: {pct}% der Zwischensumme, eine separate Gebühr, die dem Kunden zusätzlich berechnet wird — dies ist Plattformeinnahme, kein Teil der Auszahlung an den Anbieter.",
+    "deliveryFeeLine": "Liefergebühr: wird pro Bestellung nach Lieferentfernung und -zone berechnet, kein fester Prozentsatz — der Anteil am Bestellgesamtbetrag wird nur zur Einordnung angezeigt, nicht als Satz.",
+    "taxLineIntro": "Die Steuer (Mehrwertsteuer/Umsatzsteuer) variiert je nach Währung:",
+    "note": "Jeder unten pro Transaktion angezeigte Prozentsatz spiegelt das wider, was tatsächlich auf diese Bestellung angewendet wurde, auch wenn sich die Sätze später ändern."
   }
 }
