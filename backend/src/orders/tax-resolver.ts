@@ -20,7 +20,10 @@ import { round2 } from './orders.service';
  * before this ticket. They fall through to `DEFAULT_TAX_RATE` (0) below, same as any other
  * currency this table doesn't yet cover.
  */
-const TAX_RATE_TABLE: Record<string, number> = {
+// Exported (not just used internally via getRate) so OrdersService.getFeeSchedule
+// (docs/ROADMAP.md FDP-129) can list every configured currency's rate for the admin/vendor
+// "how fees work" reference blurb, without duplicating this table a second time.
+export const TAX_RATE_TABLE: Record<string, number> = {
   NGN: 0.075,
   GHS: 0.15,
   KES: 0.16,

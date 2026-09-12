@@ -1071,7 +1071,7 @@
     "grossMargin": "Margen bruto",
     "orders": "Pedidos",
     "avgOrderValue": "Valor promedio del pedido",
-    "platformFee": "Tarifa de la plataforma",
+    "platformFee": "Comisión de la plataforma",
     "netPayout": "Pago neto",
     "salesByItem": "Ventas por artículo",
     "sortedByRevenue": "Ordenado por ingresos, de mayor a menor.",
@@ -1096,7 +1096,20 @@
     "totalAdSpend": "Gasto publicitario total",
     "adPaymentStatus_pending": "Pendiente",
     "adPaymentStatus_succeeded": "Pagado",
-    "adPaymentStatus_failed": "Fallido"
+    "adPaymentStatus_failed": "Fallido",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Tarifa de envío",
+    "serviceFee": "Tarifa de servicio",
+    "tax": "Impuesto",
+    "discount": "Descuento",
+    "payoutToVendor": "Pago al proveedor",
+    "total": "Total",
+    "ofOrderTotal": "del total del pedido",
+    "orderTransactions": "Transacciones de pedidos",
+    "orderTransactionsDescription": "Cada pedido entregado en este rango, con el desglose exacto de comisiones detrás de cada uno, para que nada sobre lo que se te cobró o pagó sea un misterio.",
+    "orderNumber": "N.º de pedido",
+    "items": "Artículos",
+    "totalPayoutThisPage": "Pago total (esta página)"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "Ingresos por publicidad",
     "advertisingRevenueDescription": "Todos los cargos de campañas publicitarias de todos los proveedores, para auditoría.",
     "noCampaignTransactionsFound": "No se encontraron transacciones de campañas publicitarias",
-    "campaignPeriod": "Periodo de campaña"
+    "campaignPeriod": "Periodo de campaña",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Tarifa de envío",
+    "serviceFee": "Tarifa de servicio",
+    "tax": "Impuesto",
+    "discount": "Descuento",
+    "platformFee": "Comisión de la plataforma",
+    "payoutToVendor": "Pago al proveedor",
+    "total": "Total",
+    "ofOrderTotal": "del total del pedido"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Revisar y aprobar",
@@ -1858,5 +1880,13 @@
     "checkAgain": "Verificar de nuevo",
     "couldNotLoadCampaign": "No se pudo cargar esta campaña publicitaria",
     "loading": "Cargando…"
+  },
+  "FeeScheduleInfo": {
+    "title": "Cómo funcionan estas comisiones",
+    "platformCommissionLine": "Comisión de la plataforma: {pct}% del subtotal de comida de cada pedido, deducido de lo que se paga al proveedor — fijado por pedido, así que un cambio de tarifa posterior nunca reescribe pedidos pasados.",
+    "serviceFeeLine": "Tarifa de servicio: {pct}% del subtotal, un cargo aparte que se suma a lo que paga el cliente — es ingreso de la plataforma, no parte del pago al proveedor.",
+    "deliveryFeeLine": "Tarifa de envío: se calcula según la distancia y la zona de entrega de cada pedido, no es un porcentaje fijo — su parte del total del pedido se muestra solo como referencia, no como una tarifa.",
+    "taxLineIntro": "El impuesto (IVA/impuesto sobre ventas) varía según la moneda:",
+    "note": "Cada porcentaje mostrado por transacción abajo refleja lo que realmente se aplicó a ese pedido específico, incluso si estas tarifas cambian después."
   }
 }

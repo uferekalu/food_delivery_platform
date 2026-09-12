@@ -1071,7 +1071,7 @@
     "grossMargin": "毛利率",
     "orders": "订单数",
     "avgOrderValue": "平均订单金额",
-    "platformFee": "平台费用",
+    "platformFee": "平台费",
     "netPayout": "净收款",
     "salesByItem": "按商品统计销售",
     "sortedByRevenue": "按收入从高到低排序。",
@@ -1096,7 +1096,20 @@
     "totalAdSpend": "广告支出总额",
     "adPaymentStatus_pending": "待处理",
     "adPaymentStatus_succeeded": "已支付",
-    "adPaymentStatus_failed": "失败"
+    "adPaymentStatus_failed": "失败",
+    "subtotal": "小计",
+    "deliveryFee": "配送费",
+    "serviceFee": "服务费",
+    "tax": "税费",
+    "discount": "折扣",
+    "payoutToVendor": "支付给商家",
+    "total": "总计",
+    "ofOrderTotal": "占订单总额",
+    "orderTransactions": "订单交易",
+    "orderTransactionsDescription": "此时间范围内每一笔已完成配送的订单,均附有明确的费用明细——让您对收费和收款情况一目了然。",
+    "orderNumber": "订单号",
+    "items": "商品",
+    "totalPayoutThisPage": "本页总收款"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "广告收入",
     "advertisingRevenueDescription": "所有供应商的每一笔广告活动费用,用于审计。",
     "noCampaignTransactionsFound": "未找到广告活动交易",
-    "campaignPeriod": "广告周期"
+    "campaignPeriod": "广告周期",
+    "subtotal": "小计",
+    "deliveryFee": "配送费",
+    "serviceFee": "服务费",
+    "tax": "税费",
+    "discount": "折扣",
+    "platformFee": "平台费",
+    "payoutToVendor": "支付给商家",
+    "total": "总计",
+    "ofOrderTotal": "占订单总额"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "审核并批准",
@@ -1858,5 +1880,13 @@
     "checkAgain": "重新检查",
     "couldNotLoadCampaign": "无法加载此广告活动",
     "loading": "加载中…"
+  },
+  "FeeScheduleInfo": {
+    "title": "费用说明",
+    "platformCommissionLine": "平台佣金:每笔订单餐食小计的 {pct}%,从支付给商家的款项中扣除——按每笔订单锁定,因此之后的费率变动不会改变过去订单的计算方式。",
+    "serviceFeeLine": "服务费:小计的 {pct}%,是额外向顾客收取的费用——这是平台收入,不属于商家的收款部分。",
+    "deliveryFeeLine": "配送费:根据每笔订单的配送距离和区域计算,并非固定百分比——下方显示的百分比仅表示其占订单总额的比例,并非费率。",
+    "taxLineIntro": "税费(增值税/销售税)因币种而异:",
+    "note": "下方每笔交易显示的百分比均反映该笔订单实际适用的费率,即使这些费率之后发生变化。"
   }
 }

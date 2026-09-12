@@ -2927,3 +2927,109 @@ already-known `mongodb-memory-server` process-cleanup flake under 45-file concur
 `backend/CLAUDE.md`), not real defects — none of the four reproduced when run outside that
 contention. `npm run test:e2e` reran to confirm the `AdminModule`/`AdCampaignsModule` wiring change
 boots cleanly. `tsc --noEmit`/`eslint`/production `build` clean on both sides.
+
+## 51. Categorical fee breakdown + mobile accordion for transaction tables (docs/ROADMAP.md FDP-129)
+
+Direct follow-up feedback on §50: the admin ledger needed to show the platform fee percentage, the
+delivery fee percentage, the tax percentage, and the order price explicitly on every transaction —
+"categorical," in the user's words, not just a bare total — and the wide table forced horizontal
+scrolling on mobile, which the user called out as confusing. Both problems needed solving on the
+admin ledger AND the vendor's own sales report, since the user explicitly asked for the vendor side
+to get the same treatment "so vendors would not struggle to make sense of their transactions."
+
+### The fee model, precisely (why this took real design thought)
+
+An order's money splits five ways, and conflating any two of them produces a genuinely wrong
+mental model, not just an ugly UI:
+
+- **`subtotal`** — the food price, what the vendor's menu actually charges.
+- **`deliveryFee`** — real distance/zone-based pricing (`DeliveryZonesService.calculateFee`), paid
+  toward the rider's earnings. **Not a percentage of anything** — there is no "delivery fee rate."
+- **`serviceFee`** — a flat 5% of subtotal (`SERVICE_FEE_RATE`), charged to the CUSTOMER on top of
+  subtotal, kept entirely by the platform. Distinct from platform commission below.
+- **`platformFeeAmount`** — a flat 15% of subtotal (`PLATFORM_COMMISSION_RATE`), deducted from what
+  the VENDOR is paid (`restaurantPayoutAmount = subtotal - platformFeeAmount`). The customer never
+  sees this as a separate line item; it comes out of the vendor's share, not the customer's total.
+- **`tax`** — VAT/sales tax, currency-keyed (`TaxResolver`/`TAX_RATE_TABLE`), computed on
+  `subtotal + deliveryFee + serviceFee - discount`.
+
+`total = subtotal + deliveryFee + serviceFee + tax - discount`. Two fees the customer pays
+(`serviceFee`, `tax`) are baked into that sum; one fee (`platformFeeAmount`) is deducted from the
+vendor's payout and never appears in `total` at all. Showing all of this without conflating "what
+the customer paid extra" with "what the platform took from the vendor" was the actual design
+problem — solved by simply listing every figure by name (`subtotal`, `deliveryFee`, `serviceFee`,
+`tax`, `discount`, `platformFeeAmount`, `payoutAmount`, `total`) rather than collapsing any of them.
+
+### Rates are derived per-order, not read from today's constant
+
+Every `*RatePct` field on the new `OrderTransaction` shape (`platformFeeRatePct`,
+`serviceFeeRatePct`, `taxRatePct`) is computed from **that order's own stored amounts** —
+`platformFeeAmount / subtotal * 100`, not `PLATFORM_COMMISSION_RATE * 100`. This matters concretely:
+`platformFeeAmount`/`serviceFee`/`tax` are all snapshotted onto the order at creation time and never
+rewritten (the same "protect against later edits" convention `OrderItem.price`/`costPrice` already
+follow), so if the platform's commission rate ever changes, an order placed under the old rate must
+keep showing the old rate — reading the current global constant instead would silently rewrite
+history. `deliveryFeeSharePct` is different in kind (delivery fee isn't rate-based at all): it's
+`deliveryFee / total * 100`, shown as "8.5% of order total" purely for proportion/context, never
+labelled as a rate. Unit-tested directly: a fixture with `platformFeeAmount` at 10% of `subtotal`
+(simulating a pre-rate-change order) reports `platformFeeRatePct: 10`, not today's 15%.
+
+### `GET /orders/fee-schedule` — one source for the "how fees work" blurb
+
+Both the admin ledger and the new vendor sales-report section show a `FeeScheduleInfo` component
+(an `Alert`) explaining the mechanics above, with live numbers — "Platform commission: 15% of
+subtotal," a per-currency tax-rate table (NGN 7.5%, GHS 15%, KES 16%, ZAR 15%, UGX 18%, GBP 20%) —
+sourced from a new `OrdersService.getFeeSchedule()` / `GET /orders/fee-schedule` (no `@Roles()`
+restriction; both an admin and any vendor need it, and it's a fixed reference table, not
+per-user data). Reading real constants rather than hardcoding the explanation's numbers in two
+places (backend logic, frontend copy) means the blurb can never drift from what an order is
+actually charged if a rate changes later.
+
+### Vendor-side: a new paginated transactions list, not a new report
+
+`OrdersService.getSalesReportTransactions` is a new, separate method (not a change to the existing
+`getSalesReportOrders`, which the CSV export still uses unpaginated) — same `deliveredOrdersMatch`
+filter (DELIVERED-only, `deliveredAt`-ranged) as the aggregate sales report above it on the page,
+so a vendor comparing the two never sees a mismatched order count. Two new routes
+(`GET /orders/{restaurant,store}/:id/sales-report/transactions`) back a new `VendorOrderTransactionsSection`
+component, rendered on both `dashboard/restaurants/[id]/sales-report` and the store counterpart.
+`SalesReport.totals` also gained `taxTotal` — a real gap found in passing: tax had been entirely
+absent from both the aggregate stats and the CSV export since FDP-64/FDP-101 shipped, not just
+missing for this ticket's purposes. The CSV export gained a `Tax` column for the same reason.
+
+### Mobile: `DetailDisclosure`, not `Accordion`
+
+The homepage FAQ's `Accordion` (FDP-121) is single-open-at-a-time by design — right for a list of
+questions, wrong for a list of transactions, where comparing two rows side by side is a real use
+case. New `DetailDisclosure`/`DetailRow` UI-kit primitives (`components/ui/detail-disclosure.tsx`)
+give each row its own independent open/closed state, reusing `Accordion`'s exact visual language
+(rounded card, chevron rotates and fills on open, CSS `grid-template-rows` 0fr↔1fr reveal) without
+its single-open coordination. Every rich transaction table now renders twice: a `<table>` under
+`hidden sm:block` for desktop (this codebase's established wide-table pattern, horizontal scroll
+accepted the same way `sales-by-item`/`sales-by-day` already do), and a `sm:hidden` list of
+`DetailDisclosure` cards for mobile — one collapsed summary (total, status badge, date, vendor) per
+row, expanding to the full stacked fee breakdown on tap. Both renderings pull from the exact same
+`OrderTransaction[]` data and are extracted into shared `OrderTransactionRow`/`OrderTransactionCard`
+components (`components/order-transaction-views.tsx`), reused verbatim by the admin ledger and the
+new vendor section, so the two surfaces can never drift out of sync with each other. The simpler
+6-field "Advertising revenue" table got a plain always-visible stacked card on mobile instead of an
+accordion — nothing there needs hiding behind a toggle.
+
+### Verification
+
+Live Playwright verification against real seeded data (an order with non-zero tax AND discount, so
+every fee line actually has a nonzero value to check) confirmed: the fee-schedule blurb renders the
+correct live numbers; the desktop table shows every new column with correct amount+rate pairing;
+critically, `document.body.scrollWidth` exactly equals the viewport width at 375px on both the
+admin ledger and the vendor sales report (zero horizontal page overflow — the actual complaint
+being fixed); and tapping a mobile card's summary flips its button's `aria-expanded` from `false`
+to `true` and reveals the full stacked detail grid (verified via a corrected selector after an
+initial script mistakenly clicked the adjacent vendor-type `Select`'s own `aria-expanded` button
+instead of the transaction card's). Checked in light and dark mode, desktop and mobile, on both the
+admin and vendor surfaces. Full backend suite for the touched services (`orders`/`admin`/
+`ad-campaigns`, 126/126) green; `tsc --noEmit`/`eslint`/production `build` clean on both sides — a
+first backend-wide `eslint --fix` pass reformatted several files from an already-shipped, unrelated
+feature (the support-tickets/chatbot module), which were reverted before committing to keep this
+PR scoped to what was actually asked, per this session's own scope-matching discipline. New
+`FeeScheduleInfo` i18n namespace plus new keys in `AdminOverviewTab`/`SalesReportPage` shipped in
+all 6 languages, key parity verified programmatically.

@@ -11,11 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
+import { DetailRow } from "@/components/ui/detail-disclosure";
+import { FeeScheduleInfo } from "@/components/fee-schedule-info";
+import {
+  OrderTransactionRow,
+  OrderTransactionCard,
+  PAYMENT_STATUS_BADGE_VARIANT,
+} from "@/components/order-transaction-views";
 import { useGetAdminAnalyticsQuery } from "@/lib/redux/services/admin-api";
 import { useGetOrderTransactionsQuery } from "@/lib/redux/services/admin-api";
 import { useGetAdCampaignTransactionsQuery } from "@/lib/redux/services/ad-campaigns-api";
 import { formatMoney } from "@/lib/currency";
-import type { OrderStatus, OrderPaymentStatus, AdCampaignStatus } from "@/lib/redux/restaurant-types";
+import type { OrderStatus, AdCampaignStatus } from "@/lib/redux/restaurant-types";
 import type { UserRole } from "@/lib/constants/roles";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -28,27 +35,6 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     </Card>
   );
 }
-
-const ORDER_STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
-  PENDING_PAYMENT: "warning",
-  PLACED: "info",
-  ACCEPTED_BY_RESTAURANT: "info",
-  PREPARING: "info",
-  READY_FOR_PICKUP: "info",
-  ASSIGNED_TO_RIDER: "info",
-  PICKED_UP: "info",
-  OUT_FOR_DELIVERY: "info",
-  DELIVERED: "success",
-  CANCELLED: "danger",
-  REFUNDED: "neutral",
-};
-
-const PAYMENT_STATUS_BADGE_VARIANT: Record<OrderPaymentStatus, BadgeProps["variant"]> = {
-  pending: "warning",
-  succeeded: "success",
-  failed: "danger",
-  refunded: "neutral",
-};
 
 const AD_CAMPAIGN_STATUS_BADGE_VARIANT: Record<AdCampaignStatus, BadgeProps["variant"]> = {
   pending_payment: "warning",
@@ -81,11 +67,14 @@ function TotalsByCurrencyFooter({
   );
 }
 
-// Every order across every vendor (restaurant/grocery/pharmacy), paginated and filterable, with
-// item-level detail — the admin-wide audit ledger requested in docs/ROADMAP.md FDP-128. The list
+// Every order across every vendor (restaurant/grocery/pharmacy), paginated and filterable, with a
+// full categorical fee breakdown per order (docs/ROADMAP.md FDP-129) — the admin-wide audit ledger
+// originally requested in FDP-128, expanded so subtotal/delivery fee/service fee/tax/discount/
+// platform fee/vendor payout are all explicit per transaction, not just a bare total. The list
 // itself shows every status (a CANCELLED order is still an auditable event); the totals footer
 // only counts money actually collected (succeeded/refunded), matching getAnalyticsSummary's
-// established convention.
+// established convention. Desktop renders a wide table; below `sm`, each row becomes its own
+// collapsible card instead, so nothing requires horizontal scrolling on a phone.
 function OrderTransactionsSection() {
   const t = useTranslations("AdminOverviewTab");
   const tStatus = useTranslations("OrderStatus");
@@ -124,6 +113,8 @@ function OrderTransactionsSection() {
         <CardDescription>{t("orderTransactionsDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <FeeScheduleInfo />
+
         <div className="flex flex-wrap items-end gap-4">
           <FormField label={t("from")}>
             <Input
@@ -171,15 +162,23 @@ function OrderTransactionsSection() {
           <EmptyState title={t("noTransactionsFound")} description={t("tryDifferentFilters")} />
         ) : (
           <>
-            <div className={`overflow-x-auto ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
-              <table className="w-full min-w-[880px] text-left text-sm">
+            {/* Desktop: a wide table (established pattern for data-heavy admin views). */}
+            <div className={`hidden overflow-x-auto sm:block ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
+              <table className="w-full min-w-[1600px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-text-muted">
                     <th className="py-2 pr-4 font-medium">{t("date")}</th>
                     <th className="py-2 pr-4 font-medium">{t("vendor")}</th>
                     <th className="py-2 pr-4 font-medium">{t("orderNumber")}</th>
                     <th className="py-2 pr-4 font-medium">{t("items")}</th>
-                    <th className="py-2 pr-4 font-medium">{t("amount")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("subtotal")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("deliveryFee")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("serviceFee")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("tax")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("discount")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("platformFee")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("payoutToVendor")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("total")}</th>
                     <th className="py-2 pr-4 font-medium">{t("status")}</th>
                     <th className="py-2 font-medium">{t("payment")}</th>
                   </tr>
@@ -187,34 +186,33 @@ function OrderTransactionsSection() {
                 <tbody>
                   {data.items.map((order) => (
                     <tr key={order._id} className="border-b border-border last:border-0 align-top">
-                      <td className="py-2 pr-4 whitespace-nowrap text-text">
-                        {new Date(order.createdAt).toLocaleDateString(locale)}
-                      </td>
-                      <td className="py-2 pr-4 text-text">
-                        {order.vendor.name}
-                        <Badge variant="neutral" className="ml-2 align-middle">
-                          {order.vendor.type === "restaurant" ? t("restaurants") : t("storesVendorType")}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4 whitespace-nowrap text-text-muted">{order.orderNumber}</td>
-                      <td className="py-2 pr-4 text-text">
-                        {order.items.map((item) => `${item.name} ×${item.qty}`).join(", ")}
-                      </td>
-                      <td className="py-2 pr-4 whitespace-nowrap font-medium text-text">
-                        {formatMoney(order.total, order.currency, locale)}
-                      </td>
-                      <td className="py-2 pr-4 whitespace-nowrap">
-                        <Badge variant={ORDER_STATUS_BADGE_VARIANT[order.status]}>{tStatus(order.status)}</Badge>
-                      </td>
-                      <td className="py-2 whitespace-nowrap">
-                        <Badge variant={PAYMENT_STATUS_BADGE_VARIANT[order.paymentStatus]}>
-                          {tPayment(order.paymentStatus)}
-                        </Badge>
-                      </td>
+                      <OrderTransactionRow
+                        order={order}
+                        locale={locale}
+                        showVendor
+                        t={t}
+                        tStatus={tStatus}
+                        tPayment={tPayment}
+                      />
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile: one collapsible card per transaction — no horizontal scrolling required. */}
+            <div className={`flex flex-col gap-3 sm:hidden ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
+              {data.items.map((order) => (
+                <OrderTransactionCard
+                  key={order._id}
+                  order={order}
+                  locale={locale}
+                  showVendor
+                  t={t}
+                  tStatus={tStatus}
+                  tPayment={tPayment}
+                />
+              ))}
             </div>
 
             <TotalsByCurrencyFooter
@@ -233,7 +231,9 @@ function OrderTransactionsSection() {
 
 // The other half of the audit ledger: every ad-campaign charge, across every vendor, separate
 // from the order ledger above since ad revenue and order revenue are distinct revenue streams
-// (per the user's explicit request to document ad sales separately).
+// (per the user's explicit request to document ad sales separately). Only 6 fields, so mobile
+// gets a plain stacked info card rather than a full accordion — nothing here needs hiding behind
+// a toggle, just laid out vertically instead of in a horizontally-scrolling table row.
 function AdvertisingRevenueSection() {
   const t = useTranslations("AdminOverviewTab");
   const tCampaignStatus = useTranslations("AdminAdCampaignsTab");
@@ -302,7 +302,7 @@ function AdvertisingRevenueSection() {
           <EmptyState title={t("noCampaignTransactionsFound")} description={t("tryDifferentFilters")} />
         ) : (
           <>
-            <div className={`overflow-x-auto ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
+            <div className={`hidden overflow-x-auto sm:block ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-text-muted">
@@ -347,6 +347,44 @@ function AdvertisingRevenueSection() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className={`flex flex-col gap-3 sm:hidden ${isFetching ? "opacity-60 transition-opacity" : ""}`}>
+              {data.items.map((campaign) => (
+                <Card key={campaign._id} className="border-border">
+                  <CardContent className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-text">
+                        {formatMoney(campaign.totalPrice, campaign.currency, locale)}
+                      </span>
+                      <Badge variant={AD_CAMPAIGN_STATUS_BADGE_VARIANT[campaign.status]}>
+                        {tCampaignStatus(`status_${campaign.status}`)}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-text-muted">
+                      {new Date(campaign.createdAt).toLocaleDateString(locale)} · {campaign.vendor.name}
+                    </span>
+                    <div className="flex flex-col divide-y divide-border pt-1">
+                      <DetailRow
+                        label={t("vendor")}
+                        value={`${campaign.vendor.name} (${campaign.vendor.type === "restaurant" ? t("restaurants") : t("storesVendorType")})`}
+                      />
+                      <DetailRow
+                        label={t("campaignPeriod")}
+                        value={`${new Date(campaign.startDate).toLocaleDateString(locale)} – ${new Date(campaign.endDate).toLocaleDateString(locale)}`}
+                      />
+                      <DetailRow
+                        label={t("payment")}
+                        value={
+                          <Badge variant={PAYMENT_STATUS_BADGE_VARIANT[campaign.paymentStatus]}>
+                            {tPayment(campaign.paymentStatus)}
+                          </Badge>
+                        }
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             <TotalsByCurrencyFooter

@@ -1071,7 +1071,7 @@
     "grossMargin": "Marge brute",
     "orders": "Commandes",
     "avgOrderValue": "Valeur moyenne des commandes",
-    "platformFee": "Frais de plateforme",
+    "platformFee": "Commission de la plateforme",
     "netPayout": "Paiement net",
     "salesByItem": "Ventes par article",
     "sortedByRevenue": "Triées par revenu, du plus élevé au plus faible.",
@@ -1096,7 +1096,20 @@
     "totalAdSpend": "Dépenses publicitaires totales",
     "adPaymentStatus_pending": "En attente",
     "adPaymentStatus_succeeded": "Payé",
-    "adPaymentStatus_failed": "Échoué"
+    "adPaymentStatus_failed": "Échoué",
+    "subtotal": "Sous-total",
+    "deliveryFee": "Frais de livraison",
+    "serviceFee": "Frais de service",
+    "tax": "Taxe",
+    "discount": "Remise",
+    "payoutToVendor": "Versement au vendeur",
+    "total": "Total",
+    "ofOrderTotal": "du total de la commande",
+    "orderTransactions": "Transactions de commandes",
+    "orderTransactionsDescription": "Chaque commande livrée sur cette période, avec le détail exact des frais derrière chacune — pour que rien de ce qui vous a été facturé ou versé ne reste flou.",
+    "orderNumber": "N° de commande",
+    "items": "Articles",
+    "totalPayoutThisPage": "Versement total (cette page)"
   },
   "NotFoundPage": {
     "eyebrow": "404",
@@ -1228,7 +1241,16 @@
     "advertisingRevenue": "Revenus publicitaires",
     "advertisingRevenueDescription": "Toutes les charges de campagnes publicitaires de tous les vendeurs, à des fins d'audit.",
     "noCampaignTransactionsFound": "Aucune transaction de campagne publicitaire trouvée",
-    "campaignPeriod": "Période de campagne"
+    "campaignPeriod": "Période de campagne",
+    "subtotal": "Sous-total",
+    "deliveryFee": "Frais de livraison",
+    "serviceFee": "Frais de service",
+    "tax": "Taxe",
+    "discount": "Remise",
+    "platformFee": "Commission de la plateforme",
+    "payoutToVendor": "Versement au vendeur",
+    "total": "Total",
+    "ofOrderTotal": "du total de la commande"
   },
   "AdminRestaurantsTab": {
     "reviewAndApprove": "Examiner et approuver",
@@ -1858,5 +1880,13 @@
     "checkAgain": "Vérifier à nouveau",
     "couldNotLoadCampaign": "Impossible de charger cette campagne publicitaire",
     "loading": "Chargement…"
+  },
+  "FeeScheduleInfo": {
+    "title": "Comment fonctionnent ces frais",
+    "platformCommissionLine": "Commission de la plateforme : {pct}% du sous-total alimentaire de chaque commande, déduite du versement au vendeur — fixée par commande, donc un changement de taux ultérieur ne réécrit jamais les commandes passées.",
+    "serviceFeeLine": "Frais de service : {pct}% du sous-total, des frais distincts ajoutés à ce que paie le client — il s'agit d'un revenu de la plateforme, pas d'une part du versement au vendeur.",
+    "deliveryFeeLine": "Frais de livraison : calculés selon la distance et la zone de livraison de chaque commande, pas un pourcentage fixe — sa part du total de la commande est affichée à titre indicatif, pas comme un taux.",
+    "taxLineIntro": "La taxe (TVA/taxe de vente) varie selon la devise :",
+    "note": "Chaque pourcentage affiché par transaction ci-dessous reflète ce qui a réellement été appliqué à cette commande précise, même si ces taux changent plus tard."
   }
 }
