@@ -3124,3 +3124,77 @@ work, not fixes to the app. `tsc --noEmit`/`eslint`/production `build` clean on 
 `sponsored` key on both detail-page i18n namespaces (already existed on the cards, just missing on
 the pages) and `required`/`optional` on `ItemDetailModal` shipped in all 6 languages, key parity
 verified programmatically.
+
+## 53. Static desktop sidebar, checkout promo-gating fix, and a full promo-discount audit (docs/ROADMAP.md FDP-132)
+
+Direct follow-up feedback on §52's redesign, plus an explicit worry that promo-code discounts
+might be "just decoration" rather than actually deducted from what a customer pays.
+
+### Static sidebar, scrollable content — a two-pane layout, not just `position: sticky`
+
+`CategoryNav`'s desktop sidebar was already `position: sticky`, which is correct CSS but not what
+"static" means colloquially: sticky tracks scroll only within its own containing block, and once
+that block's bottom edge (which is wherever the last category's content happens to end) reaches
+the viewport, the sidebar simply runs out of room to keep following — it doesn't disappear or
+break, it just stops being pinned near the top once you're deep into a long menu. Fixed by
+bounding the **content pane** specifically — `lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto` on
+the div wrapping the "Menu"/"Catalog" heading and category sections, `lg:` only (mobile keeps
+normal page-level flow, unaffected). Since the sidebar is a flex *sibling* of that pane, not a
+descendant, its own sticky behavior is now governed by the outer page's scroll (which doesn't move
+while the user scrolls *within* the now-independently-scrollable content pane) rather than by the
+pane's own height — the net effect is the sidebar staying visually fixed on screen for as long as
+the menu section is in view, exactly matching "sidebar static, the inside is scrollable."
+
+**A verification methodology lesson worth recording**: the first attempt to verify this used
+Playwright's synthetic `page.mouse.wheel()` positioned over the content pane, which produced a
+false negative — the sidebar appeared to scroll away with the outer page. Direct inspection
+(`getComputedStyle` on the pane) confirmed the CSS bound was applying correctly
+(`max-height: 788px`, `overflow-y: auto`, `scrollHeight: 1768` vs `clientHeight: 788`) — the bug
+was in the test, not the feature. Switching to directly setting the pane's own `scrollTop` (which
+is what a real mouse-wheel-over-that-region or scrollbar-drag actually does at the DOM level, and
+what `scrollIntoView` and native scroll delegation both respect) confirmed the real behavior: the
+sidebar's on-screen bounding box was pixel-identical before and after, and `window.scrollY` never
+moved. Lesson for any future scroll-interaction verification in this app: prefer direct `scrollTop`
+assertions over synthetic wheel events when a nested/bounded scroll container is involved —
+synthetic wheel events don't reliably respect the same target-resolution a real browser input does.
+
+### Checkout promo-code gating fix
+
+Found while separately auditing the promo-discount concern below: the entire promo-code entry
+control on the checkout page (`checkout/page.tsx`) was nested inside the Payment Method card's
+`availableProviders.length > 1` guard — meaning if a currency were ever configured with exactly one
+payment provider, the promo input would vanish from checkout entirely alongside the now-pointless
+single-option radio picker. Harmless today (`PaymentProviderResolver` currently returns 2-3
+providers for every configured currency), but a real landmine for whenever that changes. Decoupled:
+the card now renders whenever at least one provider exists; only the `RadioGroup` itself stays
+conditional on `length > 1`, with a plain single-line fallback (`providerLabels[availableProviders[0]]`)
+when there's exactly one — so a future single-provider currency never silently loses promo-code
+entry at checkout.
+
+### Full promo-discount audit — the concern was unfounded
+
+Traced the entire chain end to end rather than assuming: checkout (`checkout/page.tsx`'s
+`applyPromo`) calls `POST /promo-codes/validate` with the real cart subtotal and stores
+`{code, discountAmount}`; order creation (`OrdersService.createOrder`, both the restaurant and
+store paths) re-validates against the real subtotal (`PromoCodesService.validate`, which genuinely
+rejects a code below its `minOrderAmount` — `orders.service.ts` lines confirmed directly), computes
+a real `discount`, and folds it into `total` (`subtotal + deliveryFee + serviceFee + tax - discount`).
+`order.promoCode` is only ever set once validation has already succeeded, so a stored promo code
+with a zero discount is not reachable via normal user input. `PromoCodesService.redeem()` atomically
+increments `usedCount` against `usageLimit` right after order creation, closing the concurrent-reuse
+race the same way every other atomic-claim pattern in this codebase does (§19's `Payout` claiming,
+for instance).
+
+Visibility was the other half of the worry, and it's real everywhere checked: the customer's own
+order detail page renders a genuine "Discount: -₦X" line whenever `order.discount > 0`; the admin
+transactions ledger (§50/§51) already renders the real per-order `discount` column, unchanged; the
+vendor sales report's `discountTotal` stat (§50, added in that same ticket) is real and already
+displayed in the totals grid. The one place discount genuinely never appears — the earnings
+summary (`getEarningsSummary`) — is correct by design, not a gap: `platformFeeAmount`/
+`restaurantPayoutAmount` are computed from the pre-discount `subtotal`, before `discount` is even
+looked at (`orders.service.ts`'s own comment: *"a promo discount is a platform marketing cost, not
+something passed on to reduce what the restaurant is owed"*). The platform absorbs the cost of
+every promo code out of its own take, not the vendor's — so a vendor's earnings report has nothing
+to net out. No code changes were needed for any of this; it already worked correctly across cart,
+order creation, order detail, admin ledger, and sales report. Only the checkout promo-gating
+fragility above (found in passing during this audit) needed fixing.

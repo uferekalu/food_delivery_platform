@@ -282,7 +282,10 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
         <CategoryNav categories={navCategories} />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-8">
+        {/* Desktop: the sidebar stays static (sticky, pinned) while this pane scrolls
+            independently within its own bounded height — see the identical note on the
+            restaurant detail page (docs/ROADMAP.md FDP-131 follow-up). Mobile unaffected. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-8 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-2">
           <h2 className="text-xl font-semibold text-text">{t("catalog")}</h2>
           {loadingCatalog ? (
             <div className="flex flex-col gap-3">

@@ -350,21 +350,32 @@ function CheckoutForm() {
           </CardContent>
         </Card>
 
-        {availableProviders && availableProviders.length > 1 && (
+        {/* The promo-code control used to be nested inside this card's `length > 1` guard,
+            meaning it silently vanished from checkout whenever a currency had only one payment
+            provider configured — harmless today (every configured currency currently has 2-3
+            providers) but a real latent bug waiting for the day that changes. Decoupled: the
+            card (and the promo section specifically) shows whenever there's at least one
+            provider; only the radio picker itself stays conditional on there being a genuine
+            choice to make (docs/ROADMAP.md FDP-131 follow-up). */}
+        {availableProviders && availableProviders.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>{t("paymentMethod")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <RadioGroup
-                label={t("paymentMethod")}
-                value={selectedProvider ?? availableProviders[0]}
-                onChange={(value) => setSelectedProvider(value as PaymentProvider)}
-              >
-                {availableProviders.map((provider) => (
-                  <RadioOption key={provider} value={provider} label={providerLabels[provider]} />
-                ))}
-              </RadioGroup>
+              {availableProviders.length > 1 ? (
+                <RadioGroup
+                  label={t("paymentMethod")}
+                  value={selectedProvider ?? availableProviders[0]}
+                  onChange={(value) => setSelectedProvider(value as PaymentProvider)}
+                >
+                  {availableProviders.map((provider) => (
+                    <RadioOption key={provider} value={provider} label={providerLabels[provider]} />
+                  ))}
+                </RadioGroup>
+              ) : (
+                <p className="text-sm text-text-muted">{providerLabels[availableProviders[0]]}</p>
+              )}
 
               <div className="border-t border-border pt-3">
                 {appliedPromo ? (
