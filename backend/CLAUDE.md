@@ -178,11 +178,22 @@ retrying after a fixed account issue rather than waiting for next Monday. See
 `docs/ARCHITECTURE.md` §19 for the full money-safety design (atomic order claiming, confirmed-vs-
 ambiguous failure handling, `reconciliationRequired`).
 
-**Operational prerequisite this code cannot itself satisfy**: the platform's live Paystack
-account needs transfer OTP disabled (Paystack dashboard → Settings → Preferences → Transfers),
-or `PaystackAdapter.transfer` will come back rejected for every real transfer attempt — Paystack's
-API otherwise requires a human to finalize each transfer with a one-time code, which an automated
-weekly cron has no way to provide.
+**Operational prerequisites this code cannot itself satisfy**:
+- The platform's live Paystack account needs transfer OTP disabled (Paystack dashboard →
+  Settings → Preferences → Transfers), or `PaystackAdapter.transfer` will come back rejected for
+  every real transfer attempt — Paystack's API otherwise requires a human to finalize each
+  transfer with a one-time code, which an automated weekly cron has no way to provide.
+- The Paystack account must also complete Paystack's own business verification/KYC to move off
+  their default "Starter Business" tier — a starter-tier account can collect payments but is
+  blocked from the Transfers API entirely, rejecting every payout attempt with `"You cannot
+  initiate third party payouts as a starter business"` (surfaced verbatim by
+  `PaystackAdapter.transfer`, `paystack.adapter.ts`, since it throws whatever `message` Paystack's
+  own API response returns). Confirmed live 2026-09-15: the weekly batch's per-payout "confirmed,
+  clean rejection" handling (docs/ARCHITECTURE.md §19, point 3) worked exactly as designed —
+  released the claimed orders and made them retryable — but every retry fails identically until
+  the account is actually upgraded via the Paystack dashboard (Settings/Compliance → submit
+  business registration documents). No code or redeploy fixes this; once resolved on Paystack's
+  side, "Run batch now" or the next Monday run picks the released orders back up automatically.
 
 ## Database migrations & backups
 
