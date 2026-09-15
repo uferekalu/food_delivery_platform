@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
@@ -12,12 +12,43 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ItemDetailModal } from "@/components/item-detail-modal";
 import { FavoriteButton } from "@/components/favorite-button";
 import { ReviewsList } from "@/components/reviews-list";
-import { PromoTicker } from "@/components/promo-ticker";
+import { InlineDiscountBadge } from "@/components/inline-discount-badge";
+import { CategoryNav } from "@/components/category-nav";
+import { PlateIcon } from "@/components/restaurant-card";
 import { useGetRestaurantBySlugQuery } from "@/lib/redux/services/restaurants-api";
 import { useGetMenuQuery } from "@/lib/redux/services/menu-api";
 import type { MenuItem } from "@/lib/redux/restaurant-types";
 import { describeOpenStatus, getOpenStatus } from "@/lib/opening-hours";
 import { formatMoney } from "@/lib/currency";
+
+function StarIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={className}>
+      <path d="M10 1.5l2.62 5.31 5.86.85-4.24 4.13 1 5.84L10 14.9l-5.24 2.75 1-5.84L1.52 7.66l5.86-.85L10 1.5z" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 6v4l3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** A small "at a glance" stat pill — rating, ETA, price level — descriptively distinct from the
+ * name/status header above it rather than squeezed into one bullet-separated muted line
+ * (docs/ROADMAP.md FDP-131, direct feedback comparing this page to Glovo's own store page). */
+function StatChip({ icon, children }: { icon?: ReactNode; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text">
+      {icon && <span className="text-text-muted">{icon}</span>}
+      {children}
+    </span>
+  );
+}
 
 export default function RestaurantDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const t = useTranslations("RestaurantDetailPage");
@@ -33,7 +64,7 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
     return (
       <Container className="flex flex-col gap-4 py-10">
         <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-56 w-full" />
       </Container>
     );
   }
@@ -53,22 +84,57 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
   // A restaurant that never set opening hours still falls back to the manual toggle alone —
   // see getOpenStatus's "unknown" case.
   const { label: openLabel, isOpenNow } = describeOpenStatus(restaurant.isOpen, scheduleStatus, locale, t);
+  const categories = (menu ?? []).map((c) => ({ id: c._id, name: c.name }));
 
   return (
     <Container className="flex flex-col gap-6 py-10">
       <Breadcrumbs items={[{ label: t("restaurants"), href: "/restaurants" }, { label: restaurant.name }]} />
 
-      <div className="flex flex-col gap-2">
+      {/* Hero cover banner (docs/ROADMAP.md FDP-131) — coverUrl/logoUrl already existed end-to-end
+          (schema, upload form) but were never rendered on this page, only on the discovery-grid
+          card. Same fallback-icon-on-bg-secondary treatment as RestaurantCard, just larger. */}
+      <div className="relative h-48 w-full overflow-hidden rounded-xl bg-secondary sm:h-64 lg:h-72">
+        {restaurant.coverUrl ? (
+          // A restaurant cover photo doesn't warrant next/image's layout machinery here.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={restaurant.coverUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-text-muted">
+            <PlateIcon className="size-16" />
+          </div>
+        )}
+        {restaurant.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={restaurant.logoUrl}
+            alt=""
+            className="absolute -bottom-8 left-4 size-16 rounded-full border-4 border-surface object-cover shadow-md sm:size-20"
+          />
+        )}
+      </div>
+
+      <div className={`flex flex-col gap-3 ${restaurant.logoUrl ? "pt-8 sm:pt-10" : ""}`}>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-text">{restaurant.name}</h1>
+          {restaurant.isSponsored && <Badge variant="warning">{t("sponsored")}</Badge>}
           <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
           <FavoriteButton restaurantId={restaurant._id} />
         </div>
-        <p className="text-text-muted">
-          {restaurant.cuisineTypes.join(", ")} • ⭐ {restaurant.avgRating.toFixed(1)} (
-          {t("reviewCount", { count: restaurant.reviewCount })}) • {"$".repeat(restaurant.priceLevel)}
-          {restaurant.estimatedDeliveryMinutes ? ` • ${t("estimatedMinutes", { minutes: restaurant.estimatedDeliveryMinutes })}` : ""}
-        </p>
+
+        <p className="text-text-muted">{restaurant.cuisineTypes.join(", ")}</p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <StatChip icon={<StarIcon />}>
+            {restaurant.avgRating.toFixed(1)} ({t("reviewCount", { count: restaurant.reviewCount })})
+          </StatChip>
+          {restaurant.estimatedDeliveryMinutes && (
+            <StatChip icon={<ClockIcon />}>{t("estimatedMinutes", { minutes: restaurant.estimatedDeliveryMinutes })}</StatChip>
+          )}
+          <StatChip>{"$".repeat(restaurant.priceLevel)}</StatChip>
+        </div>
+
+        <InlineDiscountBadge restaurantId={restaurant._id} currency={restaurant.currency} />
+
         {restaurant.description && <p className="max-w-2xl text-text">{restaurant.description}</p>}
         <p className="text-sm text-text-muted">
           {restaurant.address.line1}, {restaurant.address.city}, {restaurant.address.state}
@@ -81,72 +147,74 @@ export default function RestaurantDetailPage({ params }: { params: Promise<{ slu
         </Alert>
       )}
 
-      <PromoTicker restaurantId={restaurant._id} currency={restaurant.currency} />
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        <CategoryNav categories={categories} />
 
-      <div className="flex flex-col gap-8">
-        <h2 className="text-xl font-semibold text-text">{t("menu")}</h2>
-        {loadingMenu ? (
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        ) : !menu || menu.length === 0 ? (
-          <EmptyState title={t("menuComingSoon")} description={t("menuNotPublished")} />
-        ) : (
-          menu.map((category) => (
-            <div key={category._id} className="flex flex-col gap-3">
-              <h3 className="text-lg font-semibold text-text">{category.name}</h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                {category.items
-                  .filter((item) => item.isAvailable)
-                  .map((item) => (
-                    <div
-                      key={item._id}
-                      className="flex h-full flex-col overflow-hidden rounded-lg border border-border transition-shadow duration-150 hover:border-border-strong hover:shadow-md"
-                    >
-                      {item.imageUrl && (
-                        // A menu item photo doesn't warrant next/image's layout machinery here.
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.imageUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
-                      )}
-                      <div className="flex flex-1 flex-col gap-2 p-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="line-clamp-2 text-sm font-medium text-text">{item.name}</span>
-                          {item.description && (
-                            <span className="line-clamp-1 text-xs text-text-muted">{item.description}</span>
-                          )}
-                        </div>
-                        {item.discountedPrice != null ? (
-                          <div className="flex flex-wrap items-baseline gap-1.5">
-                            <span className="text-sm font-semibold text-danger">
-                              {formatMoney(item.discountedPrice, restaurant.currency, locale)}
-                            </span>
-                            <span className="text-xs text-text-muted line-through">
+        <div className="flex min-w-0 flex-1 flex-col gap-8">
+          <h2 className="text-xl font-semibold text-text">{t("menu")}</h2>
+          {loadingMenu ? (
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : !menu || menu.length === 0 ? (
+            <EmptyState title={t("menuComingSoon")} description={t("menuNotPublished")} />
+          ) : (
+            menu.map((category) => (
+              <div key={category._id} id={`category-${category._id}`} className="flex scroll-mt-40 flex-col gap-3 sm:scroll-mt-24">
+                <h3 className="text-lg font-semibold text-text">{category.name}</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {category.items
+                    .filter((item) => item.isAvailable)
+                    .map((item) => (
+                      <div
+                        key={item._id}
+                        className="flex h-full flex-col overflow-hidden rounded-lg border border-border transition-shadow duration-150 hover:border-border-strong hover:shadow-md"
+                      >
+                        {item.imageUrl && (
+                          // A menu item photo doesn't warrant next/image's layout machinery here.
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.imageUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
+                        )}
+                        <div className="flex flex-1 flex-col gap-2 p-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="line-clamp-2 text-sm font-medium text-text">{item.name}</span>
+                            {item.description && (
+                              <span className="line-clamp-1 text-xs text-text-muted">{item.description}</span>
+                            )}
+                          </div>
+                          {item.discountedPrice != null ? (
+                            <div className="flex flex-wrap items-baseline gap-1.5">
+                              <span className="text-sm font-semibold text-danger">
+                                {formatMoney(item.discountedPrice, restaurant.currency, locale)}
+                              </span>
+                              <span className="text-xs text-text-muted line-through">
+                                {formatMoney(item.price, restaurant.currency, locale)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-semibold text-text">
                               {formatMoney(item.price, restaurant.currency, locale)}
                             </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm font-semibold text-text">
-                            {formatMoney(item.price, restaurant.currency, locale)}
-                          </span>
-                        )}
-                        {isOpenNow && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-auto w-full"
-                            onClick={() => setActiveItem(item)}
-                          >
-                            {t("addToCart")}
-                          </Button>
-                        )}
+                          )}
+                          {isOpenNow && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-auto w-full"
+                              onClick={() => setActiveItem(item)}
+                            >
+                              {t("addToCart")}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
 
       {activeItem && (

@@ -153,7 +153,9 @@
     "decreaseQuantity": "Diminuer la quantité",
     "increaseQuantity": "Augmenter la quantité",
     "addToCartWithPrice": "Ajouter au panier — {amount}",
-    "logInToOrder": "Connectez-vous pour commander"
+    "logInToOrder": "Connectez-vous pour commander",
+    "required": "Obligatoire",
+    "optional": "Facultatif"
   },
   "HomePage": {
     "nowDelivering": "Livraison en cours",
@@ -641,7 +643,8 @@
     "menuNotPublished": "Ce restaurant n'a pas encore publié son menu.",
     "required": "requis",
     "addToCart": "Ajouter au panier",
-    "reviews": "Avis"
+    "reviews": "Avis",
+    "sponsored": "Sponsorisé"
   },
   "Upload": {
     "uploadedDocument": "Document téléchargé",
@@ -1636,7 +1639,8 @@
     "couldNotAddToCart": "Impossible d'ajouter au panier",
     "startNewCartTitle": "Démarrer un nouveau panier ?",
     "startNewCartDescription": "Votre panier contient des articles d'un autre restaurant ou commerce. Ajouter cet article le videra.",
-    "clearCartAndAdd": "Vider le panier et ajouter"
+    "clearCartAndAdd": "Vider le panier et ajouter",
+    "sponsored": "Sponsorisé"
   },
   "NearMePage": {
     "title": "Près de moi",

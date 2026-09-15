@@ -153,7 +153,9 @@
     "decreaseQuantity": "Disminuir cantidad",
     "increaseQuantity": "Aumentar cantidad",
     "addToCartWithPrice": "Agregar al carrito — {amount}",
-    "logInToOrder": "Inicia sesión para pedir"
+    "logInToOrder": "Inicia sesión para pedir",
+    "required": "Obligatorio",
+    "optional": "Opcional"
   },
   "HomePage": {
     "nowDelivering": "Entregando ahora",
@@ -641,7 +643,8 @@
     "menuNotPublished": "Este restaurante aún no ha publicado su menú.",
     "required": "obligatorio",
     "addToCart": "Agregar al carrito",
-    "reviews": "Reseñas"
+    "reviews": "Reseñas",
+    "sponsored": "Patrocinado"
   },
   "Upload": {
     "uploadedDocument": "Documento subido",
@@ -1636,7 +1639,8 @@
     "couldNotAddToCart": "No se pudo agregar al carrito",
     "startNewCartTitle": "¿Comenzar un nuevo carrito?",
     "startNewCartDescription": "Tu carrito tiene artículos de otro restaurante o tienda. Agregar este artículo lo vaciará.",
-    "clearCartAndAdd": "Vaciar carrito y agregar"
+    "clearCartAndAdd": "Vaciar carrito y agregar",
+    "sponsored": "Patrocinado"
   },
   "NearMePage": {
     "title": "Cerca de mí",

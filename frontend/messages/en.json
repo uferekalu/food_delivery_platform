@@ -153,7 +153,9 @@
     "decreaseQuantity": "Decrease quantity",
     "increaseQuantity": "Increase quantity",
     "addToCartWithPrice": "Add to cart — {amount}",
-    "logInToOrder": "Log in to order"
+    "logInToOrder": "Log in to order",
+    "required": "Required",
+    "optional": "Optional"
   },
   "HomePage": {
     "nowDelivering": "Now delivering",
@@ -641,7 +643,8 @@
     "menuNotPublished": "This restaurant hasn't published their menu yet.",
     "required": "required",
     "addToCart": "Add to cart",
-    "reviews": "Reviews"
+    "reviews": "Reviews",
+    "sponsored": "Sponsored"
   },
   "Upload": {
     "uploadedDocument": "Uploaded document",
@@ -1643,7 +1646,8 @@
     "couldNotAddToCart": "Couldn't add to cart",
     "startNewCartTitle": "Start a new cart?",
     "startNewCartDescription": "Your cart has items from a different restaurant or store. Adding this item will clear it.",
-    "clearCartAndAdd": "Clear cart and add"
+    "clearCartAndAdd": "Clear cart and add",
+    "sponsored": "Sponsored"
   },
   "NearMePage": {
     "title": "Near me",

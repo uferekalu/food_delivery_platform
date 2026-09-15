@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/modal";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
@@ -40,43 +41,54 @@ function ModifierGroupFields({
   const t = useTranslations("ItemDetailModal");
   const locale = useLocale();
   const isSingleChoice = group.max === 1;
+  const isRequired = group.min > 0;
 
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-sm font-medium text-text">
-        {group.name}
-        {group.min > 0 && <span className="ml-1 text-danger">*</span>}
-        <span className="ml-2 text-xs font-normal text-text-muted">
-          {group.min === group.max
-            ? t("chooseExact", { count: group.min })
-            : t("chooseRange", { min: group.min, max: group.max })}
-        </span>
-      </legend>
-      {group.options.map((option) => {
-        const checked = selected.includes(option.name);
-        const disabled = !checked && !isSingleChoice && selected.length >= group.max;
-        return (
-          <label
-            key={option.name}
-            className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm has-checked:border-primary has-disabled:cursor-not-allowed has-disabled:opacity-50"
-          >
-            <span className="flex items-center gap-2">
-              <input
-                type={isSingleChoice ? "radio" : "checkbox"}
-                name={isSingleChoice ? group.name : undefined}
-                checked={checked}
-                disabled={disabled}
-                onChange={() => onToggle(option.name)}
-                className="accent-(--color-primary)"
-              />
-              {option.name}
-            </span>
-            {option.priceDelta > 0 && (
-              <span className="text-text-muted">+{formatMoney(option.priceDelta, currency, locale)}</span>
-            )}
-          </label>
-        );
-      })}
+    // A bordered card per group, not just a fieldset with spacing — direct feedback comparing
+    // this modal to Glovo's own reference (docs/ROADMAP.md FDP-131:
+    // glovoapp.com/en/ng/lagos/stores/chicken-republic-los), whose "Spice"/"Size"/"Side"/"Style"/
+    // "Drinks"/"Packaging" groups are each visually distinct sections, and a "Required" pill
+    // rather than a bare asterisk next to the group name.
+    <fieldset className="flex flex-col gap-2.5 rounded-lg border border-border p-3.5">
+      <legend className="sr-only">{group.name}</legend>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-text">{group.name}</span>
+        <Badge variant={isRequired ? "danger" : "neutral"}>
+          {isRequired ? t("required") : t("optional")}
+        </Badge>
+      </div>
+      <p className="text-xs text-text-muted">
+        {group.min === group.max
+          ? t("chooseExact", { count: group.min })
+          : t("chooseRange", { min: group.min, max: group.max })}
+      </p>
+      <div className="flex flex-col gap-2">
+        {group.options.map((option) => {
+          const checked = selected.includes(option.name);
+          const disabled = !checked && !isSingleChoice && selected.length >= group.max;
+          return (
+            <label
+              key={option.name}
+              className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm has-checked:border-primary has-checked:bg-primary-subtle/40 has-disabled:cursor-not-allowed has-disabled:opacity-50"
+            >
+              <span className="flex items-center gap-2">
+                <input
+                  type={isSingleChoice ? "radio" : "checkbox"}
+                  name={isSingleChoice ? group.name : undefined}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => onToggle(option.name)}
+                  className="accent-(--color-primary)"
+                />
+                {option.name}
+              </span>
+              {option.priceDelta > 0 && (
+                <span className="text-text-muted">+{formatMoney(option.priceDelta, currency, locale)}</span>
+              )}
+            </label>
+          );
+        })}
+      </div>
     </fieldset>
   );
 }
@@ -171,12 +183,12 @@ export function ItemDetailModal({ item, currency, open, onClose }: ItemDetailMod
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={item.name} description={item.description || undefined} size="md">
+    <Modal open={open} onClose={onClose} title={item.name} description={item.description || undefined} size="lg">
       <div className="flex flex-col gap-5">
         {item.imageUrl && (
           // A menu item photo doesn't warrant next/image's layout machinery here.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt="" className="-mt-1 h-40 w-full rounded-md object-cover" />
+          <img src={item.imageUrl} alt="" className="-mt-1 h-56 w-full rounded-md object-cover" />
         )}
 
         {item.discountedPrice != null && (

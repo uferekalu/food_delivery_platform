@@ -153,7 +153,9 @@
     "decreaseQuantity": "Menge verringern",
     "increaseQuantity": "Menge erhöhen",
     "addToCartWithPrice": "Zum Warenkorb hinzufügen — {amount}",
-    "logInToOrder": "Zum Bestellen anmelden"
+    "logInToOrder": "Zum Bestellen anmelden",
+    "required": "Erforderlich",
+    "optional": "Optional"
   },
   "HomePage": {
     "nowDelivering": "Wir liefern jetzt",
@@ -641,7 +643,8 @@
     "menuNotPublished": "Dieses Restaurant hat seine Speisekarte noch nicht veröffentlicht.",
     "required": "erforderlich",
     "addToCart": "Zum Warenkorb hinzufügen",
-    "reviews": "Bewertungen"
+    "reviews": "Bewertungen",
+    "sponsored": "Gesponsert"
   },
   "Upload": {
     "uploadedDocument": "Hochgeladenes Dokument",
@@ -1636,7 +1639,8 @@
     "couldNotAddToCart": "Konnte nicht zum Warenkorb hinzugefügt werden",
     "startNewCartTitle": "Neuen Warenkorb starten?",
     "startNewCartDescription": "Dein Warenkorb enthält Artikel eines anderen Restaurants oder Shops. Das Hinzufügen dieses Artikels leert ihn.",
-    "clearCartAndAdd": "Warenkorb leeren und hinzufügen"
+    "clearCartAndAdd": "Warenkorb leeren und hinzufügen",
+    "sponsored": "Gesponsert"
   },
   "NearMePage": {
     "title": "In meiner Nähe",
