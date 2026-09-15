@@ -153,7 +153,9 @@
     "decreaseQuantity": "减少数量",
     "increaseQuantity": "增加数量",
     "addToCartWithPrice": "加入购物车 — {amount}",
-    "logInToOrder": "登录后下单"
+    "logInToOrder": "登录后下单",
+    "required": "必选",
+    "optional": "可选"
   },
   "HomePage": {
     "nowDelivering": "正在配送",
@@ -641,7 +643,8 @@
     "menuNotPublished": "该餐厅尚未发布菜单。",
     "required": "必需",
     "addToCart": "加入购物车",
-    "reviews": "评价"
+    "reviews": "评价",
+    "sponsored": "推广"
   },
   "Upload": {
     "uploadedDocument": "已上传的文件",
@@ -1636,7 +1639,8 @@
     "couldNotAddToCart": "无法加入购物车",
     "startNewCartTitle": "开始新的购物车？",
     "startNewCartDescription": "你的购物车中有来自另一家餐厅或商店的商品。添加此商品将清空购物车。",
-    "clearCartAndAdd": "清空购物车并添加"
+    "clearCartAndAdd": "清空购物车并添加",
+    "sponsored": "推广"
   },
   "NearMePage": {
     "title": "附近",

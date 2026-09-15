@@ -3033,3 +3033,94 @@ feature (the support-tickets/chatbot module), which were reverted before committ
 PR scoped to what was actually asked, per this session's own scope-matching discipline. New
 `FeeScheduleInfo` i18n namespace plus new keys in `AdminOverviewTab`/`SalesReportPage` shipped in
 all 6 languages, key parity verified programmatically.
+
+## 52. Restaurant/store detail page redesign, modeled on Glovo's real UI (docs/ROADMAP.md FDP-131)
+
+Direct design feedback, with screenshots and a real reference URL
+(glovoapp.com/en/ng/lagos/stores/chicken-republic-los): both detail pages were "very basic" next
+to Glovo's — no cover photo, rating/ETA/discount squeezed into one muted bullet-separated text
+line instead of highlighted, the menu/catalog was one long flat scroll with no category
+navigation, and the add-to-cart modal's modifier groups were a bare `*` + sentence.
+
+### What research found before writing any code
+
+`coverUrl`/`logoUrl` already existed end-to-end — schema (`Restaurant`/`Store.coverUrl`), DTOs,
+the vendor-dashboard "edit restaurant/store" form's real `ImageUpload` (direct-to-Cloudinary,
+signed upload), and the frontend type — and were already rendered on `RestaurantCard`/`StoreCard`
+(the discovery-grid cards). The gap was purely that neither detail page rendered them at all. No
+backend/schema/upload work was needed for the hero banner; this was a frontend rendering pass on
+data already fully available from the same `useGetRestaurantBySlugQuery`/`useGetStoreBySlugQuery`
+calls both pages already made.
+
+### Hero banner
+
+Both `restaurants/[slug]/page.tsx` and `stores/[slug]/page.tsx` gained a large cover-image band
+(`h-48 sm:h-64 lg:h-72`, `object-cover`, same fallback-icon-on-`bg-secondary` treatment the cards
+already use — `PlateIcon`/`BasketIcon`/`PillIcon`, imported and reused rather than duplicated)
+with the logo overlaid bottom-left, larger than the card's version. Rating, ETA, and (restaurant
+only) price level now render as distinct `StatChip` pills — small bordered pill, icon + value —
+instead of one bullet-separated muted line, matching how Glovo visually separates "97% · 45-65' ·
+₦1,599 → Free" into individually legible chips. No delivery-fee chip was added: this platform's
+delivery fee is real distance/zone-based pricing (`DeliveryZonesService.calculateFee`), not a
+single static value on `Restaurant`/`Store` the way `avgRating`/`estimatedDeliveryMinutes` are —
+inventing a "from ₦X" figure without a customer address in context would be guessing, not
+reporting a real number.
+
+### `InlineDiscountBadge` — the same promo data, a second visual treatment
+
+Glovo's "-30% on orders over ₦3,000" sits directly under the store name, in document flow. The
+existing `PromoTicker` (§39/§41) is deliberately `position: fixed`, floating over the page by
+design — restyling it in place would have broken every other page it's mounted on. New
+`InlineDiscountBadge` (`frontend/src/components/inline-discount-badge.tsx`) reuses the *exact*
+same data source (`useGetActivePromoCodesQuery`) and the *exact* same "PromoTicker" i18n headline
+strings (`percentHeadline`/`amountHeadline`/`minOrderNote`) — deliberately not a new namespace —
+so the floating ticker and this in-flow badge can never say something different about the same
+active code even though they look different. `PromoTicker` itself is untouched everywhere else in
+the app; this is a second renderer of the same query, not a replacement.
+
+### `CategoryNav` — a jump list, not a new fetch
+
+New `frontend/src/components/category-nav.tsx`, shared by both pages. Renders twice: a sticky
+left sidebar (`hidden lg:block`) and a sticky horizontal scrollable chip row (`lg:hidden`), both
+calling the same `scrollToCategory(id)` — `document.getElementById(`category-${id}`)?.scrollIntoView(...)`.
+The calling page's only obligation is giving each category section `id={`category-${id}`}` plus a
+matching `scroll-mt-*` (clearing the sticky header) — no ref plumbing between page and nav. Active-
+category highlighting uses `IntersectionObserver` against those same section ids rather than a
+scroll-position listener, with an asymmetric `rootMargin` (`-140px 0px -70% 0px`) approximating
+"the topmost section that's passed under the sticky nav." On the store page, only *top-level*
+category sections get the anchor id (`CategorySection`'s existing recursive nesting is unchanged;
+a nested subcategory still renders inline under its parent, it's just not its own nav entry) —
+matching the reference, whose sidebar never lists a subcategory. Renders nothing for 0-1
+categories, since a jump list to jump nowhere is clutter, not a feature.
+
+### `ItemDetailModal` — bordered group cards with a Required/Optional pill
+
+The backend modifier schema already had everything needed (`ModifierGroup.min`/`max`/`options`,
+requiredness derived from `min > 0`, single-vs-multi from `max === 1`) — this was purely a
+rendering pass. Each group is now its own bordered card (`rounded-lg border p-3.5`) with a
+`Badge` (`danger` "Required" / `neutral` "Optional") next to the group name, replacing a bare `*`
+— radio/checkbox semantics, price-delta display, and the running-total/quantity/submit flow below
+are otherwise unchanged. Modal bumped from `size="md"` to `size="lg"` with a taller hero image
+(`h-56`, was `h-40`) to give the now-larger modifier cards room without feeling cramped.
+
+### Verification — two apparent bugs that were screenshot artifacts, not real ones
+
+Live Playwright verification against real seeded data (cover/logo photos, 3 menu categories, one
+item with two modifier groups, an active scoped promo code) confirmed the hero/badges/discount/
+category-nav all render correctly in light and dark mode on both pages. Two things looked broken
+mid-verification and turned out not to be, both worth recording since they'll recur if not
+understood: (1) clicking a category nav item on a short 3-category test fixture appeared to
+scroll to the wrong section and highlight the wrong nav item in a `fullPage` screenshot — rebuilt
+against a realistically tall fixture (4 categories, 24 items) and confirmed via `boundingBox()`
+that every click correctly scrolls its heading to exactly 96px from the top (clearing the sticky
+header) and updates the active highlight, in both directions; the original page was simply too
+short for `position: sticky`/`fullPage`'s interaction with an artificially expanded capture canvas
+to behave sensibly. (2) The inline discount badge appeared to collide with the floating chat-
+widget button in a `fullPage` mobile screenshot — a `position: fixed` element's placement is
+relative to the real viewport, which a `fullPage` capture (which expands the canvas beyond the
+actual viewport) distorts; a plain viewport-only screenshot at the real scroll position confirmed
+no collision at all. Both are logged as a `fullPage`-screenshot caveat for future verification
+work, not fixes to the app. `tsc --noEmit`/`eslint`/production `build` clean on both sides. New
+`sponsored` key on both detail-page i18n namespaces (already existed on the cards, just missing on
+the pages) and `required`/`optional` on `ItemDetailModal` shipped in all 6 languages, key parity
+verified programmatically.
