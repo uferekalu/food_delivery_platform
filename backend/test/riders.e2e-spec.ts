@@ -12,7 +12,10 @@ import type { OrderDocument } from '../src/orders/schemas/order.schema';
 jest.setTimeout(60_000);
 
 // Valid rider KYC fields (docs/ROADMAP.md FDP-61), reused across every /riders/apply call in
-// this spec — spread over { vehicleType: ... } so each call site only needs to vary that.
+// this spec — spread over { vehicleType: ..., phone: ... } so each call site only needs to vary
+// those. `phone` is deliberately NOT included here (docs/ROADMAP.md FDP-134, `User.phone` has a
+// unique index) — this file successfully applies more than one real rider, so each call site
+// supplies its own distinct phone rather than every caller colliding on the same one.
 const VALID_RIDER_KYC = {
   dateOfBirth: '1995-06-15',
   governmentIdType: 'national_id',
@@ -191,7 +194,7 @@ describe('Riders (e2e)', () => {
     await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${owner.accessToken}`)
-      .send({ vehicleType: 'car', ...VALID_RIDER_KYC })
+      .send({ vehicleType: 'car', phone: '+2348020000001', ...VALID_RIDER_KYC })
       .expect(400);
 
     // Missing required KYC fields is a validation error, not a role error.
@@ -207,6 +210,7 @@ describe('Riders (e2e)', () => {
       .set('Authorization', `Bearer ${applicant.accessToken}`)
       .send({
         vehicleType: 'motorcycle',
+        phone: '+2348020000002',
         ...VALID_RIDER_KYC,
         dateOfBirth: new Date(
           new Date().getFullYear() - 17,
@@ -220,7 +224,7 @@ describe('Riders (e2e)', () => {
     const applyRes = await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${applicant.accessToken}`)
-      .send({ vehicleType: 'motorcycle', ...VALID_RIDER_KYC })
+      .send({ vehicleType: 'motorcycle', phone: '+2348020000003', ...VALID_RIDER_KYC })
       .expect(201);
     const riderProfile = applyRes.body as { _id: string; isVerified: boolean };
     expect(riderProfile.isVerified).toBe(false);
@@ -229,7 +233,7 @@ describe('Riders (e2e)', () => {
     await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${applicant.accessToken}`)
-      .send({ vehicleType: 'car', ...VALID_RIDER_KYC })
+      .send({ vehicleType: 'car', phone: '+2348020000003', ...VALID_RIDER_KYC })
       .expect(400);
 
     // The old access token still says "customer" — role changes need a fresh token (same
@@ -310,7 +314,7 @@ describe('Riders (e2e)', () => {
     await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${otherRider.accessToken}`)
-      .send({ vehicleType: 'bicycle', ...VALID_RIDER_KYC })
+      .send({ vehicleType: 'bicycle', phone: '+2348020000004', ...VALID_RIDER_KYC })
       .expect(201);
     const otherRiderLogin = await reLogin('other-rider@example.com');
     await request(server)

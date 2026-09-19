@@ -17,6 +17,8 @@ export interface DropdownMenuItem {
   onSelect: () => void;
   disabled?: boolean;
   destructive?: boolean;
+  /** Decorative only (aria-hidden) — the label alone is still the accessible name. */
+  icon?: ReactNode;
 }
 
 export interface DropdownTriggerProps {
@@ -185,12 +187,17 @@ export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuPr
                   closeMenu();
                 }}
                 className={cn(
-                  "cursor-pointer px-3 py-2 text-sm",
+                  "flex cursor-pointer items-center gap-2 px-3 py-2 text-sm",
                   item.destructive ? "text-danger" : "text-text",
                   index === activeIndex && (item.destructive ? "bg-danger-bg" : "bg-secondary"),
                   item.disabled && "cursor-not-allowed opacity-50",
                 )}
               >
+                {item.icon && (
+                  <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center">
+                    {item.icon}
+                  </span>
+                )}
                 {item.label}
               </li>
             ))}

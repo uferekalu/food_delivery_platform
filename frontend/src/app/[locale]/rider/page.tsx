@@ -25,7 +25,7 @@ import {
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
-import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
+import type { Order, OrderStatus, Rider } from "@/lib/redux/restaurant-types";
 
 const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
   PENDING_PAYMENT: "warning",
@@ -135,18 +135,37 @@ function ActiveDeliveryCard({ order }: { order: Order }) {
   );
 }
 
+function LocationDotIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
+      <path
+        d="M10 18s6-5.686 6-10a6 6 0 1 0-12 0c0 4.314 6 10 6 10z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="8" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
 /**
- * Only ever mounted while `rider.isOnline` (see below) — this makes React's own unmount
- * lifecycle the trigger for stopping the browser's GPS watch, instead of a separate effect that
- * watches online status and calls setState from inside an effect body (which the React
- * Compiler's `set-state-in-effect` rule flags — see frontend/CLAUDE.md). Available any time the
- * rider is online, not just mid-delivery, since nearest-rider dispatch (docs/ROADMAP.md FDP-98)
- * needs a fresh location for an idle-but-online rider to even be considered — going offline (or
- * closing the tab) simply lets this go stale, the same way `isOnline` itself already can.
+ * Going online and sharing location used to be two separate switches — direct user feedback
+ * (docs/ROADMAP.md FDP-134) that this was a real footgun: a rider could toggle "online" (the
+ * prominent, first control) and reasonably believe they're now dispatchable, while the second,
+ * easy-to-miss "Share live location" switch stayed off — invisible to nearest-rider dispatch
+ * (FDP-98) AND the seller's assign-rider picker (FDP-133), which both require `currentLocation`.
+ * Fixed by making "go online" itself request location, in the same click — still a single,
+ * explicit user-initiated action (not an effect reacting to state, not requested on mount),
+ * matching this codebase's standing "no silent geolocation prompts" rule (docs/ARCHITECTURE.md
+ * §17) in spirit while removing the two-step gap. Manages both the `isOnline` mutation and the
+ * GPS watch together since they now have to be coordinated by the same handler.
  */
-function LocationSharingToggle() {
+function OnlineStatusCard({ rider }: { rider: Rider }) {
   const t = useTranslations("RiderDashboardPage");
+  const { toast } = useToast();
   const socket = useSocket();
+  const [toggleOnline, { isLoading: toggling }] = useToggleRiderOnlineMutation();
   const [sharingLocation, setSharingLocation] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -184,18 +203,48 @@ function LocationSharingToggle() {
     setSharingLocation(true);
   }
 
+  function handleToggleOnline() {
+    const goingOnline = !rider.isOnline;
+    void toggleOnline()
+      .unwrap()
+      .then(() => {
+        if (goingOnline) startSharingLocation();
+        else stopSharingLocation();
+      })
+      .catch((err: unknown) =>
+        toast({ title: t("couldNotUpdateStatus"), description: getErrorMessage(err), variant: "danger" }),
+      );
+  }
+
   return (
-    <>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-text">{t("shareLiveLocation")}</span>
-        <Switch
-          label={t("shareLiveLocation")}
-          checked={sharingLocation}
-          onChange={(checked) => (checked ? startSharingLocation() : stopSharingLocation())}
-        />
-      </div>
-      {geoError && <Alert variant="danger">{geoError}</Alert>}
-    </>
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-text">{rider.isOnline ? t("youreOnline") : t("youreOffline")}</span>
+            <span className="text-sm text-text-muted">{t("goOnlineDescription")}</span>
+          </div>
+          <Switch label={t("online")} checked={rider.isOnline} disabled={toggling} onChange={handleToggleOnline} />
+        </div>
+        {rider.isOnline &&
+          (sharingLocation ? (
+            <p className="flex items-center gap-1.5 text-xs text-success">
+              <LocationDotIcon />
+              {t("sharingLocationActive")}
+            </p>
+          ) : (
+            <div className="flex flex-col items-start gap-2 rounded-md bg-warning-bg p-3">
+              <p className="flex items-center gap-1.5 text-xs text-warning">
+                <LocationDotIcon />
+                {geoError ?? t("locationNotSharedWarning")}
+              </p>
+              <Button size="sm" variant="outline" onClick={startSharingLocation}>
+                {t("enableLocationSharing")}
+              </Button>
+            </div>
+          ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -204,8 +253,6 @@ function RiderDashboard() {
   const { data: rider, isLoading: loadingProfile } = useGetMyRiderProfileQuery();
   const { data: queue, isLoading: loadingQueue, refetch: refetchQueue } = useGetRiderQueueQuery();
   const { data: myDeliveries, refetch: refetchDeliveries } = useGetMyDeliveriesQuery();
-  const [toggleOnline, { isLoading: toggling }] = useToggleRiderOnlineMutation();
-  const { toast } = useToast();
   const socket = useSocket();
   const activeDeliveries = (myDeliveries ?? []).filter((o) => ACTIVE_RIDER_STATUSES.includes(o.status));
 
@@ -243,29 +290,7 @@ function RiderDashboard() {
     <div className="flex flex-col gap-6">
       {!rider.isVerified && <Alert variant="warning">{t("pendingVerificationWarning")}</Alert>}
 
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-text">{rider.isOnline ? t("youreOnline") : t("youreOffline")}</span>
-              <span className="text-sm text-text-muted">{t("goOnlineDescription")}</span>
-            </div>
-            <Switch
-              label={t("online")}
-              checked={rider.isOnline}
-              disabled={toggling}
-              onChange={() =>
-                void toggleOnline()
-                  .unwrap()
-                  .catch((err: unknown) =>
-                    toast({ title: t("couldNotUpdateStatus"), description: getErrorMessage(err), variant: "danger" }),
-                  )
-              }
-            />
-          </div>
-          {rider.isOnline && <LocationSharingToggle />}
-        </CardContent>
-      </Card>
+      <OnlineStatusCard rider={rider} />
 
       <Card>
         <CardContent className="flex items-center justify-between gap-4">
