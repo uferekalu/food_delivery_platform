@@ -262,12 +262,20 @@ function RiderDashboard() {
       void refetchQueue();
       void refetchDeliveries();
     };
-    // A generic order-status event is enough to know it's worth refetching — the location
-    // broadcast (docs/ROADMAP.md FDP-17) is purely one-way (rider -> customer), it never needs
-    // to trigger a rider-side refetch.
-    socket.on("order:statusChanged", handleUpdate);
+    // Listens for "notification:new", not "order:statusChanged" (docs/ROADMAP.md FDP-135) — the
+    // latter is only ever broadcast to an order's own room (`order:<id>`), which this page never
+    // joins (there's no `order:subscribe` call here, unlike the customer tracking page), so that
+    // listener never actually fired; this dashboard's queue/active-deliveries silently never
+    // live-updated at all, not even before a reconnect. "notification:new" is broadcast to this
+    // rider's own `user:<id>` room instead, which every connection joins automatically and
+    // unconditionally in RealtimeGateway.handleConnection — no `:subscribe` call needed, and it's
+    // rejoined on every reconnect for free. Every rider-relevant moment already sends a
+    // notification (assigned, reassigned/unassigned — see OrdersService's notifyRiderAssigned/
+    // notifyRiderUnassigned), so this is a reliable "something changed, worth refetching" signal
+    // — the same blanket-refetch-on-any-event posture the vendor dashboard already uses.
+    socket.on("notification:new", handleUpdate);
     return () => {
-      socket.off("order:statusChanged", handleUpdate);
+      socket.off("notification:new", handleUpdate);
     };
   }, [socket, refetchQueue, refetchDeliveries]);
 

@@ -64,7 +64,13 @@ function MessagesThread() {
 
   useEffect(() => {
     if (!socket || !user) return;
-    socket.emit("vendor-conversation:subscribe", { vendorId: user.id });
+    // Re-subscribes on every "connect" (initial + any automatic reconnect), not just once on
+    // mount — a reconnect keeps the same client-side Socket object (so this effect wouldn't
+    // otherwise re-run) but is a brand-new connection server-side, with no rooms joined yet
+    // (docs/ROADMAP.md FDP-135).
+    const subscribe = () => socket.emit("vendor-conversation:subscribe", { vendorId: user.id });
+    subscribe();
+    socket.on("connect", subscribe);
 
     const handleNew = () => {
       void refetch();
@@ -72,6 +78,7 @@ function MessagesThread() {
     };
     socket.on("vendor-message:new", handleNew);
     return () => {
+      socket.off("connect", subscribe);
       socket.off("vendor-message:new", handleNew);
     };
   }, [socket, user, refetch, markRead]);

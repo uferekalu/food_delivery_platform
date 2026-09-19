@@ -151,7 +151,13 @@ function OrderQueue({ storeId, storeName }: { storeId: string; storeName: string
 
   useEffect(() => {
     if (!socket) return;
-    socket.emit("store:subscribe", { storeId });
+    // Re-subscribes on every "connect" (initial + any automatic reconnect), not just once on
+    // mount — a reconnect keeps the same client-side Socket object (so this effect wouldn't
+    // otherwise re-run) but is a brand-new connection server-side, with no rooms joined yet
+    // (docs/ROADMAP.md FDP-135).
+    const subscribe = () => socket.emit("store:subscribe", { storeId });
+    subscribe();
+    socket.on("connect", subscribe);
 
     const handleOrderUpdated = (order: Order) => {
       if (order.storeId !== storeId) return;
@@ -160,6 +166,7 @@ function OrderQueue({ storeId, storeName }: { storeId: string; storeName: string
     };
     socket.on("store:orderUpdated", handleOrderUpdated);
     return () => {
+      socket.off("connect", subscribe);
       socket.off("store:orderUpdated", handleOrderUpdated);
     };
   }, [socket, storeId, refetch, toast, tStatus]);

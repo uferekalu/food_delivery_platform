@@ -3449,3 +3449,78 @@ documented in `backend/CLAUDE.md`, reproduced and confirmed passing in isolation
 `goOnlineDescription`) and `RiderApplyPage` keys (`yourPhoneNumber`, `yourPhoneNumberHint`,
 `enterValidPhone`, `licenseAlreadyExpired`) shipped in all 6 languages, key parity verified
 programmatically.
+
+## 56. Socket reconnects silently dropped room membership everywhere (docs/ROADMAP.md FDP-135)
+
+Direct user report: the customer order-tracking stepper stopped advancing live partway through
+an order's lifecycle, requiring a manual refresh — and a request to check every live-update
+surface in the app, not just this one page.
+
+### Root cause
+
+`frontend/src/lib/socket.ts` keeps one shared `Socket` singleton for the whole app
+(`ensureSocket`), reused across every page via `useSocket()` — deliberately, so a page
+navigation doesn't tear down and reconnect the realtime connection. That object reference stays
+the same across a *reconnect* too: socket.io-client's own automatic reconnection (after a brief
+network drop, a backend redeploy, a laptop sleeping, etc. — none of which are rare over the
+lifetime of an order sitting on a tracking page) transparently re-establishes the transport
+without ever changing the JS `Socket` reference the app holds.
+
+The problem: every page that needed a *specific* room (`order:<id>`, `restaurant:<id>`,
+`store:<id>`, `vendor-conversation:<id>`) joined it with a one-time `socket.emit(":subscribe",
+...)` inside a `useEffect` keyed on `[socket, ...]`. Room membership is server-side state tied to
+one physical connection — `RealtimeGateway`'s `handleConnection` runs fresh on every reconnect,
+with none of the rooms the *previous* connection had joined. But since the client-side `socket`
+reference never changes on a reconnect, the `useEffect` that originally joined the room never
+re-runs, so nothing on the client ever re-emits the `:subscribe` call. Net effect: any page
+sitting through even one transient reconnect silently stopped receiving that room's events for
+the rest of its session — invisible until you happen to refresh (which remounts the effect from
+scratch) or reload much later and wonder why "it just started working again."
+
+### Fix — re-subscribe on every "connect", not just once on mount
+
+All 6 affected call sites (`orders/[id]/page.tsx`, `checkout/callback/page.tsx`, both vendor
+`dashboard/{restaurants,stores}/[id]/orders/page.tsx`, `dashboard/messages/page.tsx`,
+`admin/messages-tab.tsx`) got the identical fix: extract the `:subscribe` emit into a named
+function, call it once immediately (the original behavior, for the already-connected/first-
+connection case) *and* register it as a `socket.on("connect", subscribe)` listener, cleaned up
+alongside the room's own event listener in the effect's return function. Socket.IO fires
+`"connect"` for the initial connection AND every automatic reconnect, so this makes room
+membership self-healing across reconnects without needing to detect or special-case a reconnect
+explicitly. The only client-observable cost is one harmless duplicate `:subscribe` emit on the
+very first connection (the direct call plus the `"connect"` listener both fire) — server-side
+room joins are idempotent, so this is a no-op in practice, not a real inefficiency worth avoiding
+with extra bookkeeping.
+
+### A second, structurally different bug found auditing every socket listener in the app
+
+`rider/page.tsx` listened for `order:statusChanged` to know when to refetch the rider's queue/
+active-deliveries — but that event is *only* ever broadcast to an order's own room, which this
+page never joined in the first place (no `:subscribe` call existed here at all, for any order).
+So this listener never fired in production, reconnect or not — the rider dashboard's live-update
+mechanism was dead code from the day it shipped (FDP-16), not something this ticket's reconnect
+bug newly broke. Fixed by switching to `notification:new` instead — broadcast to the rider's own
+`user:<id>` room, which every connection joins automatically and unconditionally inside
+`RealtimeGateway.handleConnection` (not behind any `:subscribe` call, and rejoined for free on
+every reconnect for the same reason `handleConnection` runs fresh each time). The rider-
+assignment flow (FDP-133/134's `notifyRiderAssigned`/`notifyRiderUnassigned`) already sends a
+notification for every moment the rider dashboard actually needs to refetch for, so this is a
+reliable "something changed, worth refetching" signal reusing infrastructure that already
+exists — the same blanket-refetch-on-any-relevant-event posture the vendor dashboard pages
+already use for their own room's events. `notification-bell.tsx` was audited too and confirmed
+already correct for the identical structural reason (same always-rejoined `user:<id>` room) —
+verified, not assumed, by reading it alongside every other `socket.on(...)` call site in the
+frontend.
+
+### Verification
+
+Live end-to-end, not just code review: seeded a real restaurant + order via the production API
+shape, opened the customer tracking page in a real Chromium session, used Playwright's
+`context.setOffline(true)` then `setOffline(false)` to force a genuine transport-level
+disconnect and automatic reconnect (the real-world scenario a mocked "connect" event firing
+wouldn't actually prove), then had the vendor advance the order's status twice through a
+separate authenticated browser session. Confirmed the stepper updated live both times — no
+`page.reload()` anywhere in the test — screenshotted. `tsc --noEmit`/`eslint`/production `build`
+clean; no backend changes were needed (the gateway's room/broadcast logic was already correct —
+the bug was entirely in when the frontend re-joined rooms), no i18n changes (comment-only
+additions to existing effects).

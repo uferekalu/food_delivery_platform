@@ -255,7 +255,18 @@ function OrderDetail({ id }: { id: string }) {
 
   useEffect(() => {
     if (!socket) return;
-    socket.emit("order:subscribe", { orderId: id });
+    // Re-subscribes on every "connect" (fired for the initial connection AND every automatic
+    // reconnect Socket.IO does transparently under the hood, e.g. after a brief network drop or
+    // a backend redeploy) — not just once on mount. Room membership is server-side state tied to
+    // one physical connection: a reconnect keeps the same client-side `Socket` object (so this
+    // effect never re-runs on its own) but is a brand-new connection from the server's
+    // perspective, with none of the previous rooms joined. Without this, an order sitting on
+    // this page through a reconnect would silently stop receiving live status updates — exactly
+    // right up until the point of reconnecting, then never again until a hard refresh
+    // (docs/ROADMAP.md FDP-135, direct user report: the tracking stepper stopped advancing live).
+    const subscribe = () => socket.emit("order:subscribe", { orderId: id });
+    subscribe();
+    socket.on("connect", subscribe);
 
     const handleStatusChanged = (updated: Order) => {
       if (updated._id === id) void refetch();
@@ -264,6 +275,7 @@ function OrderDetail({ id }: { id: string }) {
     socket.on("order:statusChanged", handleStatusChanged);
     socket.on("order:riderLocation", handleRiderLocation);
     return () => {
+      socket.off("connect", subscribe);
       socket.off("order:statusChanged", handleStatusChanged);
       socket.off("order:riderLocation", handleRiderLocation);
     };
