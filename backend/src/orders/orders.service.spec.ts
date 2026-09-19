@@ -90,6 +90,7 @@ describe('OrdersService', () => {
   let payoutClawbackModel: Model<PayoutClawbackDocument>;
   let notify: jest.Mock;
   let listAll: jest.Mock;
+  let findByIdsUsers: jest.Mock;
 
   const userId = 'customer-id';
   const validAddress = { line1: '1 Main St', city: 'Lagos', state: 'Lagos' };
@@ -148,7 +149,10 @@ describe('OrdersService', () => {
         },
         {
           // Admin fan-out for the refund-hardening pass (docs/ROADMAP.md FDP-104) — no admins by
-          // default, individual tests override this where they need to assert on it.
+          // default, individual tests override this where they need to assert on it. `findById`/
+          // `findByIds` back the rider-assignment notification/contact-info lookups
+          // (docs/ROADMAP.md FDP-133) — `null`/`[]` by default since most tests here don't care
+          // about the resolved name, just that the fire-and-forget call doesn't blow up.
           provide: UsersService,
           useValue: {
             listAll: jest.fn().mockResolvedValue({
@@ -158,6 +162,8 @@ describe('OrdersService', () => {
               limit: 50,
               totalPages: 0,
             }),
+            findById: jest.fn().mockResolvedValue(null),
+            findByIds: jest.fn().mockResolvedValue([]),
           },
         },
       ],
@@ -181,6 +187,7 @@ describe('OrdersService', () => {
     payoutClawbackModel = moduleRef.get(getModelToken(PayoutClawback.name));
     notify = moduleRef.get(NotificationsService).notify as jest.Mock;
     listAll = moduleRef.get(UsersService).listAll as jest.Mock;
+    findByIdsUsers = moduleRef.get(UsersService).findByIds as jest.Mock;
     // $geoNear (nearest-rider dispatch, docs/ROADMAP.md FDP-98) needs the 2dsphere index built
     // before the first geo query — see backend/CLAUDE.md/docs/ARCHITECTURE.md §22 for why this
     // can't be assumed ready right after `MongooseModule.forFeature` resolves.
@@ -195,6 +202,7 @@ describe('OrdersService', () => {
     realtimeGateway.emitOrderStatusChanged.mockClear();
     notify.mockClear();
     listAll.mockClear();
+    findByIdsUsers.mockClear();
     await Promise.all([
       restaurantModel.deleteMany({}).exec(),
       itemModel.deleteMany({}).exec(),
@@ -2842,13 +2850,29 @@ describe('OrdersService', () => {
       return userId;
     }
 
+    // docs/ROADMAP.md FDP-133: READY_FOR_PICKUP no longer auto-dispatches synchronously — it
+    // now only stamps `readyForPickupAt` and waits for the seller's grace period
+    // (RIDER_ASSIGNMENT_GRACE_PERIOD_MS) to lapse before `autoDispatchStaleReadyOrders` (the
+    // sweep RiderDispatchSchedulerService's cron drives) picks it up. Backdating
+    // `readyForPickupAt` and calling the sweep directly mirrors what the real cron does for a
+    // genuinely stale order, without this whole describe block needing to wait 3 real minutes.
     async function readyOrderFrom(restaurantId: string) {
       const order = await createOrderAtStatus(restaurantId, 'PREPARING');
-      return ordersService.updateStatusByOwner(
+      await ordersService.updateStatusByOwner(
         owner,
         order._id.toString(),
         'READY_FOR_PICKUP',
       );
+      await orderModel
+        .updateOne(
+          { _id: order._id },
+          { readyForPickupAt: new Date(Date.now() - 10 * 60 * 1000) },
+        )
+        .exec();
+      await ordersService.autoDispatchStaleReadyOrders();
+      const updated = await orderModel.findById(order._id).exec();
+      if (!updated) throw new Error('order disappeared mid-test');
+      return updated;
     }
 
     it('auto-assigns the nearest online, verified rider once an order becomes READY_FOR_PICKUP', async () => {
@@ -2994,6 +3018,306 @@ describe('OrdersService', () => {
 
       expect(order.status).toBe('READY_FOR_PICKUP');
       expect(order.riderId).toBeNull();
+    });
+  });
+
+  describe('seller-driven rider assignment (docs/ROADMAP.md FDP-133)', () => {
+    const owner = {
+      sub: 'owner-id',
+      email: 'owner@test.local',
+      role: 'restaurant_owner',
+    } as const;
+    const restaurantOrigin = { lat: 6.5, lng: 3.35 };
+
+    async function createRider(
+      lat: number,
+      lng: number,
+      overrides: Partial<{ isOnline: boolean; isVerified: boolean }> = {},
+    ): Promise<string> {
+      const riderUserId = new Types.ObjectId().toString();
+      await riderModel.create({
+        userId: riderUserId,
+        vehicleType: 'bicycle',
+        isOnline: overrides.isOnline ?? true,
+        isVerified: overrides.isVerified ?? true,
+        currentLocation: { type: 'Point', coordinates: [lng, lat] },
+        locationUpdatedAt: new Date(),
+        dateOfBirth: new Date('1995-01-01'),
+        governmentIdType: 'national_id',
+        governmentIdNumber: 'A1234567',
+        governmentIdDocumentUrl: 'https://example.com/id.pdf',
+        proofOfAddressDocumentUrl: 'https://example.com/address.pdf',
+        guarantor: {
+          fullName: 'Jane Guarantor',
+          phone: '+2348000000000',
+          relationship: 'Sister',
+          address: '1 Guarantor St',
+        },
+        nextOfKinName: 'John Next',
+        nextOfKinPhone: '+2348000000001',
+        nextOfKinRelationship: 'Brother',
+      });
+      return riderUserId;
+    }
+
+    it('no longer auto-assigns the instant an order becomes READY_FOR_PICKUP — it just stamps readyForPickupAt and waits for the seller', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      await createRider(6.501, 3.35); // would have been auto-assigned under the old behavior
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PREPARING',
+      );
+
+      const updated = await ordersService.updateStatusByOwner(
+        owner,
+        order._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      expect(updated.status).toBe('READY_FOR_PICKUP');
+      expect(updated.riderId).toBeNull();
+      expect(updated.readyForPickupAt).toBeInstanceOf(Date);
+    });
+
+    it('getAvailableRidersForOwner lists nearby available riders, nearest first, with contact info', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const closeRiderId = await createRider(6.501, 3.35);
+      const farRiderId = await createRider(6.52, 3.35);
+      await createRider(6.501, 3.35, { isOnline: false }); // excluded
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      findByIdsUsers.mockResolvedValueOnce([
+        { _id: closeRiderId, name: 'Close Rider', phone: '+2348011111111' },
+        { _id: farRiderId, name: 'Far Rider', phone: null },
+      ]);
+
+      const riders = await ordersService.getAvailableRidersForOwner(
+        owner,
+        order._id.toString(),
+      );
+
+      expect(riders).toHaveLength(2);
+      expect(riders[0]).toMatchObject({
+        riderId: closeRiderId,
+        name: 'Close Rider',
+        phone: '+2348011111111',
+      });
+      expect(riders[0].distanceKm).toBeLessThan(riders[1].distanceKm);
+      expect(riders[1]).toMatchObject({ riderId: farRiderId, name: 'Far Rider', phone: null });
+    });
+
+    it('getAvailableRidersForOwner rejects a non-owner', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.getAvailableRidersForOwner(intruder, order._id.toString()),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getAvailableRidersForOwner rejects an order not at an assignable stage', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PREPARING',
+      );
+
+      await expect(
+        ordersService.getAvailableRidersForOwner(owner, order._id.toString()),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('assignRiderByOwner assigns a specific rider to a READY_FOR_PICKUP order', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      const updated = await ordersService.assignRiderByOwner(
+        owner,
+        order._id.toString(),
+        riderId,
+      );
+
+      expect(updated.status).toBe('ASSIGNED_TO_RIDER');
+      expect(updated.riderId?.toString()).toBe(riderId);
+    });
+
+    it('assignRiderByOwner rejects an unverified rider', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35, { isVerified: false });
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+
+      await expect(
+        ordersService.assignRiderByOwner(owner, order._id.toString(), riderId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('assignRiderByOwner reassigns an ASSIGNED_TO_RIDER order to a different rider', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const firstRiderId = await createRider(6.501, 3.35);
+      const secondRiderId = await createRider(6.52, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel
+        .updateOne({ _id: order._id }, { riderId: firstRiderId })
+        .exec();
+
+      const updated = await ordersService.assignRiderByOwner(
+        owner,
+        order._id.toString(),
+        secondRiderId,
+      );
+
+      expect(updated.status).toBe('ASSIGNED_TO_RIDER');
+      expect(updated.riderId?.toString()).toBe(secondRiderId);
+      expect(updated.statusHistory.at(-1)).toMatchObject({
+        status: 'ASSIGNED_TO_RIDER',
+        by: owner.sub,
+      });
+    });
+
+    it('assignRiderByOwner rejects assigning the rider who is already on the order', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel.updateOne({ _id: order._id }, { riderId }).exec();
+
+      await expect(
+        ordersService.assignRiderByOwner(owner, order._id.toString(), riderId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('assignRiderByOwner rejects assigning once the order has moved past ASSIGNED_TO_RIDER', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'PICKED_UP',
+      );
+
+      await expect(
+        ordersService.assignRiderByOwner(owner, order._id.toString(), riderId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('assignRiderByOwner rejects a non-owner', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'READY_FOR_PICKUP',
+      );
+      const intruder = {
+        sub: 'someone-else',
+        email: 'intruder@test.local',
+        role: 'restaurant_owner',
+      } as const;
+
+      await expect(
+        ordersService.assignRiderByOwner(intruder, order._id.toString(), riderId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('findForRestaurant keeps an order visible with its rider contact info through delivery, instead of dropping it once a rider is attached', async () => {
+      const restaurant = await createApprovedRestaurant('NGN', {
+        line1: '1 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        ...restaurantOrigin,
+      });
+      const riderId = await createRider(6.501, 3.35);
+      const order = await createOrderAtStatus(
+        restaurant._id.toString(),
+        'ASSIGNED_TO_RIDER',
+      );
+      await orderModel.updateOne({ _id: order._id }, { riderId }).exec();
+      findByIdsUsers.mockResolvedValueOnce([
+        { _id: riderId, name: 'Assigned Rider', phone: '+2348022222222' },
+      ]);
+
+      const queue = await ordersService.findForRestaurant(
+        owner,
+        restaurant._id.toString(),
+      );
+
+      expect(queue).toHaveLength(1);
+      expect(queue[0].rider).toMatchObject({
+        riderId,
+        name: 'Assigned Rider',
+        phone: '+2348022222222',
+      });
     });
   });
 

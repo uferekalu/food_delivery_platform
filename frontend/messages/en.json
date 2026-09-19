@@ -972,7 +972,19 @@
     "newOrdersAppearHere": "New orders will appear here as soon as they come in.",
     "restaurantNotFound": "Restaurant not found",
     "storeNotFound": "Store not found",
-    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it."
+    "mayNotExistOrNoAccess": "It may not exist, or you don't have access to it.",
+    "assignRider": "Assign a rider",
+    "reassignRider": "Reassign rider",
+    "autoDispatchNotice": "If you don't assign someone, we'll automatically dispatch the nearest available rider after a few minutes.",
+    "noRidersNearby": "No riders available nearby",
+    "noRidersNearbyDescription": "There's nobody online and nearby right now. We'll keep trying to auto-dispatch this order in the background.",
+    "assign": "Assign",
+    "distanceAway": "{distance} km away",
+    "riderAssignedToast": "Rider assigned",
+    "couldNotAssignRider": "Couldn't assign rider",
+    "riderAssignedNoContact": "A rider is assigned, but their contact details aren't available.",
+    "callRider": "Call rider",
+    "noPhoneOnFile": "No phone number on file"
   },
   "DeliveryZonesPage": {
     "couldNotDeleteZone": "Couldn't delete zone",

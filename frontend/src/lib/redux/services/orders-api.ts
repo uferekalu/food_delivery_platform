@@ -1,6 +1,7 @@
 import { api } from "../api";
 import type {
   Address,
+  AvailableRiderOption,
   Cart,
   FeeSchedule,
   Order,
@@ -240,6 +241,28 @@ export const ordersApi = api.injectEndpoints({
         { type: "Order", id: "STORE_QUEUE" },
       ],
     }),
+
+    // Seller-driven rider assignment (docs/ROADMAP.md FDP-133) — the seller's "who can I assign
+    // this to" picker, shown once an order is READY_FOR_PICKUP (or still ASSIGNED_TO_RIDER, for
+    // reassigning an unresponsive rider).
+    getAvailableRiders: builder.query<AvailableRiderOption[], string>({
+      query: (orderId) => `/orders/${orderId}/available-riders`,
+      providesTags: (_result, _error, orderId) => [{ type: "Order", id: `AVAILABLE-RIDERS-${orderId}` }],
+    }),
+
+    assignOrderRider: builder.mutation<Order, { orderId: string; riderUserId: string }>({
+      query: ({ orderId, riderUserId }) => ({
+        url: `/orders/${orderId}/assign-rider`,
+        method: "POST",
+        body: { riderUserId },
+      }),
+      invalidatesTags: (result, _error, { orderId }) => [
+        { type: "Order", id: orderId },
+        { type: "Order", id: "QUEUE" },
+        { type: "Order", id: "STORE_QUEUE" },
+        { type: "Order", id: `AVAILABLE-RIDERS-${orderId}` },
+      ],
+    }),
   }),
 });
 
@@ -258,4 +281,6 @@ export const {
   useGetStoreSalesReportTransactionsQuery,
   useUpdateOrderStatusMutation,
   useReorderMutation,
+  useGetAvailableRidersQuery,
+  useAssignOrderRiderMutation,
 } = ordersApi;

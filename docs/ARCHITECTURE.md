@@ -3198,3 +3198,140 @@ every promo code out of its own take, not the vendor's — so a vendor's earning
 to net out. No code changes were needed for any of this; it already worked correctly across cart,
 order creation, order detail, admin ledger, and sales report. Only the checkout promo-gating
 fragility above (found in passing during this audit) needed fixing.
+
+## 54. Seller-driven rider assignment (docs/ROADMAP.md FDP-133)
+
+Direct user request: once a restaurant/store marked an order `READY_FOR_PICKUP`, the seller had
+no say in who delivered it and no visibility once a rider was attached — dispatch was either
+instant auto-assignment to the nearest online rider (§22/FDP-98) or a rider self-claiming from the
+open queue (FDP-16), and the order then vanished entirely from the seller's own order list the
+moment `riderId` was set. The user wanted the seller to be able to pick a specific nearby rider
+themselves, call them, and keep watching the order through delivery — without removing either of
+the existing mechanisms.
+
+### The seller gets first refusal; auto-dispatch becomes a grace-period fallback
+
+`OrdersService.applyOwnerTransition` used to call `dispatchToNearestRider` synchronously, inline,
+the instant a seller marked an order `READY_FOR_PICKUP` — by the time the seller's own request
+even returned, a rider was very often already attached. That call is gone; the transition now only
+stamps a new `readyForPickupAt: Date | null` field on the order (a plain scalar, not a
+`statusHistory` unwind, for the same "cheap indexed query" reason `deliveredAt` exists — §3). A new
+`RiderDispatchSchedulerService` (`backend/src/orders/rider-dispatch-scheduler.service.ts`) runs
+every minute (`@Cron(CronExpression.EVERY_MINUTE)`, same thin-trigger shape as
+`AdCampaignSchedulerService`/`PayoutSchedulerService`) and calls
+`OrdersService.autoDispatchStaleReadyOrders()`, which finds every order still `READY_FOR_PICKUP`
+with `riderId: null` whose `readyForPickupAt` is older than `RIDER_ASSIGNMENT_GRACE_PERIOD_MS`
+(3 minutes, an exported constant) and dispatches each exactly the way the old instant path did.
+Net effect: the seller has a real window to assign someone themselves; an order they never act on
+still doesn't stall forever. The rider self-claim queue (`findUnassignedForRiders`,
+`POST /riders/orders/:id/assign`) is untouched and still works the whole time — whichever of the
+three paths (seller pick, auto-dispatch sweep, rider self-claim) writes first wins, via the same
+atomic `findOneAndUpdate({ status: 'READY_FOR_PICKUP', riderId: null }, ...)` all three now funnel
+through in `OrdersService.assignToRider`.
+
+### The seller's own picker and assign/reassign action
+
+Two new endpoints, both `@Roles('restaurant_owner', 'admin')` and ownership-checked against the
+order's own restaurant/store (factored into a shared `assertOwnerAccessToOrder`, since
+`updateStatusByOwner` used to inline this check itself):
+
+- `GET /orders/:id/available-riders` (`OrdersService.getAvailableRidersForOwner`) — reuses the
+  exact same `$geoNear`-over-`Rider.currentLocation` candidate query the auto-dispatch path always
+  used (extracted into a shared `findNearbyRiderCandidates(order, limit)`, filtering
+  online+verified+not-already-on-an-active-delivery riders), but returns the *whole* nearby list
+  (up to 20, vs. auto-dispatch's top pick alone) enriched with each rider's name/phone (joined from
+  `User` — `Rider` itself has no phone field, see §3/§16) and distance in km. Allowed while the
+  order is `READY_FOR_PICKUP` (the normal case) or still `ASSIGNED_TO_RIDER` (reassigning before
+  pickup), rejected otherwise.
+- `POST /orders/:id/assign-rider` (`OrdersService.assignRiderByOwner`) — two cases. Assigning a
+  still-unassigned `READY_FOR_PICKUP` order calls straight into the same `assignToRider` the other
+  two dispatch paths use (so the race-safety is identical). Reassigning an already-
+  `ASSIGNED_TO_RIDER` order to a *different* rider (e.g. the first one isn't responding — the
+  user's explicit "call the rider to make sure they accept and complete the delivery" scenario) is
+  a second, narrower atomic `findOneAndUpdate` filtered on `status: 'ASSIGNED_TO_RIDER'`, no
+  `riderId` filter needed since only the order's own seller can call this. Both paths verify the
+  target rider is verified first (a direct `riderModel.findOne({ userId })` check — deliberately
+  not a call into `RidersService`, since `OrdersModule` intentionally has no dependency on
+  `RidersModule` to avoid the circular import `RidersModule → OrdersModule` already creates,
+  documented in `orders.module.ts`).
+
+### Rider contact info exposed to a seller — a first for this codebase
+
+Before this ticket, no role's phone number was ever exposed to a *different* role anywhere in this
+API (§16's PII-redaction note only ever covered hiding data, not sharing it across roles). A new
+narrow `OrderRiderContact` shape (`{ riderId, name, phone, vehicleType, rating }` — deliberately
+not the full `Rider`/`User` document) is attached as `rider: OrderRiderContact | null` on every
+order `findForRestaurant`/`findForStore` returns, via a new `attachRiderContact` helper that
+batch-joins `Rider`+`User` for every distinct `riderId` in one query pair rather than N+1. This is
+also why `findForRestaurant`/`findForStore`'s return type changed from `OrderDocument[]` to plain
+enriched objects (`{ ...order.toObject(), rider }`) — nothing downstream ever called `.save()` on
+what these two return (confirmed: only the controller forwards them to the client), so the change
+is safe.
+
+`ACTIVE_SELLER_STATUSES` (the filter behind both list endpoints) gained `ASSIGNED_TO_RIDER`,
+`PICKED_UP`, `OUT_FOR_DELIVERY` — previously it stopped at `READY_FOR_PICKUP`, so an order
+literally disappeared from the seller's own dashboard the instant a rider was attached, which was
+half of the user's original complaint ("the store has no control of it"). An order now stays
+visible, with live rider contact info, all the way through delivery.
+
+### Notifications — three new fire-and-forget pushes, all reusing `NotificationsService.notify`
+
+None of these existed before; a rider previously only learned of an assignment by refetching after
+the generic `order:statusChanged` socket event, and a seller was never told who got assigned at
+all. All three are best-effort (caught, logged, never block the transition that triggered them —
+same posture as every other `notify*` method in `orders.service.ts`):
+
+- `notifyRiderAssigned` — "you've been given a new delivery," fired from `assignToRider` for every
+  caller (auto-dispatch, seller-assign) *except* a rider's own self-claim, which passes
+  `{ notifyRider: false }` from `RidersController.assign` — telling someone about the thing they
+  just clicked adds nothing.
+- `notifyRiderUnassigned` — fired only from the reassignment path in `assignRiderByOwner`, so the
+  previous rider knows they're off the hook.
+- `notifyOwnerOfRiderAssignment` — fired unconditionally from `assignToRider` (so every one of the
+  three dispatch paths triggers it) and again from the reassignment path — the seller is always
+  told who's coming, which is what makes the phone number on `available-riders`/the order queue
+  actually useful rather than just there for decoration.
+
+### Frontend — assign/contact UI, and the order stays in the queue
+
+`frontend/src/components/order-rider-assignment.tsx` (new, shared by both
+`dashboard/restaurants/[id]/orders/page.tsx` and `dashboard/stores/[id]/orders/page.tsx`, which
+were otherwise still intentionally near-duplicate files — see §1 for why this codebase doesn't
+share more between the two seller types) exports two pieces, both used from each page's existing
+`OrderActions` status switch:
+
+- `AssignRiderAction` — replaces the old plain "Waiting for a rider" text at `READY_FOR_PICKUP`
+  with a button opening a `Modal` picker (`useGetAvailableRidersQuery`, skipped until the modal is
+  actually open) listing each nearby rider's name, star rating (`Rating`, read-only), review count,
+  vehicle (`Badge`, reusing the existing `VehicleType` i18n namespace already shipped for the rider
+  dashboard), and distance, each with an "Assign" button.
+- `RiderContactCard` — shown for `ASSIGNED_TO_RIDER`/`PICKED_UP`/`OUT_FOR_DELIVERY`: rider name,
+  vehicle badge, rating, and a `tel:` link (styled via the exported `buttonVariants` directly on an
+  `<a>`, since `Button` itself only renders a `<button>` — no `asChild` polymorphism in this UI
+  kit) — falls back to a "no phone on file" note when the joined `User.phone` is `null`. While
+  still `ASSIGNED_TO_RIDER`, also shows a "Reassign" button opening the same picker modal.
+
+No new page-level routing or socket wiring needed — both dashboard pages already subscribe to
+`restaurant:orderUpdated`/`store:orderUpdated` and `refetch()` the queue on any event
+(`realtimeGateway.emitOrderStatusChanged` already broadcasts to those rooms on every transition,
+unchanged), so an auto-dispatch, a rider's own self-claim, or another browser tab reassigning all
+show up live without any new frontend realtime code.
+
+### Testing
+
+11 new `orders.service.spec.ts` cases (`describe('seller-driven rider assignment ...')`): the
+grace-period behavior itself (a fresh `READY_FOR_PICKUP` transition leaves `riderId: null` and
+stamps `readyForPickupAt`, proving the old instant-dispatch behavior is genuinely gone), the picker
+(nearest-first with contact info, ownership/stage rejections), assign (happy path, unverified-rider
+rejection, non-owner rejection), reassign (happy path incl. `statusHistory`, same-rider rejection,
+past-`ASSIGNED_TO_RIDER` rejection), and that `findForRestaurant` keeps an assigned order visible
+with its rider's contact info. The pre-existing "nearest-rider dispatch" describe block (6 cases,
+FDP-98) needed its `readyOrderFrom` test helper updated to backdate `readyForPickupAt` and call
+`autoDispatchStaleReadyOrders()` explicitly, mirroring what the real cron sweep now does, since a
+synchronous dispatch-on-transition no longer exists to assert against directly — the underlying
+`$geoNear`/busy-filtering logic itself is untouched and all 6 cases pass unmodified otherwise. Full
+backend suite green; `tsc --noEmit`/`eslint` clean on both sides. New `DashboardOrdersPage` keys
+(`assignRider`, `reassignRider`, `autoDispatchNotice`, `noRidersNearby`,
+`noRidersNearbyDescription`, `assign`, `distanceAway`, `riderAssignedToast`,
+`couldNotAssignRider`, `riderAssignedNoContact`, `callRider`, `noPhoneOnFile`) shipped in all 6
+languages, key parity verified programmatically.

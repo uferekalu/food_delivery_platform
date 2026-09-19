@@ -29,6 +29,10 @@ export const NOTIFICATION_TYPES = [
   'ad_campaign_payment_failed',
   'ad_campaign_active',
   'ad_campaign_ended',
+  // Seller-driven rider assignment (docs/ROADMAP.md FDP-133).
+  'rider_assigned',
+  'rider_unassigned',
+  'order_rider_assigned',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

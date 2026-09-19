@@ -171,6 +171,15 @@ export class Order {
   @Prop({ type: Date, default: null })
   estimatedDeliveryAt: Date | null;
 
+  // Set exactly once, the moment the order transitions to READY_FOR_PICKUP
+  // (OrdersService.applyOwnerTransition) — docs/ROADMAP.md FDP-133. Gives the seller a grace
+  // window to manually assign a rider themselves before RiderDispatchSchedulerService's sweep
+  // falls back to automatic nearest-rider dispatch. Same "distinct scalar field, not just a
+  // statusHistory entry" rationale as deliveredAt above: the sweep's cron query needs an
+  // indexed field to compare against `now - grace period`, not an array to unwind every run.
+  @Prop({ type: Date, default: null, index: true })
+  readyForPickupAt: Date | null;
+
   // Set exactly once, the moment the order transitions to DELIVERED
   // (OrdersService.updateStatusByRider) — distinct from statusHistory (which also records this
   // moment as an entry) so date-range sales reporting (docs/ROADMAP.md FDP-64) can $match/index
