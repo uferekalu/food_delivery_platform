@@ -119,7 +119,14 @@ function ConversationThread({ vendorId }: { vendorId: string }) {
 
   useEffect(() => {
     if (!socket) return;
-    socket.emit("vendor-conversation:subscribe", { vendorId });
+    // Re-subscribes on every "connect" (initial + any automatic reconnect), not just once on
+    // mount — a reconnect keeps the same client-side Socket object (so this effect wouldn't
+    // otherwise re-run) but is a brand-new connection server-side, with no rooms joined yet
+    // (docs/ROADMAP.md FDP-135). This view also has a 4s polling fallback, but this admin inbox
+    // deserves the same live-update correctness as everywhere else.
+    const subscribe = () => socket.emit("vendor-conversation:subscribe", { vendorId });
+    subscribe();
+    socket.on("connect", subscribe);
 
     const handleNew = () => {
       void refetch();
@@ -127,6 +134,7 @@ function ConversationThread({ vendorId }: { vendorId: string }) {
     };
     socket.on("vendor-message:new", handleNew);
     return () => {
+      socket.off("connect", subscribe);
       socket.off("vendor-message:new", handleNew);
     };
   }, [socket, vendorId, refetch, markRead]);

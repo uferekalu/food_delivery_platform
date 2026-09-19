@@ -63,13 +63,20 @@ function CallbackContent() {
 
   useEffect(() => {
     if (!socket || !orderId) return;
-    socket.emit("order:subscribe", { orderId });
+    // Re-subscribes on every "connect" (initial + any automatic reconnect), not just once on
+    // mount — see orders/[id]/page.tsx's identical fix for why a bare reconnect otherwise
+    // silently drops room membership without a matching client-side signal to re-join
+    // (docs/ROADMAP.md FDP-135).
+    const subscribe = () => socket.emit("order:subscribe", { orderId });
+    subscribe();
+    socket.on("connect", subscribe);
 
     const handleStatusChanged = (updated: Order) => {
       if (updated._id === orderId) void refetch();
     };
     socket.on("order:statusChanged", handleStatusChanged);
     return () => {
+      socket.off("connect", subscribe);
       socket.off("order:statusChanged", handleStatusChanged);
     };
   }, [socket, orderId, refetch]);
