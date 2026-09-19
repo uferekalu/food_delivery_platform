@@ -438,7 +438,20 @@
     "noStoresYet": "Ainda não há lojas",
     "tryDifferentTag": "Experimente outra etiqueta, ou veja todas as lojas.",
     "cuisineFilters": "Filtros de culinária",
-    "tagFilters": "Filtros de categoria"
+    "tagFilters": "Filtros de categoria",
+    "searchStores": "Buscar lojas…",
+    "minimumRating": "Avaliação mínima",
+    "maximumDeliveryTime": "Tempo máximo de entrega",
+    "sortBy": "Ordenar por",
+    "newest": "Mais recentes",
+    "highestRated": "Mais bem avaliados",
+    "fastestDelivery": "Entrega mais rápida",
+    "anyRating": "Qualquer avaliação",
+    "starsAndUp": "{count}+ estrelas",
+    "anyDeliveryTime": "Qualquer tempo de entrega",
+    "under30Min": "Menos de 30 min",
+    "under45Min": "Menos de 45 min",
+    "under60Min": "Menos de 60 min"
   },
   "CheckoutPage": {
     "cardStripe": "Cartão (Stripe)",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "Avalie este restaurante",
+    "rateThisStore": "Avalie esta loja",
     "rateYourRider": "Avalie seu entregador",
     "paymentNotYetConfirmed": "Pagamento ainda não confirmado",
     "paymentNotConfirmedDescription": "Ainda não confirmamos o pagamento deste pedido. Se você concluiu o pagamento, geralmente é apenas um atraso na resposta do provedor de pagamento.",
@@ -1658,7 +1672,8 @@
     "startNewCartTitle": "Iniciar um novo carrinho?",
     "startNewCartDescription": "Seu carrinho tem itens de outro restaurante ou loja. Adicionar este item irá esvaziá-lo.",
     "clearCartAndAdd": "Esvaziar carrinho e adicionar",
-    "sponsored": "Patrocinado"
+    "sponsored": "Patrocinado",
+    "reviews": "Avaliações"
   },
   "NearMePage": {
     "title": "Perto de mim",

@@ -438,7 +438,20 @@
     "noStoresYet": "Aún no hay tiendas",
     "tryDifferentTag": "Prueba otra etiqueta, o explora todas las tiendas.",
     "cuisineFilters": "Filtros de cocina",
-    "tagFilters": "Filtros de categoría"
+    "tagFilters": "Filtros de categoría",
+    "searchStores": "Buscar tiendas…",
+    "minimumRating": "Calificación mínima",
+    "maximumDeliveryTime": "Tiempo de entrega máximo",
+    "sortBy": "Ordenar por",
+    "newest": "Más recientes",
+    "highestRated": "Mejor calificados",
+    "fastestDelivery": "Entrega más rápida",
+    "anyRating": "Cualquier calificación",
+    "starsAndUp": "{count}+ estrellas",
+    "anyDeliveryTime": "Cualquier tiempo de entrega",
+    "under30Min": "Menos de 30 min",
+    "under45Min": "Menos de 45 min",
+    "under60Min": "Menos de 60 min"
   },
   "CheckoutPage": {
     "cardStripe": "Tarjeta (Stripe)",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "Califica este restaurante",
+    "rateThisStore": "Califica esta tienda",
     "rateYourRider": "Califica a tu repartidor",
     "paymentNotYetConfirmed": "Pago aún no confirmado",
     "paymentNotConfirmedDescription": "Aún no hemos confirmado el pago de este pedido. Si completaste el pago, generalmente es solo un retraso en la respuesta del proveedor de pagos.",
@@ -1658,7 +1672,8 @@
     "startNewCartTitle": "¿Comenzar un nuevo carrito?",
     "startNewCartDescription": "Tu carrito tiene artículos de otro restaurante o tienda. Agregar este artículo lo vaciará.",
     "clearCartAndAdd": "Vaciar carrito y agregar",
-    "sponsored": "Patrocinado"
+    "sponsored": "Patrocinado",
+    "reviews": "Reseñas"
   },
   "NearMePage": {
     "title": "Cerca de mí",

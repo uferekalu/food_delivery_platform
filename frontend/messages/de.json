@@ -438,7 +438,20 @@
     "noStoresYet": "Noch keine Shops",
     "tryDifferentTag": "Probiere ein anderes Tag oder durchsuche alle Shops.",
     "cuisineFilters": "Küchen-Filter",
-    "tagFilters": "Kategorie-Filter"
+    "tagFilters": "Kategorie-Filter",
+    "searchStores": "Geschäfte suchen…",
+    "minimumRating": "Mindestbewertung",
+    "maximumDeliveryTime": "Maximale Lieferzeit",
+    "sortBy": "Sortieren nach",
+    "newest": "Neueste",
+    "highestRated": "Bestbewertet",
+    "fastestDelivery": "Schnellste Lieferung",
+    "anyRating": "Beliebige Bewertung",
+    "starsAndUp": "{count}+ Sterne",
+    "anyDeliveryTime": "Beliebige Lieferzeit",
+    "under30Min": "Unter 30 Min.",
+    "under45Min": "Unter 45 Min.",
+    "under60Min": "Unter 60 Min."
   },
   "CheckoutPage": {
     "cardStripe": "Karte (Stripe)",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "Bewerte dieses Restaurant",
+    "rateThisStore": "Bewerte dieses Geschäft",
     "rateYourRider": "Bewerte deinen Fahrer",
     "paymentNotYetConfirmed": "Zahlung noch nicht bestätigt",
     "paymentNotConfirmedDescription": "Wir haben die Zahlung für diese Bestellung noch nicht bestätigt. Wenn du den Bezahlvorgang abgeschlossen hast, ist dies normalerweise nur eine Verzögerung bei der Rückmeldung des Zahlungsanbieters.",
@@ -1658,7 +1672,8 @@
     "startNewCartTitle": "Neuen Warenkorb starten?",
     "startNewCartDescription": "Dein Warenkorb enthält Artikel eines anderen Restaurants oder Shops. Das Hinzufügen dieses Artikels leert ihn.",
     "clearCartAndAdd": "Warenkorb leeren und hinzufügen",
-    "sponsored": "Gesponsert"
+    "sponsored": "Gesponsert",
+    "reviews": "Bewertungen"
   },
   "NearMePage": {
     "title": "In meiner Nähe",

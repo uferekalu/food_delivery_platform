@@ -18,6 +18,7 @@ export interface ListReviewsParams {
 
 export interface ReviewEligibility {
   restaurant: boolean;
+  store: boolean;
   rider: boolean;
 }
 

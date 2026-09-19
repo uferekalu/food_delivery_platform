@@ -438,7 +438,20 @@
     "noStoresYet": "Aucun commerce pour l'instant",
     "tryDifferentTag": "Essayez une autre étiquette, ou parcourez tous les commerces.",
     "cuisineFilters": "Filtres de cuisine",
-    "tagFilters": "Filtres de catégorie"
+    "tagFilters": "Filtres de catégorie",
+    "searchStores": "Rechercher des boutiques…",
+    "minimumRating": "Note minimale",
+    "maximumDeliveryTime": "Délai de livraison maximum",
+    "sortBy": "Trier par",
+    "newest": "Plus récents",
+    "highestRated": "Mieux notés",
+    "fastestDelivery": "Livraison la plus rapide",
+    "anyRating": "Toute note",
+    "starsAndUp": "{count}+ étoiles",
+    "anyDeliveryTime": "Tout délai de livraison",
+    "under30Min": "Moins de 30 min",
+    "under45Min": "Moins de 45 min",
+    "under60Min": "Moins de 60 min"
   },
   "CheckoutPage": {
     "cardStripe": "Carte (Stripe)",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "Notez ce restaurant",
+    "rateThisStore": "Notez cette boutique",
     "rateYourRider": "Notez votre livreur",
     "paymentNotYetConfirmed": "Paiement pas encore confirmé",
     "paymentNotConfirmedDescription": "Nous n'avons pas encore confirmé le paiement de cette commande. Si vous avez terminé le paiement, il s'agit généralement d'un simple délai de réponse du fournisseur de paiement.",
@@ -1658,7 +1672,8 @@
     "startNewCartTitle": "Démarrer un nouveau panier ?",
     "startNewCartDescription": "Votre panier contient des articles d'un autre restaurant ou commerce. Ajouter cet article le videra.",
     "clearCartAndAdd": "Vider le panier et ajouter",
-    "sponsored": "Sponsorisé"
+    "sponsored": "Sponsorisé",
+    "reviews": "Avis"
   },
   "NearMePage": {
     "title": "Près de moi",

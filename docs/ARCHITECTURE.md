@@ -3524,3 +3524,86 @@ separate authenticated browser session. Confirmed the stepper updated live both 
 clean; no backend changes were needed (the gateway's room/broadcast logic was already correct —
 the bug was entirely in when the frontend re-joined rooms), no i18n changes (comment-only
 additions to existing effects).
+
+## 57. Store reviews, a real eligibility bug, and grocery/pharmacy browse parity (docs/ROADMAP.md FDP-136)
+
+Direct, explicit user request: audit grocery/pharmacy ordering for the same smoothness as
+restaurant ordering, and confirm customers can review restaurants, stores, *and* riders
+successfully. Research first (a dedicated Explore pass across both the reviews module and the
+full store ordering flow, comparing every step against its restaurant counterpart) before any
+code changes — confirmed most of the ordering flow (cart, checkout, order tracking, reorder) was
+already at genuine parity, and narrowed the real gaps to two: reviews, and browse/discovery.
+
+### Reviews had no `'store'` target type at all — plus a real bug this caused
+
+`REVIEW_TARGET_TYPES` was `['restaurant', 'rider']` — a grocery/pharmacy store could not be
+reviewed, full stop, despite `Store` already carrying `avgRating`/`reviewCount` fields (read and
+sorted on elsewhere) and a `StoresService.updateRatingStats` method that existed but was never
+called by anything. Fixed by adding `'store'` to the enum and extending `ReviewsService.create`
+(new `storeId`-resolution branch, mirroring the `restaurant`/`rider` ones exactly) and
+`recomputeTargetRating` (new branch calling the previously-dead `updateRatingStats`) —
+`ReviewsModule` needed `StoresModule` added to its imports (confirmed non-circular first: neither
+imports the other transitively).
+
+**A genuine, independent bug found while extending `getEligibility`**: it computed
+`restaurant: !restaurantReview` — true whenever no restaurant review exists yet for this order,
+with no check that the order actually *had* a restaurant to review. For a delivered **store**
+order, `restaurantReview` is always `null` (a restaurant review targeting a store order can never
+exist), so `eligibility.restaurant` came back `true` on every single delivered store order — the
+frontend then rendered a "Rate this restaurant" form on a grocery/pharmacy order that would have
+been rejected by `ReviewsService.create`'s own `!order.restaurantId` guard if a customer ever
+actually submitted it. Fixed by gating both `restaurant` and the new `store` field on
+`order.restaurantId`/`order.storeId` actually being set, not just "no review exists yet" — the
+same class of bug, and the same fix shape, as §54's `getAvailableRidersForOwner` distance
+filtering, just in the reviews module instead of the rider-assignment one.
+
+### Frontend: two components already fully generic, two real gaps to close
+
+`review-form.tsx`/`reviews-list.tsx` needed zero changes — both already took `targetType`
+generically with no restaurant-specific assumptions, so `"store"` worked the moment the shared
+`ReviewTargetType` union (`restaurant-types.ts`) included it. The two real gaps: the store detail
+page (`stores/[slug]/page.tsx`) had no reviews section at all — added, mirroring the restaurant
+page's `<ReviewsList targetType="restaurant" .../>` block exactly, just `"store"`. And
+`orders/[id]/page.tsx`'s `OrderReviews` — already the *same* component/mount-point rendering both
+the restaurant and rider forms for either seller type (no `sellerType` branching anywhere in that
+file), so rider reviews on a store order were confirmed already working correctly before this
+ticket — just needed a third `{eligibility.store && <ReviewForm targetType="store" .../>}` arm
+alongside the existing two.
+
+### Browse/discovery parity: stores had no rich filtering at all
+
+Restaurants have a dedicated `/restaurants` page (search, minimum rating, max price, max delivery
+time, 5-way sort) *in addition to* the simpler cuisine-chip tab on `/categories`. Stores only ever
+had the simple tag-chip tab (`StoreTypeCategory` on `/categories`) — `StoresService.findAllApproved`
+already fully supported `search`/`minRating`/`maxDeliveryMinutes`/three-way `sort` server-side
+(confirmed identical filter logic to the restaurant service), and `ListStoresParams` was already
+typed for all four — nothing on the frontend ever exposed them as controls. Rather than building a
+whole new dedicated `/stores` route (more duplication than the gap warrants, and stores were never
+meant to live outside `/categories`), `StoreTypeCategory` gained the same four controls directly,
+styled identically to `/restaurants`' own filter row (no price filter — stores have no price-level
+concept, matching `ListStoresParams`' own field set). `useDebouncedValue` reused for the search
+box, same 350ms debounce as the restaurant page.
+
+Two further real gaps were surfaced by the same research pass but are **out of scope for this
+ticket** (not what was asked, and each substantial enough to warrant its own ticket if wanted):
+favorites are restaurant-only end-to-end (`User.favoriteRestaurantIds` has no `favoriteStoreIds`
+counterpart, not just a missing frontend button), and a store product's cart line has no way to
+attach a note despite the backend/cart-drawer already fully supporting one (`AddStoreCartItemDto`
+has `notes`, nothing in the product card or cart drawer ever lets a customer set it).
+
+### Verification
+
+Live end-to-end against a real dev server, not just unit tests: created a real grocery store via
+the production API shape, approved it, seeded a verified rider and a raw-inserted DELIVERED store
+order, then confirmed in a real browser that (1) the "Rate this restaurant" form does **not**
+appear on the delivered store order (the bug above, actually fixed, not just unit-tested), (2)
+"Rate this store" and "Rate your rider" both render on the same order, (3) submitting the store
+review actually recomputes `Store.avgRating`/`reviewCount` in the database, (4) the review then
+appears on the store's own public detail page, and (5) the new search filter on the groceries tab
+genuinely narrows results and restores them when cleared — screenshotted at each step. 2 new
+backend unit tests (store-order eligibility including the bug's exact regression case, and
+rejecting a restaurant-typed review against a store order) plus 3 existing eligibility test
+assertions updated for the new `store` field shape — full backend suite green (716/716).
+`tsc --noEmit`/`eslint`/production `build` clean on both sides. New `StoreDetailPage.reviews`,
+`OrderDetailPage.rateThisStore`, and 13 new `CategoriesPage` filter-control keys shipped in all 6
+languages, key parity verified programmatically.
