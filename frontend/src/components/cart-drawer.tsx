@@ -19,9 +19,9 @@ import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import type { CartItem } from "@/lib/redux/restaurant-types";
 
-function CartIcon() {
+function CartIcon({ className = "size-5" }: { className?: string }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="size-5">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
       <path
         d="M3 5h2l1.5 9a1.5 1.5 0 0 0 1.5 1.3h6a1.5 1.5 0 0 0 1.5-1.3L17 7H5.5"
         stroke="currentColor"
@@ -160,7 +160,7 @@ export function CartDrawer() {
             <Spinner />
           </div>
         ) : !cart || cart.items.length === 0 ? (
-          <EmptyState title={t("emptyCartTitle")} description={t("emptyCartDescription")} />
+          <EmptyState icon={<CartIcon className="size-10" />} title={t("emptyCartTitle")} description={t("emptyCartDescription")} />
         ) : (
           <>
             <p className="text-sm font-medium text-text">{cart.restaurantName ?? cart.storeName}</p>

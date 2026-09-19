@@ -56,6 +56,11 @@ function ApplyForm() {
   const schema = z
     .object({
       vehicleType: z.enum(VEHICLE_TYPES),
+      phone: z
+        .string()
+        .min(7, t("required"))
+        .max(20)
+        .regex(/^\+?[1-9]\d{6,14}$/, t("enterValidPhone")),
       dateOfBirth: z.string().min(1, t("required")),
       governmentIdType: z.enum(GOVERNMENT_ID_TYPES),
       governmentIdNumber: z.string().min(4, t("tooShort")).max(50),
@@ -87,6 +92,11 @@ function ApplyForm() {
         }
         if (!values.driversLicenseExpiry) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["driversLicenseExpiry"], message: t("requiredForMotorized") });
+        } else if (new Date(values.driversLicenseExpiry) < new Date(new Date().toDateString())) {
+          // A license valid only through yesterday can't be used to deliver starting today —
+          // caught here too, not just server-side (docs/ROADMAP.md FDP-134), so the applicant
+          // sees it immediately instead of after a round trip.
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["driversLicenseExpiry"], message: t("licenseAlreadyExpired") });
         }
         if (!values.vehiclePlateNumber) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["vehiclePlateNumber"], message: t("requiredForMotorized") });
@@ -126,6 +136,7 @@ function ApplyForm() {
 
     void applyRider({
       vehicleType: values.vehicleType,
+      phone: values.phone,
       dateOfBirth: values.dateOfBirth,
       governmentIdType: values.governmentIdType,
       governmentIdNumber: values.governmentIdNumber,
@@ -185,6 +196,9 @@ function ApplyForm() {
 
           <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
             <h2 className="text-sm font-semibold text-text">{t("identity")}</h2>
+            <FormField label={t("yourPhoneNumber")} error={errors.phone?.message} hint={t("yourPhoneNumberHint")} required>
+              <Input type="tel" {...register("phone")} />
+            </FormField>
             <FormField label={t("dateOfBirth")} error={errors.dateOfBirth?.message} required>
               <Input type="date" {...register("dateOfBirth")} />
             </FormField>

@@ -104,6 +104,9 @@ describe('RidersService', () => {
 
   function kycFields() {
     return {
+      // Unique per call — `apply()` now sets this on the applicant's own User (docs/ROADMAP.md
+      // FDP-134), and `phone` has a unique index, same reasoning as createCustomer's random email.
+      phone: `+234${Math.floor(7000000000 + Math.random() * 999999999)}`,
       dateOfBirth: '1995-06-15',
       governmentIdType: 'national_id' as const,
       governmentIdNumber: 'A1234567',
@@ -266,6 +269,72 @@ describe('RidersService', () => {
 
     const count = await riderModel.countDocuments().exec();
     expect(count).toBe(0);
+  });
+
+  it('apply sets the phone number on the applicant\'s own user account (FDP-134)', async () => {
+    const customer = await createCustomer();
+    const fields = kycFields();
+
+    await ridersService.apply(requesterFor(customer), {
+      vehicleType: 'bicycle',
+      ...fields,
+    });
+
+    const updated = await usersService.findById(customer._id.toString());
+    expect(updated?.phone).toBe(fields.phone);
+  });
+
+  it('apply rejects a phone number already used by another account (FDP-134)', async () => {
+    const existingPhoneOwner = await createCustomer();
+    const sharedPhone = '+2348055512345';
+    await usersService.updateProfile(existingPhoneOwner._id.toString(), {
+      phone: sharedPhone,
+    });
+
+    const applicant = await createCustomer();
+    await expect(
+      ridersService.apply(requesterFor(applicant), {
+        vehicleType: 'bicycle',
+        ...kycFields(),
+        phone: sharedPhone,
+      }),
+    ).rejects.toThrow();
+
+    const count = await riderModel.countDocuments().exec();
+    expect(count).toBe(0);
+  });
+
+  it('apply rejects an already-expired driver\'s license (FDP-134)', async () => {
+    const customer = await createCustomer();
+
+    await expect(
+      ridersService.apply(requesterFor(customer), {
+        vehicleType: 'motorcycle',
+        ...kycFields(),
+        driversLicenseExpiry: '2020-01-01',
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    const count = await riderModel.countDocuments().exec();
+    expect(count).toBe(0);
+  });
+
+  it('verify rejects a rider whose driver\'s license has since expired, even though it was valid at apply time (FDP-134)', async () => {
+    const customer = await createCustomer();
+    const rider = await ridersService.apply(requesterFor(customer), {
+      vehicleType: 'car',
+      ...kycFields(),
+    });
+
+    // Simulate time passing between application and admin review — the license was valid on
+    // the day the rider applied, but has since lapsed.
+    await riderModel
+      .updateOne({ _id: rider._id }, { driversLicenseExpiry: new Date('2020-01-01') })
+      .exec();
+
+    await expect(
+      ridersService.verify(rider._id.toString()),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('verify rejects a rider missing required KYC information (FDP-61)', async () => {

@@ -5,6 +5,7 @@ import {
   IsIn,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -23,6 +24,24 @@ export class ApplyRiderDto {
   @ApiProperty({ enum: VEHICLE_TYPES })
   @IsIn(VEHICLE_TYPES)
   vehicleType: VehicleType;
+
+  // The rider's own contact number (docs/ROADMAP.md FDP-134) — distinct from the guarantor/next-
+  // of-kin phones below. Applying was the one place in the whole signup→apply flow that never
+  // asked for it (account registration's own phone field is optional, and most riders skip it),
+  // which left `assignRiderByOwner`'s "call rider" feature (docs/ROADMAP.md FDP-133) with nothing
+  // to show for a lot of real riders. Same E.164-ish pattern as UpdateProfileDto.phone, so a
+  // rider who already set one at signup and a rider setting it here for the first time both land
+  // in the same `User.phone` field/format.
+  @ApiProperty({
+    description:
+      "The rider's own contact number — shown to a seller once assigned so they can call.",
+  })
+  @IsString()
+  @Matches(/^\+?[1-9]\d{6,14}$/, {
+    message:
+      'Enter a valid phone number, digits only (an optional leading + is fine)',
+  })
+  phone: string;
 
   @ApiProperty({
     description: 'ISO date string — applicant must be at least 18 years old',

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -27,6 +28,21 @@ import { CreateSavedAddressDto } from './dto/create-saved-address.dto';
 import { UpdateSavedAddressDto } from './dto/update-saved-address.dto';
 import { ListUsersDto } from './dto/list-users.dto';
 import { escapeRegExp } from '../common/utils/regex';
+
+// Narrow check for the specific unique-index violation this file's write paths can hit — `err`
+// is `unknown` here (a raw driver/Mongoose error, not one of this codebase's own exception
+// types), so this only claims "yes, this really is a duplicate phone" rather than assuming shape.
+function isDuplicatePhoneError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const code = (err as { code?: unknown }).code;
+  if (code !== 11000) return false;
+  const keyPattern = (err as { keyPattern?: unknown }).keyPattern;
+  if (keyPattern && typeof keyPattern === 'object' && 'phone' in keyPattern) {
+    return true;
+  }
+  const message = (err as { message?: unknown }).message;
+  return typeof message === 'string' && message.includes('phone');
+}
 
 export interface CreateUserInput {
   email: string;
@@ -236,7 +252,18 @@ export class UsersService {
     if (dto.name !== undefined) user.name = dto.name;
     if (dto.avatarUrl !== undefined) user.avatarUrl = dto.avatarUrl;
     if (dto.phone !== undefined) user.phone = dto.phone;
-    return user.save();
+    try {
+      return await user.save();
+    } catch (err) {
+      // `phone` has a unique index — surface the foreseeable "someone else already used this
+      // number" case as a clean 409 instead of a raw Mongo E11000 error bubbling up as a 500.
+      if (isDuplicatePhoneError(err)) {
+        throw new ConflictException(
+          'This phone number is already in use on another account',
+        );
+      }
+      throw err;
+    }
   }
 
   async listAddresses(id: string): Promise<SavedAddress[]> {

@@ -68,6 +68,26 @@ export class RidersService {
       );
     }
 
+    // A rider needs a real driver's license for as long as they're actually delivering, not just
+    // on the day they applied — an admin reviewing the application weeks later (docs/ROADMAP.md
+    // FDP-134) would otherwise verify a license that's already lapsed by then. Applies to any
+    // motorized vehicle type; ApplyRiderDto already makes this required for those.
+    if (
+      dto.driversLicenseExpiry &&
+      new Date(dto.driversLicenseExpiry) < new Date()
+    ) {
+      throw new BadRequestException(
+        "Your driver's license has already expired — renew it before applying",
+      );
+    }
+
+    // The rider's own contact number (docs/ROADMAP.md FDP-134) — account registration's phone
+    // field is optional and most riders skip it, which left the seller's "call rider" feature
+    // (docs/ROADMAP.md FDP-133) with nothing to show for a lot of real riders. Set it here, before
+    // creating the Rider profile, so a phone number already taken by another account fails clean
+    // (ConflictException from updateProfile) rather than leaving a half-created application.
+    await this.usersService.updateProfile(requester.sub, { phone: dto.phone });
+
     const rider = await this.riderModel.create({
       userId: requester.sub,
       vehicleType: dto.vehicleType,
@@ -259,6 +279,12 @@ export class RidersService {
       if (!rider.vehicleRegistrationDocumentUrl)
         missing.push('vehicle registration document');
       if (!rider.vehiclePlateNumber) missing.push('vehicle plate number');
+      // Re-checked here too, not just at apply() time (docs/ROADMAP.md FDP-134) — an admin can
+      // review an application weeks after it was submitted, by which point a license that was
+      // valid on the day the rider applied may have since lapsed.
+      if (rider.driversLicenseExpiry && rider.driversLicenseExpiry < new Date()) {
+        missing.push("a valid (non-expired) driver's license");
+      }
     }
     if (missing.length > 0) {
       throw new BadRequestException(

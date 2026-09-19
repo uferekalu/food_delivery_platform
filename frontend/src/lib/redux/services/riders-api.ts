@@ -10,6 +10,7 @@ import type {
 
 export interface ApplyRiderInput {
   vehicleType: VehicleType;
+  phone: string;
   dateOfBirth: string;
   governmentIdType: GovernmentIdType;
   governmentIdNumber: string;

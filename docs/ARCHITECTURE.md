@@ -3335,3 +3335,117 @@ backend suite green; `tsc --noEmit`/`eslint` clean on both sides. New `Dashboard
 `noRidersNearbyDescription`, `assign`, `distanceAway`, `riderAssignedToast`,
 `couldNotAssignRider`, `riderAssignedNoContact`, `callRider`, `noPhoneOnFile`) shipped in all 6
 languages, key parity verified programmatically.
+
+## 55. Live-testing fallout from §54: the online/location footgun, a missing rider phone, expired-license validation, and menu icons (docs/ROADMAP.md FDP-134)
+
+User live-tested §54's seller-assign-rider feature immediately after it shipped and reported the
+picker saying "no riders available nearby" despite riders genuinely being online — plus, while
+investigating, found the rider application form had nowhere to enter a phone number, an expired
+driver's license was silently accepted, and several menu surfaces (the account dropdown, the
+empty cart) had no icons. All four were real, root-caused live, not assumed.
+
+### The actual bug: "online" and "sharing location" were two different things
+
+`RiderDashboardPage`'s online `Switch` and its `LocationSharingToggle` were always two separate
+controls — going online (the prominent, first switch) never implied sharing location (a second,
+easy-to-miss switch shown only once online). Both `dispatchToNearestRider` (§22/FDP-98) and
+`getAvailableRidersForOwner` (§54) filter on `Rider.currentLocation`, which only gets set once a
+rider's browser actually shares GPS via `rider:locationUpdate` — an "online" rider who never
+flipped the second switch is `isOnline: true` but `currentLocation: null`, invisible to both. This
+matches the docs — §22's own doc comment already described "a rider who leaves it off simply
+stays invisible to dispatch" as the *intended* degrade — but from a seller's perspective (or a
+rider who reasonably assumes "online" already means "available"), it reads as a bug, not a
+feature. Live-reproduced with a screenshot: `LocationSharingToggle` visibly unchecked while the
+rider dashboard clearly says "You're online."
+
+**Fix**: merged into one action rather than a "make the second switch more obvious" patch.
+`frontend/src/app/[locale]/rider/page.tsx`'s `OnlineStatusCard` (replaces the old
+`LocationSharingToggle` + inline `Switch` in `RiderDashboard`) calls `startSharingLocation()` (the
+same `navigator.geolocation.watchPosition` call as before) from inside the *same* `onChange`
+handler that flips `isOnline`, immediately after the mutation resolves. This still satisfies this
+codebase's standing "no silent geolocation prompts" rule (§17) — the permission prompt is still
+the direct result of one explicit user click, just consolidated into that one click instead of
+two. Going offline stops sharing the same way. If geolocation fails or is denied, a persistent
+inline warning stays visible ("Location not shared — you can still see and claim orders from the
+queue, but won't be automatically assigned new ones") with a retry button, rather than failing
+silently. The vendor-facing empty-picker copy (`noRidersNearbyDescription`, §54) was also
+sharpened to say riders need location sharing on, not just "online," so a seller hitting this
+mid-transition (existing riders who logged in before this fix still need to re-toggle once) has
+an explanation rather than a dead end.
+
+**Live verification, not just code review**: seeded a real rider account and restaurant via the
+production API shape, drove an actual Chromium browser with `permissions: ["geolocation"]`
+granted and a fixed coordinate ~110m from the seller, clicked the rider's single "Online" switch,
+and confirmed via a direct database read that `Rider.currentLocation` was genuinely persisted from
+that one click — then, in a second browser session as the seller, confirmed the same rider now
+appears in the "Assign a rider" picker (the exact scenario originally reported as broken).
+Screenshots of both sides captured. A `context.request`-based login pattern was needed for two of
+the script's browser sessions after the first attempt hit a real 429 from `/auth/login`'s
+`{ limit: 5, ttl: 60_000 }` throttle (a script doing register+apply+verify+approve+3 browser
+logins in quick succession genuinely exceeds it) — documented in the verification script itself
+as a reusable pattern for any future live-verification work that needs several authenticated
+sessions in one run.
+
+### Rider's own phone number, and expired-license validation
+
+Neither existed anywhere in the rider application flow. `ApplyRiderDto` gets a new required
+`phone` field (same E.164-ish `@Matches` pattern as `UpdateProfileDto.phone`), and
+`RidersService.apply` now calls `usersService.updateProfile(requester.sub, { phone: dto.phone })`
+before creating the `Rider` document — set on the applicant's own `User.phone`, the exact field
+§54's "call rider" contact card already reads. `UsersService.updateProfile` gained a
+try/catch around the `.save()` translating the underlying Mongo `E11000` unique-index violation
+(via a new `isDuplicatePhoneError` helper, since `err` here is genuinely `unknown` — a raw
+driver/Mongoose error, not one of this codebase's own exception types) into a clean
+`ConflictException` ("This phone number is already in use on another account") instead of a raw
+500 — a real, previously-unhandled foreseeable-conflict gap on the *existing* profile-update path
+too, not just new surface area this ticket added.
+
+Expiry validation follows the same two-checkpoint pattern `assertKycComplete` already established
+for KYC completeness (§61): rejected at `apply()` time (`dto.driversLicenseExpiry < new Date()` →
+`BadRequestException`, immediate feedback) *and* re-checked at `verify()` time inside
+`assertKycComplete` itself, since an admin can review an application weeks after submission, by
+which point a license genuinely valid on the day the rider applied may since have lapsed — the
+same "regardless of caller, re-check unconditionally" posture that method's own doc comment
+already argues for. The frontend's zod schema mirrors the apply-time check (comparing against
+midnight today, so an expiry of literally today still passes) for the same reason every other
+validation in this form is duplicated client-side — immediate feedback without a round trip.
+
+Investigated but found NOT to need a fix: the user also asked that "the documents to be uploaded
+[be] relevant to what they select" (bicycle vs. motorized) — already correctly implemented since
+FDP-61 (`needsVehicleDocs = vehicleType !== "bicycle"` conditionally renders the entire "Vehicle &
+license" section), confirmed by toggling the radio live and screenshotting both states rather than
+assuming the existing code was the gap.
+
+### Icons
+
+Direct feedback that "most areas of the system do not use icons," scoped to the two concrete
+examples given rather than a full app-wide icon audit: `frontend/src/components/auth-status.tsx`'s
+account dropdown (the single shared menu covering "my dashboard"/orders/account/logout across
+every role, per §-numbered "congested header" note earlier in this file) and the empty-cart state
+in `frontend/src/components/cart-drawer.tsx`. `DropdownMenuItem` (`ui/dropdown-menu.tsx`) gained
+an optional `icon?: ReactNode`, rendered `aria-hidden` before the label — backward compatible,
+the only other consumer (`design-system` showcase page) is unaffected by an optional field. Eight
+small inline SVG icons (`StorefrontIcon`, `BasketIcon`, `ChatBubbleIcon`, `ScooterIcon`,
+`GaugeIcon`, `ReceiptIcon`, `UserCircleIcon`, `LogOutIcon`) follow this codebase's established
+per-file inline-icon convention (no shared icon library exists or was introduced) and are wired
+into both the dropdown `items` array and the "stacked" mobile-menu variant. The empty-cart
+`EmptyState` gets the same `CartIcon` already used for the header trigger and item-thumbnail
+fallback, just larger (`CartIcon` changed from a hardcoded `size-5` to an optional `className`
+prop to allow this without a second component).
+
+### Testing
+
+4 new `riders.service.spec.ts` cases (phone set on apply, duplicate-phone rejection, expired-
+license rejection at apply, expired-license rejection at verify despite being valid at apply
+time) — full existing suite (16 cases) still green with `kycFields()` updated to generate a
+unique phone per call (`phone` now has a unique index reachable from this code path). Three e2e
+specs (`riders`, `reviews`, `admin`) needed their shared `VALID_RIDER_KYC` fixtures given explicit
+per-call-site phone numbers, since more than one of them successfully creates more than one real
+rider within the same test using what was previously a single shared constant. Full backend suite
+green (714/714; the one intermittent `mongodb-memory-server` teardown flake under concurrent load,
+documented in `backend/CLAUDE.md`, reproduced and confirmed passing in isolation). `tsc --noEmit`/
+`eslint`/production `build` clean on both sides. New `RiderDashboardPage` keys
+(`sharingLocationActive`, `locationNotSharedWarning`, `enableLocationSharing`, updated
+`goOnlineDescription`) and `RiderApplyPage` keys (`yourPhoneNumber`, `yourPhoneNumberHint`,
+`enterValidPhone`, `licenseAlreadyExpired`) shipped in all 6 languages, key parity verified
+programmatically.

@@ -225,7 +225,7 @@ describe('Admin (e2e)', () => {
     const applyRes = await request(server)
       .post('/riders/apply')
       .set('Authorization', `Bearer ${riderAccount.accessToken}`)
-      .send({ vehicleType: 'bicycle', ...VALID_RIDER_KYC })
+      .send({ vehicleType: 'bicycle', phone: '+2348040000001', ...VALID_RIDER_KYC })
       .expect(201);
     const riderId = (applyRes.body as { _id: string })._id;
 
