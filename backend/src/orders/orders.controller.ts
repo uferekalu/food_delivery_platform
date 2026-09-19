@@ -17,6 +17,7 @@ import { csvRow } from '../common/utils/csv';
 import { OrdersService, round2 } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { AssignOrderRiderDto } from './dto/assign-order-rider.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
 import { ListSalesReportTransactionsQueryDto } from './dto/list-sales-report-transactions-query.dto';
 import { ReorderDto } from './dto/reorder.dto';
@@ -327,5 +328,29 @@ export class OrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.ordersService.updateStatusByOwner(user, id, dto.status);
+  }
+
+  // Seller-driven rider assignment (docs/ROADMAP.md FDP-133) — the seller's "who can I assign
+  // this to" picker: nearby, available, verified riders with enough info (name, phone, distance)
+  // to actually choose and call one.
+  @Roles('restaurant_owner', 'admin')
+  @Get(':id/available-riders')
+  getAvailableRiders(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.ordersService.getAvailableRidersForOwner(user, id);
+  }
+
+  // Counterpart action to the picker above — assigns (or reassigns) a specific rider, replacing
+  // "leave it for a rider to self-claim or wait for auto-dispatch" with the seller's own choice.
+  @Roles('restaurant_owner', 'admin')
+  @Post(':id/assign-rider')
+  assignRider(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() dto: AssignOrderRiderDto,
+  ) {
+    return this.ordersService.assignRiderByOwner(user, id, dto.riderUserId);
   }
 }

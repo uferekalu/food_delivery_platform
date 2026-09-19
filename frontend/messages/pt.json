@@ -972,7 +972,19 @@
     "newOrdersAppearHere": "Novos pedidos aparecerão aqui assim que chegarem.",
     "restaurantNotFound": "Restaurante não encontrado",
     "storeNotFound": "Loja não encontrada",
-    "mayNotExistOrNoAccess": "Ele pode não existir, ou você não tem acesso a ele."
+    "mayNotExistOrNoAccess": "Ele pode não existir, ou você não tem acesso a ele.",
+    "assignRider": "Atribuir um entregador",
+    "reassignRider": "Reatribuir entregador",
+    "autoDispatchNotice": "Se você não atribuir ninguém, despacharemos automaticamente o entregador disponível mais próximo em alguns minutos.",
+    "noRidersNearby": "Nenhum entregador disponível por perto",
+    "noRidersNearbyDescription": "No momento não há ninguém on-line e por perto. Continuaremos tentando despachar este pedido automaticamente em segundo plano.",
+    "assign": "Atribuir",
+    "distanceAway": "a {distance} km",
+    "riderAssignedToast": "Entregador atribuído",
+    "couldNotAssignRider": "Não foi possível atribuir o entregador",
+    "riderAssignedNoContact": "Um entregador está atribuído, mas os dados de contato não estão disponíveis.",
+    "callRider": "Ligar para o entregador",
+    "noPhoneOnFile": "Nenhum número de telefone registrado"
   },
   "DeliveryZonesPage": {
     "couldNotDeleteZone": "Não foi possível excluir a zona",

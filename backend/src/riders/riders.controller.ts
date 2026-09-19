@@ -71,7 +71,11 @@ export class RidersController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     await this.ridersService.assertVerified(user.sub);
-    return this.ordersService.assignToRider(user.sub, orderId);
+    // Self-claim — the rider already knows they just accepted it, so skip the redundant
+    // "you've been assigned" push (docs/ROADMAP.md FDP-133's `notifyRider` option).
+    return this.ordersService.assignToRider(user.sub, orderId, {
+      notifyRider: false,
+    });
   }
 
   @Roles('rider')

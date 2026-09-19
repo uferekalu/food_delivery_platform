@@ -20,6 +20,7 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { PaymentProviderResolver } from '../payments/provider-resolver';
 import { TaxResolver } from './tax-resolver';
+import { RiderDispatchSchedulerService } from './rider-dispatch-scheduler.service';
 
 @Module({
   imports: [
@@ -53,7 +54,16 @@ import { TaxResolver } from './tax-resolver';
     UsersModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, PaymentProviderResolver, TaxResolver],
+  providers: [
+    OrdersService,
+    PaymentProviderResolver,
+    TaxResolver,
+    // Grace-period rider-dispatch fallback (docs/ROADMAP.md FDP-133) — see the service's own doc
+    // comment. Lives here, not a separate module, since it only ever calls back into
+    // OrdersService itself, the same "thin scheduler colocated with what it drives" shape as
+    // AdCampaignSchedulerService/PayoutSchedulerService.
+    RiderDispatchSchedulerService,
+  ],
   exports: [OrdersService],
 })
 export class OrdersModule {}

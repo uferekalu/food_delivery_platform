@@ -972,7 +972,19 @@
     "newOrdersAppearHere": "Neue Bestellungen erscheinen hier, sobald sie eingehen.",
     "restaurantNotFound": "Restaurant nicht gefunden",
     "storeNotFound": "Shop nicht gefunden",
-    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf."
+    "mayNotExistOrNoAccess": "Es existiert möglicherweise nicht, oder du hast keinen Zugriff darauf.",
+    "assignRider": "Fahrer zuweisen",
+    "reassignRider": "Fahrer neu zuweisen",
+    "autoDispatchNotice": "Wenn du niemanden zuweist, wird nach ein paar Minuten automatisch der nächstgelegene verfügbare Fahrer beauftragt.",
+    "noRidersNearby": "Keine Fahrer in der Nähe verfügbar",
+    "noRidersNearbyDescription": "Gerade ist niemand online und in der Nähe. Wir versuchen weiterhin im Hintergrund, diese Bestellung automatisch zuzuweisen.",
+    "assign": "Zuweisen",
+    "distanceAway": "{distance} km entfernt",
+    "riderAssignedToast": "Fahrer zugewiesen",
+    "couldNotAssignRider": "Fahrer konnte nicht zugewiesen werden",
+    "riderAssignedNoContact": "Ein Fahrer ist zugewiesen, aber seine Kontaktdaten sind nicht verfügbar.",
+    "callRider": "Fahrer anrufen",
+    "noPhoneOnFile": "Keine Telefonnummer hinterlegt"
   },
   "DeliveryZonesPage": {
     "couldNotDeleteZone": "Zone konnte nicht gelöscht werden",

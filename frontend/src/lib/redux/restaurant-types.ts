@@ -389,7 +389,10 @@ export type NotificationType =
   | "ad_campaign_created"
   | "ad_campaign_payment_failed"
   | "ad_campaign_active"
-  | "ad_campaign_ended";
+  | "ad_campaign_ended"
+  | "rider_assigned"
+  | "rider_unassigned"
+  | "order_rider_assigned";
 
 export interface Notification {
   _id: string;
@@ -521,6 +524,30 @@ export interface AdminAnalytics {
   users: Record<string, number>;
 }
 
+// Seller-driven rider assignment (docs/ROADMAP.md FDP-133) — a name/phone pair exposed to the
+// order's own seller once a rider is attached, so they can actually call them. Only present on
+// `Order.rider` when the endpoint that returned it enriches it (the seller queue endpoints) —
+// optional everywhere else so this doesn't force every other Order consumer to supply it.
+export interface OrderRiderContact {
+  riderId: string;
+  name: string;
+  phone: string | null;
+  vehicleType: VehicleType;
+  rating: number;
+}
+
+// A candidate on the seller's "who can I assign this to" picker (docs/ROADMAP.md FDP-133) —
+// `GET /orders/:id/available-riders`.
+export interface AvailableRiderOption {
+  riderId: string;
+  name: string;
+  phone: string | null;
+  vehicleType: VehicleType;
+  rating: number;
+  reviewCount: number;
+  distanceKm: number;
+}
+
 export interface Order {
   _id: string;
   orderNumber: string;
@@ -553,6 +580,10 @@ export interface Order {
   refundReconciliationRequired: boolean;
   refundFailureReason: string | null;
   disputeFlagged: boolean;
+  // Seller-driven rider assignment (docs/ROADMAP.md FDP-133) — only present on the seller-queue
+  // endpoints (getRestaurantOrders/getStoreOrders), which enrich it; `undefined` elsewhere.
+  readyForPickupAt?: string | null;
+  rider?: OrderRiderContact | null;
   createdAt: string;
   updatedAt: string;
 }

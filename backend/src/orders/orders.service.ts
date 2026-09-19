@@ -42,11 +42,22 @@ import type { PaginatedResult } from '../restaurants/restaurants.service';
 
 // Nearest-rider dispatch (docs/ROADMAP.md FDP-98) only looks this far from the seller — beyond
 // this, dispatching would hand a rider a trip not actually worth taking, and the order is better
-// left for the manual queue (`findUnassignedForRiders`) instead.
+// left for the manual queue (`findUnassignedForRiders`) instead. Also the radius
+// `getAvailableRidersForOwner` (docs/ROADMAP.md FDP-133) shows a seller, so "nearby" means the
+// same thing whether a human or the auto-dispatch sweep is picking.
 const NEARBY_RIDER_DISPATCH_RADIUS_KM = 15;
 // How many nearest-by-distance candidates to pull before filtering out already-busy riders —
 // generous enough that a handful of busy riders near the front doesn't exhaust the list.
 const NEARBY_RIDER_CANDIDATE_LIMIT = 15;
+// A seller picking manually gets a few more options than the single best guess auto-dispatch
+// needs — still capped, since showing 100 riders on a picker isn't more useful than showing 20.
+const NEARBY_RIDER_PICKER_LIMIT = 20;
+
+// How long a seller gets to manually assign a rider themselves (docs/ROADMAP.md FDP-133) before
+// RiderDispatchSchedulerService's sweep falls back to the same automatic nearest-rider dispatch
+// that used to fire instantly. Long enough for a human to notice and act, short enough that an
+// order never stalls for real if they don't.
+export const RIDER_ASSIGNMENT_GRACE_PERIOD_MS = 3 * 60 * 1000;
 
 // Customer-facing copy for each status a notification is sent for — every entry here also
 // gets an in-app row + email; only OUT_FOR_DELIVERY/DELIVERED additionally go out over SMS
@@ -104,15 +115,21 @@ const ORDER_STATUS_MESSAGES: Partial<
 
 const SMS_NOTIFIED_STATUSES: OrderStatus[] = ['OUT_FOR_DELIVERY', 'DELIVERED'];
 
-// Statuses a seller (restaurant or store owner, docs/ROADMAP.md FDP-56) still needs to act on —
-// what their "live order queue" shows. Excludes PENDING_PAYMENT (not actionable until FDP-14's
-// webhook moves it to PLACED) and every terminal/rider-stage status (nothing left for the
-// seller to do).
+// Statuses a seller (restaurant or store owner, docs/ROADMAP.md FDP-56) still needs to see in
+// their live order queue. Excludes PENDING_PAYMENT (not actionable until FDP-14's webhook moves
+// it to PLACED) and terminal statuses. Used to stop at READY_FOR_PICKUP — the order vanished
+// from the seller's view the instant a rider was attached, which is exactly the "the store has
+// no control and no visibility once it hits the rider stage" gap docs/ROADMAP.md FDP-133 fixes:
+// the three rider-in-progress statuses now stay visible too, so the seller can see who's
+// assigned, contact them, and reassign if needed, all the way through to pickup being underway.
 const ACTIVE_SELLER_STATUSES: OrderStatus[] = [
   'PLACED',
   'ACCEPTED_BY_RESTAURANT',
   'PREPARING',
   'READY_FOR_PICKUP',
+  'ASSIGNED_TO_RIDER',
+  'PICKED_UP',
+  'OUT_FOR_DELIVERY',
 ];
 
 // deliveryFee is real distance-based DeliveryZone pricing as of FDP-15 (see
@@ -139,6 +156,19 @@ export const REFUNDABLE_STATUSES: OrderStatus[] = ['DELIVERED', 'CANCELLED'];
 // resolves every case actually reachable from this codebase's fee/discount arithmetic.
 export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+// Seller-driven rider assignment (docs/ROADMAP.md FDP-133) — the shape `attachRiderContact`
+// enriches a seller's order-queue view with, and `getAvailableRidersForOwner` uses for each
+// nearby candidate. A name/phone pair exposed outside the rider's own account for the first
+// time in this codebase — deliberately narrow (just enough for the seller to identify and call
+// them), not the full Rider/User document.
+export interface OrderRiderContact {
+  riderId: string;
+  name: string;
+  phone: string | null;
+  vehicleType: string;
+  rating: number;
 }
 
 // Sales report types (docs/ROADMAP.md FDP-64) — named interfaces rather than inlining, since
@@ -744,33 +774,83 @@ export class OrdersService {
   }
 
   /** The restaurant owner's live order queue — orders still awaiting some action from them,
-   * oldest first (a queue is processed in the order it was received, not newest-first). */
+   * oldest first (a queue is processed in the order it was received, not newest-first). Each
+   * order is enriched with its assigned rider's contact info, if any (docs/ROADMAP.md FDP-133) —
+   * see `attachRiderContact`. */
   async findForRestaurant(
     requester: AccessTokenPayload,
     restaurantId: string,
-  ): Promise<OrderDocument[]> {
+  ): Promise<Array<Record<string, unknown> & { rider: OrderRiderContact | null }>> {
     const restaurant =
       await this.restaurantsService.findByIdOrThrow(restaurantId);
     this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
 
-    return this.orderModel
+    const orders = await this.orderModel
       .find({ restaurantId, status: { $in: ACTIVE_SELLER_STATUSES } })
       .sort({ createdAt: 1 })
       .exec();
+    return this.attachRiderContact(orders);
   }
 
   /** Store-catalog counterpart of `findForRestaurant` (docs/ROADMAP.md FDP-56). */
   async findForStore(
     requester: AccessTokenPayload,
     storeId: string,
-  ): Promise<OrderDocument[]> {
+  ): Promise<Array<Record<string, unknown> & { rider: OrderRiderContact | null }>> {
     const store = await this.storesService.findByIdOrThrow(storeId);
     this.storesService.assertOwnerOrAdmin(store, requester);
 
-    return this.orderModel
+    const orders = await this.orderModel
       .find({ storeId, status: { $in: ACTIVE_SELLER_STATUSES } })
       .sort({ createdAt: 1 })
       .exec();
+    return this.attachRiderContact(orders);
+  }
+
+  /** Enriches each order with the assigned rider's contact info (docs/ROADMAP.md FDP-133) — so
+   * the seller's queue can show who's coming and offer a "call rider" link once one's attached,
+   * instead of just a raw `riderId`. `rider` is `null` for every order with no rider yet. Returns
+   * plain objects (each order's own fields, plus `rider`), not Mongoose documents — nothing
+   * downstream needs to `.save()` these, they're a read-only queue view. */
+  private async attachRiderContact(
+    orders: OrderDocument[],
+  ): Promise<Array<Record<string, unknown> & { rider: OrderRiderContact | null }>> {
+    const riderIds = Array.from(
+      new Set(
+        orders
+          .map((o) => o.riderId?.toString())
+          .filter((id): id is string => !!id),
+      ),
+    );
+    if (riderIds.length === 0) {
+      return orders.map((o) => ({ ...o.toObject(), rider: null }));
+    }
+
+    const [riderProfiles, users] = await Promise.all([
+      this.riderModel.find({ userId: { $in: riderIds } }).exec(),
+      this.usersService.findByIds(riderIds),
+    ]);
+    const profileByUserId = new Map(
+      riderProfiles.map((r) => [r.userId.toString(), r]),
+    );
+    const userById = new Map(users.map((u) => [u._id.toString(), u]));
+
+    return orders.map((o) => {
+      const riderId = o.riderId?.toString();
+      if (!riderId) return { ...o.toObject(), rider: null };
+      const profile = profileByUserId.get(riderId);
+      const user = userById.get(riderId);
+      const rider: OrderRiderContact | null = user
+        ? {
+            riderId,
+            name: user.name,
+            phone: user.phone ?? null,
+            vehicleType: profile?.vehicleType ?? 'motorcycle',
+            rating: profile?.rating ?? 0,
+          }
+        : null;
+      return { ...o.toObject(), rider };
+    });
   }
 
   /**
@@ -828,37 +908,45 @@ export class OrdersService {
       at: new Date(),
       by: requester.sub,
     });
+    // docs/ROADMAP.md FDP-133 — direct feedback that the seller had no say in who a ready order
+    // got dispatched to, since this used to auto-dispatch to the nearest rider immediately, right
+    // here. Now it just timestamps the moment so the seller gets a real window
+    // (RIDER_ASSIGNMENT_GRACE_PERIOD_MS) to pick a rider themselves via `assignRiderByOwner`
+    // before `RiderDispatchSchedulerService`'s sweep falls back to the same automatic dispatch —
+    // see `autoDispatchStaleReadyOrders` below.
+    if (targetStatus === 'READY_FOR_PICKUP') {
+      order.readyForPickupAt = new Date();
+    }
     await order.save();
 
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
-    if (targetStatus === 'READY_FOR_PICKUP') {
-      // Awaited, unlike `notifyOrderStatus` — the caller (the restaurant/store owner marking the
-      // order ready) gets back whatever this actually decided, so their response already shows
-      // the assigned rider instead of momentarily looking unassigned until the next refetch.
-      // Never throws (see the doc comment below), so this can't turn a dispatch failure into a
-      // failed transition — the transition itself already committed above.
-      const dispatched = await this.dispatchToNearestRider(order);
-      if (dispatched) return dispatched;
-    }
     return order;
   }
 
   /**
    * Algorithmic nearest-rider dispatch (docs/ROADMAP.md FDP-98) — replaces pure "any online
    * rider can grab any ready order" with an automatic first attempt at the closest eligible one.
-   * Swallows its own errors (a missing seller location, nobody nearby, a transient DB error) and
-   * resolves `null` rather than rejecting — a dispatch failure must never fail the
-   * READY_FOR_PICKUP transition that already committed. `findUnassignedForRiders`'s manual queue
-   * stays exactly as it was — the fallback for whenever this finds nobody, not replaced by it.
+   * As of FDP-133 this no longer fires the instant an order goes READY_FOR_PICKUP — it's now the
+   * fallback `autoDispatchStaleReadyOrders` reaches for once the seller's grace period lapses
+   * without them picking someone via `assignRiderByOwner`. Swallows its own errors (a missing
+   * seller location, nobody nearby, a transient DB error) and resolves `null` rather than
+   * rejecting. `findUnassignedForRiders`'s manual queue stays exactly as it was — the fallback
+   * for whenever this finds nobody, not replaced by it.
    */
   private async dispatchToNearestRider(
     order: OrderDocument,
   ): Promise<OrderDocument | null> {
     try {
-      const riderUserId = await this.findNearestAvailableRiderId(order);
-      if (!riderUserId) return null;
-      return await this.assignToRider(riderUserId, order._id.toString());
+      const candidates = await this.findNearbyRiderCandidates(
+        order,
+        NEARBY_RIDER_CANDIDATE_LIMIT,
+      );
+      if (candidates.length === 0) return null;
+      return await this.assignToRider(
+        candidates[0].userId,
+        order._id.toString(),
+      );
     } catch (err) {
       this.logger.error(
         `Nearest-rider dispatch failed for order ${order._id.toString()}: ${(err as Error).message}`,
@@ -868,23 +956,67 @@ export class OrdersService {
   }
 
   /**
-   * `$geoNear` over `Rider.currentLocation` (docs/ARCHITECTURE.md §22's pattern, reused verbatim)
-   * rather than an in-memory haversine sort — same reasoning as FDP-96's restaurant/store "near
-   * me" search: radius filtering happens at the database level, and a rider who's never shared
-   * their location (`currentLocation: null`) is silently excluded rather than erroring, since
-   * `$geoNear` can't match a document with no valid geo field for its 2dsphere index. Returns
-   * `null` (never throws) whenever there's simply nobody to dispatch to — a missing seller
-   * location, nobody online nearby, or every nearby rider already mid-delivery are all
-   * unremarkable, expected outcomes that fall back to the manual queue, not errors.
+   * Cron-driven fallback (docs/ROADMAP.md FDP-133; triggered by `RiderDispatchSchedulerService`)
+   * — picks up every order still stuck at READY_FOR_PICKUP with no rider once
+   * `RIDER_ASSIGNMENT_GRACE_PERIOD_MS` has passed since `readyForPickupAt`, and dispatches it the
+   * same way the old instant auto-dispatch used to, so an order the seller doesn't act on never
+   * stalls forever. Per-order failures are already caught individually inside
+   * `dispatchToNearestRider`, so one bad order can't stop the rest of the sweep.
    */
-  private async findNearestAvailableRiderId(
+  async autoDispatchStaleReadyOrders(): Promise<{
+    dispatched: number;
+    checked: number;
+  }> {
+    const cutoff = new Date(Date.now() - RIDER_ASSIGNMENT_GRACE_PERIOD_MS);
+    const staleOrders = await this.orderModel
+      .find({
+        status: 'READY_FOR_PICKUP',
+        riderId: null,
+        readyForPickupAt: { $ne: null, $lte: cutoff },
+      })
+      .exec();
+
+    let dispatched = 0;
+    for (const order of staleOrders) {
+      const result = await this.dispatchToNearestRider(order);
+      if (result) dispatched += 1;
+    }
+    return { dispatched, checked: staleOrders.length };
+  }
+
+  /**
+   * Shared candidate query behind both the automatic dispatch above and the seller-facing picker
+   * (`getAvailableRidersForOwner`) — `$geoNear` over `Rider.currentLocation` (docs/ARCHITECTURE.md
+   * §22's pattern, reused verbatim) rather than an in-memory haversine sort. A rider who's never
+   * shared their location (`currentLocation: null`) is silently excluded, not errored, since
+   * `$geoNear` can't match a document with no valid geo field for its 2dsphere index. Returns an
+   * empty array (never throws) whenever there's simply nobody nearby — a missing seller location,
+   * nobody online nearby, or every nearby rider already mid-delivery are all unremarkable,
+   * expected outcomes.
+   */
+  private async findNearbyRiderCandidates(
     order: OrderDocument,
-  ): Promise<string | null> {
+    limit: number,
+  ): Promise<
+    Array<{
+      userId: string;
+      distanceMeters: number;
+      vehicleType: string;
+      rating: number;
+      reviewCount: number;
+    }>
+  > {
     const sellerLocation = await this.getSellerLocation(order);
-    if (!sellerLocation) return null;
+    if (!sellerLocation) return [];
 
     const candidates = await this.riderModel
-      .aggregate<{ userId: string }>([
+      .aggregate<{
+        userId: string;
+        distanceMeters: number;
+        vehicleType: string;
+        rating: number;
+        reviewCount: number;
+      }>([
         {
           $geoNear: {
             near: sellerLocation,
@@ -894,14 +1026,22 @@ export class OrdersService {
             query: { isOnline: true, isVerified: true },
           },
         },
-        { $limit: NEARBY_RIDER_CANDIDATE_LIMIT },
-        { $project: { userId: { $toString: '$userId' } } },
+        { $limit: limit },
+        {
+          $project: {
+            userId: { $toString: '$userId' },
+            distanceMeters: 1,
+            vehicleType: 1,
+            rating: 1,
+            reviewCount: 1,
+          },
+        },
       ])
       .exec();
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) return [];
 
-    // $geoNear already returns nearest-first — a rider already mid-delivery is skipped in favor
-    // of the next-nearest one, rather than being dispatched a second concurrent order.
+    // $geoNear already returns nearest-first — a rider already mid-delivery is excluded in favor
+    // of the next-nearest one, rather than being handed a second concurrent order.
     const candidateIds = candidates.map((c) => c.userId);
     const busyRiderIds = await this.orderModel
       .distinct('riderId', {
@@ -911,7 +1051,7 @@ export class OrdersService {
       .exec();
     const busy = new Set(busyRiderIds.map((id: unknown) => String(id)));
 
-    return candidateIds.find((id) => !busy.has(id)) ?? null;
+    return candidates.filter((c) => !busy.has(c.userId));
   }
 
   /** The point dispatch measures distance from — the seller's own address, not the customer's
@@ -932,6 +1072,258 @@ export class OrdersService {
     return restaurant.address.location ?? null;
   }
 
+  /** Small helper alongside `getSellerLocation`/`findOwnerId` — same per-call restaurant/store
+   * fetch, just resolving the display name instead (docs/ROADMAP.md FDP-133, rider-assignment
+   * notification copy). */
+  private async getSellerName(order: OrderDocument): Promise<string> {
+    if (order.sellerType === 'store') {
+      const store = await this.storesService.findByIdOrThrow(
+        (order.storeId as NonNullable<typeof order.storeId>).toString(),
+      );
+      return store.name;
+    }
+    const restaurant = await this.restaurantsService.findByIdOrThrow(
+      (order.restaurantId as NonNullable<typeof order.restaurantId>).toString(),
+    );
+    return restaurant.name;
+  }
+
+  /** Ownership check shared by every seller-initiated order action (docs/ROADMAP.md FDP-133) —
+   * `updateStatusByOwner` used to inline this itself; factored out so `getAvailableRidersForOwner`
+   * and `assignRiderByOwner` below don't each need their own copy. */
+  private async assertOwnerAccessToOrder(
+    order: OrderDocument,
+    requester: AccessTokenPayload,
+  ): Promise<void> {
+    if (order.sellerType === 'store') {
+      const store = await this.storesService.findByIdOrThrow(
+        (order.storeId as NonNullable<typeof order.storeId>).toString(),
+      );
+      this.storesService.assertOwnerOrAdmin(store, requester);
+    } else {
+      const restaurant = await this.restaurantsService.findByIdOrThrow(
+        (
+          order.restaurantId as NonNullable<typeof order.restaurantId>
+        ).toString(),
+      );
+      this.restaurantsService.assertOwnerOrAdmin(restaurant, requester);
+    }
+  }
+
+  /** The seller's own "who can I assign this to" picker (docs/ROADMAP.md FDP-133) — the same
+   * nearby/available candidate pool `dispatchToNearestRider` uses, but the full list rather than
+   * just the top pick, enriched with the rider's name/phone so the seller can actually call them.
+   * Allowed while READY_FOR_PICKUP (the normal case) or still ASSIGNED_TO_RIDER (reassigning
+   * before pickup — e.g. the assigned rider isn't responding); anything past that the rider
+   * already has the order in hand and reassigning makes no sense. */
+  async getAvailableRidersForOwner(
+    requester: AccessTokenPayload,
+    orderId: string,
+  ): Promise<
+    Array<{
+      riderId: string;
+      name: string;
+      phone: string | null;
+      vehicleType: string;
+      rating: number;
+      reviewCount: number;
+      distanceKm: number;
+    }>
+  > {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+    await this.assertOwnerAccessToOrder(order, requester);
+
+    if (
+      order.status !== 'READY_FOR_PICKUP' &&
+      order.status !== 'ASSIGNED_TO_RIDER'
+    ) {
+      throw new BadRequestException(
+        'This order is not at a stage where a rider can be assigned',
+      );
+    }
+
+    const candidates = await this.findNearbyRiderCandidates(
+      order,
+      NEARBY_RIDER_PICKER_LIMIT,
+    );
+    const currentRiderId = order.riderId?.toString() ?? null;
+    const eligible = candidates.filter((c) => c.userId !== currentRiderId);
+    if (eligible.length === 0) return [];
+
+    const users = await this.usersService.findByIds(
+      eligible.map((c) => c.userId),
+    );
+    const userById = new Map(users.map((u) => [u._id.toString(), u]));
+
+    return eligible.map((c) => {
+      const user = userById.get(c.userId);
+      return {
+        riderId: c.userId,
+        name: user?.name ?? 'Rider',
+        phone: user?.phone ?? null,
+        vehicleType: c.vehicleType,
+        rating: c.rating,
+        reviewCount: c.reviewCount,
+        distanceKm: round2(c.distanceMeters / 1000),
+      };
+    });
+  }
+
+  /**
+   * The seller directly choosing who delivers their order (docs/ROADMAP.md FDP-133) — replaces
+   * "leave it for a rider to self-claim or wait for auto-dispatch" with an explicit choice.
+   * Covers two cases: assigning a still-unassigned READY_FOR_PICKUP order (reuses the exact same
+   * atomic `assignToRider` the self-claim/auto-dispatch paths use, so the race-safety is
+   * identical), and reassigning an already-ASSIGNED_TO_RIDER order to a different rider (e.g. the
+   * first one isn't responding) — the previous rider is notified they've been unassigned, the new
+   * one notified they've been assigned, same as a fresh assignment.
+   */
+  async assignRiderByOwner(
+    requester: AccessTokenPayload,
+    orderId: string,
+    riderUserId: string,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel.findById(orderId).exec();
+    if (!order) throw new NotFoundException('Order not found');
+    await this.assertOwnerAccessToOrder(order, requester);
+
+    const rider = await this.riderModel
+      .findOne({ userId: riderUserId })
+      .exec();
+    if (!rider) throw new NotFoundException('Rider not found');
+    if (!rider.isVerified) {
+      throw new BadRequestException(
+        'This rider is not verified yet and cannot be assigned an order',
+      );
+    }
+
+    if (order.status === 'READY_FOR_PICKUP' && !order.riderId) {
+      return this.assignToRider(riderUserId, orderId);
+    }
+
+    if (order.status === 'ASSIGNED_TO_RIDER' && order.riderId) {
+      const previousRiderId = order.riderId.toString();
+      if (previousRiderId === riderUserId) {
+        throw new BadRequestException(
+          'This rider is already assigned to this order',
+        );
+      }
+      const updated = await this.orderModel
+        .findOneAndUpdate(
+          { _id: orderId, status: 'ASSIGNED_TO_RIDER' },
+          {
+            $set: { riderId: riderUserId },
+            $push: {
+              statusHistory: {
+                status: 'ASSIGNED_TO_RIDER',
+                at: new Date(),
+                by: requester.sub,
+              },
+            },
+          },
+          { returnDocument: 'after' },
+        )
+        .exec();
+      if (!updated) {
+        throw new BadRequestException(
+          'This order has moved on and can no longer be reassigned',
+        );
+      }
+
+      this.realtimeGateway.emitOrderStatusChanged(updated);
+      this.notifyRiderUnassigned(previousRiderId, updated);
+      this.notifyRiderAssigned(riderUserId, updated);
+      this.notifyOwnerOfRiderAssignment(updated, riderUserId);
+      return updated;
+    }
+
+    throw new BadRequestException(
+      'This order is not at a stage where a rider can be assigned',
+    );
+  }
+
+  /** Fire-and-forget rider-facing notification for a new assignment (docs/ROADMAP.md FDP-133) —
+   * previously a rider only learned about an assignment by refetching after the realtime
+   * `order:statusChanged` event; this is the first explicit "you've been given a delivery" push.
+   * Skipped for a rider's own self-claim (see `assignToRider`'s `notifyRider` option) — telling
+   * someone about the thing they just clicked themselves adds nothing. */
+  private notifyRiderAssigned(riderUserId: string, order: OrderDocument): void {
+    this.getSellerName(order)
+      .then((sellerName) => {
+        const body = `You've been assigned to deliver order ${order.orderNumber} from ${sellerName}. Head over to pick it up.`;
+        return this.notificationsService.notify({
+          userId: riderUserId,
+          type: 'rider_assigned',
+          title: 'New delivery assigned',
+          body,
+          metadata: { orderId: order._id.toString() },
+          email: {
+            subject: `New delivery — ${order.orderNumber}`,
+            html: `<p>${body}</p>`,
+          },
+          sms: body,
+        });
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Rider-assigned notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
+
+  /** Counterpart of `notifyRiderAssigned` for a seller-initiated reassignment (docs/ROADMAP.md
+   * FDP-133) — lets the previous rider know they're no longer on the hook for this delivery. */
+  private notifyRiderUnassigned(
+    riderUserId: string,
+    order: OrderDocument,
+  ): void {
+    const body = `You've been unassigned from order ${order.orderNumber} — it's been reassigned to another rider.`;
+    this.notificationsService
+      .notify({
+        userId: riderUserId,
+        type: 'rider_unassigned',
+        title: 'Delivery reassigned',
+        body,
+        metadata: { orderId: order._id.toString() },
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Rider-unassigned notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
+
+  /** Fire-and-forget seller-facing notification once a rider is attached to their order — by
+   * self-claim, auto-dispatch, or the seller's own `assignRiderByOwner` pick (docs/ROADMAP.md
+   * FDP-133) — so the seller always knows who's coming and can call them (see
+   * `getAvailableRidersForOwner`'s phone number) without having to keep refreshing the dashboard. */
+  private notifyOwnerOfRiderAssignment(
+    order: OrderDocument,
+    riderUserId: string,
+  ): void {
+    Promise.all([
+      this.findOwnerId(order),
+      this.usersService.findById(riderUserId),
+    ])
+      .then(([ownerId, rider]) => {
+        const riderName = rider?.name ?? 'A rider';
+        const body = `${riderName} has been assigned to deliver order ${order.orderNumber}.`;
+        return this.notificationsService.notify({
+          userId: ownerId,
+          type: 'order_rider_assigned',
+          title: 'Rider assigned to your order',
+          body,
+          metadata: { orderId: order._id.toString(), riderId: riderUserId },
+        });
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `Owner rider-assignment notification failed for order ${order._id.toString()}: ${err.message}`,
+        ),
+      );
+  }
+
   /** The platform-wide rider queue (docs/ROADMAP.md FDP-16) — not restaurant-scoped, since a
    * rider can pick up from any restaurant. Oldest first, same "process in received order"
    * rationale as `findForRestaurant`. */
@@ -948,11 +1340,18 @@ export class OrdersService {
    * being unassigned. Two riders tapping "Accept" on the same order at the same moment is a
    * real race (unlike the single-owner queue actions above); only the update that actually
    * matches `riderId: null` wins, so the loser gets a clear "already assigned" error instead of
-   * silently overwriting the winner's claim.
+   * silently overwriting the winner's claim. Also the shared core `dispatchToNearestRider` (auto)
+   * and `assignRiderByOwner`'s first-assignment case (seller-picked) call into, since all three
+   * are "attach this specific rider to this still-unassigned order" — same atomicity needed
+   * either way. `notifyRider` defaults to true; the rider's own self-claim (`RidersController`)
+   * passes `false`, since telling someone about the thing they just clicked themselves adds
+   * nothing. The seller is notified who was assigned regardless of which of the three triggered
+   * this (docs/ROADMAP.md FDP-133) — see `notifyOwnerOfRiderAssignment`.
    */
   async assignToRider(
     riderUserId: string,
     orderId: string,
+    options?: { notifyRider?: boolean },
   ): Promise<OrderDocument> {
     const order = await this.orderModel
       .findOneAndUpdate(
@@ -981,6 +1380,10 @@ export class OrdersService {
 
     this.realtimeGateway.emitOrderStatusChanged(order);
     this.notifyOrderStatus(order);
+    if (options?.notifyRider !== false) {
+      this.notifyRiderAssigned(riderUserId, order);
+    }
+    this.notifyOwnerOfRiderAssignment(order, riderUserId);
     return order;
   }
 

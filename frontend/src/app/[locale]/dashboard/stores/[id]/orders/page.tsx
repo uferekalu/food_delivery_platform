@@ -16,6 +16,7 @@ import { useGetStoreOrdersQuery, useUpdateOrderStatusMutation } from "@/lib/redu
 import { getErrorMessage } from "@/lib/redux/error";
 import { formatMoney } from "@/lib/currency";
 import { useSocket } from "@/hooks/use-socket";
+import { AssignRiderAction, RiderContactCard } from "@/components/order-rider-assignment";
 import type { Order, OrderStatus } from "@/lib/redux/restaurant-types";
 
 const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeProps["variant"]> = {
@@ -102,7 +103,20 @@ function OrderActions({ order }: { order: Order }) {
     );
   }
 
-  return <span className="text-sm text-text-muted">{t("waitingForARider")}</span>;
+  // READY_FOR_PICKUP — the store now picks who delivers it themselves (docs/ROADMAP.md FDP-133),
+  // rather than only being able to wait for a rider to self-claim or for auto-dispatch.
+  if (order.status === "READY_FOR_PICKUP") {
+    return <AssignRiderAction order={order} />;
+  }
+
+  // ASSIGNED_TO_RIDER / PICKED_UP / OUT_FOR_DELIVERY — a rider is attached; the store stays able
+  // to see and contact them (and reassign, while still ASSIGNED_TO_RIDER) instead of the order
+  // just vanishing from the queue (docs/ROADMAP.md FDP-133).
+  if (order.status === "ASSIGNED_TO_RIDER" || order.status === "PICKED_UP" || order.status === "OUT_FOR_DELIVERY") {
+    return <RiderContactCard order={order} />;
+  }
+
+  return null;
 }
 
 function OrderQueueCard({ order }: { order: Order }) {
