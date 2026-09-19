@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { InlineDiscountBadge } from "@/components/inline-discount-badge";
 import { CategoryNav } from "@/components/category-nav";
+import { ReviewsList } from "@/components/reviews-list";
 import { BasketIcon, PillIcon } from "@/components/store-card";
 import { useGetStoreBySlugQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreCatalogQuery } from "@/lib/redux/services/store-catalog-api";
@@ -307,6 +308,11 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
             ))
           )}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold text-text">{t("reviews")}</h2>
+        <ReviewsList targetType="store" targetId={store._id} />
       </div>
     </Container>
   );

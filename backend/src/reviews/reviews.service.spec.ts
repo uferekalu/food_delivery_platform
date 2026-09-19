@@ -31,7 +31,11 @@ import {
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
 import { MenuItem, MenuItemSchema } from '../menu/schemas/menu-item.schema';
-import { Store, StoreSchema } from '../stores/schemas/store.schema';
+import {
+  Store,
+  StoreDocument,
+  StoreSchema,
+} from '../stores/schemas/store.schema';
 import { Product, ProductSchema } from '../stores/schemas/product.schema';
 import {
   PromoCode,
@@ -64,10 +68,12 @@ describe('ReviewsService', () => {
   let moduleRef: TestingModule;
   let reviewsService: ReviewsService;
   let restaurantsService: RestaurantsService;
+  let storesService: StoresService;
   let ridersService: RidersService;
   let reviewModel: Model<ReviewDocument>;
   let orderModel: Model<OrderDocument>;
   let restaurantModel: Model<RestaurantDocument>;
+  let storeModel: Model<StoreDocument>;
   let riderModel: Model<RiderDocument>;
   let userModel: Model<UserDocument>;
 
@@ -131,10 +137,12 @@ describe('ReviewsService', () => {
 
     reviewsService = moduleRef.get(ReviewsService);
     restaurantsService = moduleRef.get(RestaurantsService);
+    storesService = moduleRef.get(StoresService);
     ridersService = moduleRef.get(RidersService);
     reviewModel = moduleRef.get(getModelToken(Review.name));
     orderModel = moduleRef.get(getModelToken(Order.name));
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
     riderModel = moduleRef.get(getModelToken(Rider.name));
     userModel = moduleRef.get(getModelToken(User.name));
   }, 60_000);
@@ -144,6 +152,7 @@ describe('ReviewsService', () => {
       reviewModel.deleteMany({}).exec(),
       orderModel.deleteMany({}).exec(),
       restaurantModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
       riderModel.deleteMany({}).exec(),
       userModel.deleteMany({}).exec(),
     ]);
@@ -172,6 +181,19 @@ describe('ReviewsService', () => {
       businessRegistrationNumber: 'RC1234567',
     });
     return restaurantsService.approve(restaurant._id.toString());
+  }
+
+  async function createStore() {
+    const store = await storesService.create('store-owner-id', {
+      name: 'Market Square Supermarket',
+      type: 'groceries',
+      currency: 'NGN',
+      country: 'Nigeria',
+      address: { line1: '1 Market Rd', city: 'Lagos', state: 'Lagos' },
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC7654321',
+    });
+    return storesService.approve(store._id.toString());
   }
 
   async function createVerifiedRider(userId: string) {
@@ -225,6 +247,47 @@ describe('ReviewsService', () => {
         {
           menuItemId: restaurantId,
           name: 'Jollof Rice',
+          price: 10,
+          qty: 1,
+          selectedModifiers: [],
+          notes: '',
+        },
+      ],
+      subtotal: 10,
+      deliveryFee: 1,
+      serviceFee: 0.5,
+      tax: 0,
+      discount: 0,
+      total: 11.5,
+      platformFeeAmount: 1.5,
+      restaurantPayoutAmount: 8.5,
+      currency: 'NGN',
+      status,
+      statusHistory: [{ status, at: new Date(), by: customerId }],
+      paymentProvider: 'paystack',
+      paymentStatus: 'succeeded',
+      deliveryAddress: { line1: '1 St', city: 'Lagos', state: 'Lagos' },
+    });
+  }
+
+  /** Store-order counterpart of seedOrder (docs/ROADMAP.md FDP-136) — a separate helper rather
+   * than adding a sellerType param to seedOrder, so the many existing restaurant-order tests
+   * above stay untouched. */
+  async function seedStoreOrder(
+    storeId: string,
+    status: OrderStatus,
+    riderId: string | null = null,
+  ) {
+    return orderModel.create({
+      orderNumber: `ORD-TEST-${Math.random().toString(36).slice(2, 8)}`,
+      customerId,
+      sellerType: 'store',
+      storeId,
+      riderId,
+      items: [
+        {
+          productId: storeId,
+          name: 'Bag of Rice',
           price: 10,
           qty: 1,
           selectedModifiers: [],
@@ -389,7 +452,7 @@ describe('ReviewsService', () => {
         customer,
         order._id.toString(),
       );
-      expect(eligibility).toEqual({ restaurant: true, rider: true });
+      expect(eligibility).toEqual({ restaurant: true, store: false, rider: true });
     });
 
     it('is not eligible for rider when no rider was assigned', async () => {
@@ -400,7 +463,7 @@ describe('ReviewsService', () => {
         customer,
         order._id.toString(),
       );
-      expect(eligibility).toEqual({ restaurant: true, rider: false });
+      expect(eligibility).toEqual({ restaurant: true, store: false, rider: false });
     });
 
     it('is not eligible for a target already reviewed', async () => {
@@ -427,7 +490,57 @@ describe('ReviewsService', () => {
         customer,
         order._id.toString(),
       );
-      expect(eligibility).toEqual({ restaurant: false, rider: false });
+      expect(eligibility).toEqual({ restaurant: false, store: false, rider: false });
+    });
+
+    it('is eligible for store (not restaurant) on a delivered store order, and store reviews recompute Store.avgRating (FDP-136)', async () => {
+      const store = await createStore();
+      const rider = await createVerifiedRider('507f1f77bcf86cd799439099');
+      const order = await seedStoreOrder(
+        store._id.toString(),
+        'DELIVERED',
+        rider.userId.toString(),
+      );
+
+      const eligibility = await reviewsService.getEligibility(
+        customer,
+        order._id.toString(),
+      );
+      // The bug this fixes: previously `restaurant` came back `true` for every store order
+      // (nothing gated it on order.restaurantId actually being set), which would have rendered
+      // a "Rate this restaurant" form the backend would then reject if ever submitted.
+      expect(eligibility).toEqual({ restaurant: false, store: true, rider: true });
+
+      const review = await reviewsService.create(customer, {
+        targetType: 'store',
+        orderId: order._id.toString(),
+        rating: 5,
+        comment: 'Fresh produce, fast delivery',
+      });
+      expect(review.targetId.toString()).toBe(store._id.toString());
+
+      const updatedStore = await storeModel.findById(store._id).exec();
+      expect(updatedStore?.avgRating).toBe(5);
+      expect(updatedStore?.reviewCount).toBe(1);
+
+      const afterReview = await reviewsService.getEligibility(
+        customer,
+        order._id.toString(),
+      );
+      expect(afterReview.store).toBe(false);
+    });
+
+    it('rejects reviewing a store order as targetType "restaurant"', async () => {
+      const store = await createStore();
+      const order = await seedStoreOrder(store._id.toString(), 'DELIVERED');
+
+      await expect(
+        reviewsService.create(customer, {
+          targetType: 'restaurant',
+          orderId: order._id.toString(),
+          rating: 3,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

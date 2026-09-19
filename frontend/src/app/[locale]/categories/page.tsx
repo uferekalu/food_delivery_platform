@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs";
 import { Carousel } from "@/components/ui/carousel";
+import { Input } from "@/components/ui/input";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
@@ -13,9 +15,10 @@ import { Pagination } from "@/components/ui/pagination";
 import { RestaurantCard, PlateIcon } from "@/components/restaurant-card";
 import { StoreCard, BasketIcon, PillIcon } from "@/components/store-card";
 import { PromoTicker } from "@/components/promo-ticker";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useListRestaurantsQuery } from "@/lib/redux/services/restaurants-api";
 import { useListStoresQuery } from "@/lib/redux/services/stores-api";
-import type { StoreType } from "@/lib/redux/restaurant-types";
+import type { StoreSort, StoreType } from "@/lib/redux/restaurant-types";
 
 function CuisineChips({
   active,
@@ -177,15 +180,52 @@ function TagChips({
 
 function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: React.ReactNode }) {
   const t = useTranslations("CategoriesPage");
+  const SORT_OPTIONS: SelectOption[] = [
+    { value: "newest", label: t("newest") },
+    { value: "rating", label: t("highestRated") },
+    { value: "delivery_time", label: t("fastestDelivery") },
+  ];
+  const RATING_OPTIONS: SelectOption[] = [
+    { value: "", label: t("anyRating") },
+    { value: "3", label: t("starsAndUp", { count: 3 }) },
+    { value: "4", label: t("starsAndUp", { count: 4 }) },
+    { value: "4.5", label: t("starsAndUp", { count: 4.5 }) },
+  ];
+  const DELIVERY_TIME_OPTIONS: SelectOption[] = [
+    { value: "", label: t("anyDeliveryTime") },
+    { value: "30", label: t("under30Min") },
+    { value: "45", label: t("under45Min") },
+    { value: "60", label: t("under60Min") },
+  ];
+
   const [tag, setTag] = useState<string | null>(null);
+  // Search/minRating/maxDeliveryMinutes/sort (docs/ROADMAP.md FDP-136) — RestaurantsPage already
+  // had all four; StoresService.findAllApproved has always supported them server-side (search,
+  // minRating, maxDeliveryMinutes, sort — no price-level equivalent exists for a store, so no
+  // price filter here), this tab just never exposed them as controls.
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedValue(searchInput, 350);
+  const [minRating, setMinRating] = useState("");
+  const [maxDeliveryMinutes, setMaxDeliveryMinutes] = useState("");
+  const [sort, setSort] = useState<StoreSort>("rating");
   const [page, setPage] = useState(1);
   const { data, isLoading, isFetching, isError } = useListStoresQuery({
     type: storeType,
     tag: tag ?? undefined,
-    sort: "rating",
+    search: search || undefined,
+    minRating: minRating ? Number(minRating) : undefined,
+    maxDeliveryMinutes: maxDeliveryMinutes ? Number(maxDeliveryMinutes) : undefined,
+    sort,
     page,
     limit: 12,
   });
+
+  function resetToFirstPage<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value);
+      setPage(1);
+    };
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -197,6 +237,40 @@ function StoreTypeCategory({ storeType, icon }: { storeType: StoreType; icon: Re
           setPage(1);
         }}
       />
+
+      <div className="flex flex-col gap-3">
+        <Input
+          type="search"
+          placeholder={t("searchStores")}
+          value={searchInput}
+          onChange={(e) => {
+            setSearchInput(e.target.value);
+            setPage(1);
+          }}
+          className="max-w-sm"
+          aria-label={t("searchStores")}
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:max-w-xl">
+          <Select
+            aria-label={t("minimumRating")}
+            options={RATING_OPTIONS}
+            value={minRating}
+            onChange={resetToFirstPage(setMinRating)}
+          />
+          <Select
+            aria-label={t("maximumDeliveryTime")}
+            options={DELIVERY_TIME_OPTIONS}
+            value={maxDeliveryMinutes}
+            onChange={resetToFirstPage(setMaxDeliveryMinutes)}
+          />
+          <Select
+            aria-label={t("sortBy")}
+            options={SORT_OPTIONS}
+            value={sort}
+            onChange={resetToFirstPage((v: string) => setSort(v as StoreSort))}
+          />
+        </div>
+      </div>
 
       {isError && <Alert variant="danger">{t("couldNotLoadStores")}</Alert>}
 

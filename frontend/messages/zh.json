@@ -438,7 +438,20 @@
     "noStoresYet": "暂无商店",
     "tryDifferentTag": "试试其他标签，或浏览所有商店。",
     "cuisineFilters": "菜系筛选",
-    "tagFilters": "分类筛选"
+    "tagFilters": "分类筛选",
+    "searchStores": "搜索店铺…",
+    "minimumRating": "最低评分",
+    "maximumDeliveryTime": "最长配送时间",
+    "sortBy": "排序方式",
+    "newest": "最新",
+    "highestRated": "评分最高",
+    "fastestDelivery": "配送最快",
+    "anyRating": "任意评分",
+    "starsAndUp": "{count} 星及以上",
+    "anyDeliveryTime": "任意配送时间",
+    "under30Min": "30 分钟以内",
+    "under45Min": "45 分钟以内",
+    "under60Min": "60 分钟以内"
   },
   "CheckoutPage": {
     "cardStripe": "银行卡（Stripe）",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "评价这家餐厅",
+    "rateThisStore": "评价这家店铺",
     "rateYourRider": "评价你的骑手",
     "paymentNotYetConfirmed": "支付尚未确认",
     "paymentNotConfirmedDescription": "我们尚未确认此订单的支付。如果你已完成结算，通常只是支付服务商响应延迟。",
@@ -1658,7 +1672,8 @@
     "startNewCartTitle": "开始新的购物车？",
     "startNewCartDescription": "你的购物车中有来自另一家餐厅或商店的商品。添加此商品将清空购物车。",
     "clearCartAndAdd": "清空购物车并添加",
-    "sponsored": "推广"
+    "sponsored": "推广",
+    "reviews": "评价"
   },
   "NearMePage": {
     "title": "附近",

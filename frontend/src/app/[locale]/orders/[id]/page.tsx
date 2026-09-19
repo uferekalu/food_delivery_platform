@@ -67,13 +67,14 @@ function OrderReviews({ order }: { order: Order }) {
   const { data: eligibility, isLoading } = useGetReviewEligibilityQuery(order._id);
 
   if (isLoading || !eligibility) return null;
-  if (!eligibility.restaurant && !eligibility.rider) return null;
+  if (!eligibility.restaurant && !eligibility.store && !eligibility.rider) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {eligibility.restaurant && (
         <ReviewForm orderId={order._id} targetType="restaurant" title={t("rateThisRestaurant")} />
       )}
+      {eligibility.store && <ReviewForm orderId={order._id} targetType="store" title={t("rateThisStore")} />}
       {eligibility.rider && <ReviewForm orderId={order._id} targetType="rider" title={t("rateYourRider")} />}
     </div>
   );

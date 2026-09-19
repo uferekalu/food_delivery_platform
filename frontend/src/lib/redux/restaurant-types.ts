@@ -343,7 +343,7 @@ export interface Rider {
   updatedAt: string;
 }
 
-export const REVIEW_TARGET_TYPES = ["restaurant", "rider"] as const;
+export const REVIEW_TARGET_TYPES = ["restaurant", "store", "rider"] as const;
 export type ReviewTargetType = (typeof REVIEW_TARGET_TYPES)[number];
 
 export interface Review {

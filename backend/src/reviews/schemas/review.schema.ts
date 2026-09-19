@@ -1,7 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-export const REVIEW_TARGET_TYPES = ['restaurant', 'rider'] as const;
+// 'store' added docs/ROADMAP.md FDP-136 — a grocery/pharmacy store previously had no review
+// target at all, despite Store already carrying avgRating/reviewCount fields and a dead (never
+// called) StoresService.updateRatingStats ready to receive them.
+export const REVIEW_TARGET_TYPES = ['restaurant', 'store', 'rider'] as const;
 export type ReviewTargetType = (typeof REVIEW_TARGET_TYPES)[number];
 
 @Schema({ timestamps: true })
@@ -9,9 +12,10 @@ export class Review {
   @Prop({ type: String, enum: REVIEW_TARGET_TYPES, required: true })
   targetType: ReviewTargetType;
 
-  // A Restaurant._id or a rider's User._id (Order.riderId's own convention) depending on
-  // targetType — never client-supplied, always derived server-side from the reviewed order
-  // (see ReviewsService.create) so a customer can't review a target unrelated to their order.
+  // A Restaurant._id, a Store._id, or a rider's User._id (Order.riderId's own convention)
+  // depending on targetType — never client-supplied, always derived server-side from the
+  // reviewed order (see ReviewsService.create) so a customer can't review a target unrelated to
+  // their order.
   @Prop({ type: Types.ObjectId, required: true, index: true })
   targetId: Types.ObjectId;
 

@@ -438,7 +438,20 @@
     "noStoresYet": "No stores yet",
     "tryDifferentTag": "Try a different tag, or browse all stores.",
     "cuisineFilters": "Cuisine filters",
-    "tagFilters": "Category filters"
+    "tagFilters": "Category filters",
+    "searchStores": "Search stores…",
+    "minimumRating": "Minimum rating",
+    "maximumDeliveryTime": "Maximum delivery time",
+    "sortBy": "Sort by",
+    "newest": "Newest",
+    "highestRated": "Highest rated",
+    "fastestDelivery": "Fastest delivery",
+    "anyRating": "Any rating",
+    "starsAndUp": "{count}+ stars",
+    "anyDeliveryTime": "Any delivery time",
+    "under30Min": "Under 30 min",
+    "under45Min": "Under 45 min",
+    "under60Min": "Under 60 min"
   },
   "CheckoutPage": {
     "cardStripe": "Card (Stripe)",
@@ -563,6 +576,7 @@
   },
   "OrderDetailPage": {
     "rateThisRestaurant": "Rate this restaurant",
+    "rateThisStore": "Rate this store",
     "rateYourRider": "Rate your rider",
     "paymentNotYetConfirmed": "Payment not yet confirmed",
     "paymentNotConfirmedDescription": "We haven't confirmed payment for this order yet. If you completed checkout, this is usually just a delay in hearing back from the payment provider.",
@@ -1665,7 +1679,8 @@
     "startNewCartTitle": "Start a new cart?",
     "startNewCartDescription": "Your cart has items from a different restaurant or store. Adding this item will clear it.",
     "clearCartAndAdd": "Clear cart and add",
-    "sponsored": "Sponsored"
+    "sponsored": "Sponsored",
+    "reviews": "Reviews"
   },
   "NearMePage": {
     "title": "Near me",
