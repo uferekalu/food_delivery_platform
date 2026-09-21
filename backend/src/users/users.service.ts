@@ -12,6 +12,8 @@ import type { QueryFilter } from 'mongoose';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import type { RestaurantDocument } from '../restaurants/schemas/restaurant.schema';
 import type { PaginatedResult } from '../restaurants/restaurants.service';
+import { StoresService } from '../stores/stores.service';
+import type { StoreDocument } from '../stores/schemas/store.schema';
 import {
   RefreshToken,
   RefreshTokenDocument,
@@ -69,6 +71,12 @@ export class UsersService {
     // one flat providers array).
     @Inject(forwardRef(() => RestaurantsService))
     private readonly restaurantsService: RestaurantsService,
+    // Same forwardRef reasoning as RestaurantsService above (docs/ROADMAP.md FDP-137) —
+    // StoresModule also imports NotificationsModule (for its own automated-verification vendor
+    // notification), creating the identical UsersModule -> StoresModule -> NotificationsModule ->
+    // UsersModule cycle.
+    @Inject(forwardRef(() => StoresService))
+    private readonly storesService: StoresService,
   ) {}
 
   create(input: CreateUserInput): Promise<UserDocument> {
@@ -359,6 +367,36 @@ export class UsersService {
       .updateOne(
         { _id: id },
         { $pull: { favoriteRestaurantIds: new Types.ObjectId(restaurantId) } },
+      )
+      .exec();
+  }
+
+  // Store-catalog counterpart of the three methods above (docs/ROADMAP.md FDP-137) — identical
+  // shape, just favoriteStoreIds/storesService instead of favoriteRestaurantIds/restaurantsService.
+  async listFavoriteStores(id: string): Promise<StoreDocument[]> {
+    const user = await this.findByIdOrThrow(id);
+    if (user.favoriteStoreIds.length === 0) return [];
+    return this.storesService.findByIds(
+      user.favoriteStoreIds.map((storeId) => storeId.toString()),
+    );
+  }
+
+  async addFavoriteStore(id: string, storeId: string): Promise<void> {
+    // Throws if the store doesn't exist — favoriting a bad id shouldn't silently succeed.
+    await this.storesService.findByIdOrThrow(storeId);
+    await this.userModel
+      .updateOne(
+        { _id: id },
+        { $addToSet: { favoriteStoreIds: new Types.ObjectId(storeId) } },
+      )
+      .exec();
+  }
+
+  async removeFavoriteStore(id: string, storeId: string): Promise<void> {
+    await this.userModel
+      .updateOne(
+        { _id: id },
+        { $pull: { favoriteStoreIds: new Types.ObjectId(storeId) } },
       )
       .exec();
   }

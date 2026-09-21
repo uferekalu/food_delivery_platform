@@ -207,6 +207,7 @@ describe('ReviewsService', () => {
     const rider = await ridersService.apply(
       { sub: user._id.toString(), email: user.email, role: 'customer' },
       {
+        phone: '+2348011122233',
         vehicleType: 'motorcycle',
         dateOfBirth: '1995-06-15',
         governmentIdType: 'national_id',

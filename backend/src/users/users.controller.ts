@@ -100,6 +100,32 @@ export class UsersController {
     return this.usersService.removeFavorite(user.sub, restaurantId);
   }
 
+  // Store-catalog counterpart of the three routes above (docs/ROADMAP.md FDP-137) — a distinct
+  // path prefix ("favorite-stores", not "favorites"), not just a distinct :id param, since Nest
+  // can't route two different resources under the identical path/verb combination.
+  @Get('me/favorite-stores')
+  listFavoriteStores(@CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.listFavoriteStores(user.sub);
+  }
+
+  @Post('me/favorite-stores/:storeId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  addFavoriteStore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+  ) {
+    return this.usersService.addFavoriteStore(user.sub, storeId);
+  }
+
+  @Delete('me/favorite-stores/:storeId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeFavoriteStore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('storeId') storeId: string,
+  ) {
+    return this.usersService.removeFavoriteStore(user.sub, storeId);
+  }
+
   /**
    * The only way any user reaches `admin` or `rider` after registration (both are excluded
    * from self-service signup — see SELF_REGISTERABLE_ROLES). The very first admin has to be

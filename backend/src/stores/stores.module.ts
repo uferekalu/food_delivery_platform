@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Store, StoreSchema } from './schemas/store.schema';
 import {
@@ -21,9 +21,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: Product.name, schema: ProductSchema },
     ]),
     // Automated CAC/RC check + the vendor-facing notification it fires (docs/ROADMAP.md
-    // FDP-115) — same non-circular reasoning as RestaurantsModule's identical addition.
+    // FDP-115) — same reasoning as RestaurantsModule's identical addition.
     BusinessVerificationModule,
-    NotificationsModule,
+    // forwardRef (docs/ROADMAP.md FDP-137, once UsersModule started importing StoresModule for
+    // store favorites) — the same cycle shape RestaurantsModule/NotificationsModule/UsersModule
+    // already had to break: StoresModule -> NotificationsModule -> UsersModule -> StoresModule.
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [StoresController, ProductsController],
   providers: [StoresService, ProductsService],

@@ -15,6 +15,8 @@ import {
   Restaurant,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import { StoresService } from '../stores/stores.service';
+import { Store, StoreSchema } from '../stores/schemas/store.schema';
 import { BusinessVerificationService } from '../business-verification/business-verification.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -47,6 +49,7 @@ describe('RidersService', () => {
           { name: Rider.name, schema: RiderSchema },
           { name: User.name, schema: UserSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
+          { name: Store.name, schema: StoreSchema },
           { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
@@ -54,6 +57,9 @@ describe('RidersService', () => {
         RidersService,
         UsersService,
         RestaurantsService,
+        // UsersService now depends on StoresService too (docs/ROADMAP.md FDP-137, store
+        // favorites) — not exercised by this suite, but must be resolvable.
+        StoresService,
         // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks.
         {
           provide: BusinessVerificationService,

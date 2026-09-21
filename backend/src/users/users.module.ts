@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RestaurantsModule } from '../restaurants/restaurants.module';
+import { StoresModule } from '../stores/stores.module';
 import {
   RefreshToken,
   RefreshTokenSchema,
@@ -23,6 +24,9 @@ import { UsersController } from './users.controller';
     // for the full 3-module cycle this breaks: UsersModule -> RestaurantsModule ->
     // NotificationsModule -> UsersModule.
     forwardRef(() => RestaurantsModule),
+    // Same reasoning, same cycle shape, for stores (docs/ROADMAP.md FDP-137): UsersModule ->
+    // StoresModule -> NotificationsModule -> UsersModule.
+    forwardRef(() => StoresModule),
   ],
   controllers: [UsersController],
   providers: [UsersService],

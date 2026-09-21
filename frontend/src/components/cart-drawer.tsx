@@ -6,6 +6,7 @@ import { Link } from "@/i18n/navigation";
 import { Drawer } from "@/components/ui/drawer";
 import { IconButton } from "@/components/ui/icon-button";
 import { buttonVariants } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
@@ -38,12 +39,23 @@ function CartIcon({ className = "size-5" }: { className?: string }) {
 function CartLineItem({ item, currency }: { item: CartItem; currency: string }) {
   const t = useTranslations("CartDrawer");
   const locale = useLocale();
-  const [updateItem] = useUpdateCartItemMutation();
+  const [updateItem, { isLoading: isUpdating }] = useUpdateCartItemMutation();
   const [removeItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(item.notes ?? "");
   const { toast } = useToast();
 
   const modifiersTotal = item.selectedModifiers.reduce((sum, m) => sum + m.priceDelta, 0);
   const lineTotal = (item.price + modifiersTotal) * item.qty;
+
+  function saveNotes() {
+    void updateItem({ cartItemId: item._id, body: { notes: notesDraft.trim() || undefined } })
+      .unwrap()
+      .then(() => setEditingNotes(false))
+      .catch((err: unknown) =>
+        toast({ title: t("couldNotUpdateNotes"), description: getErrorMessage(err), variant: "danger" }),
+      );
+  }
 
   return (
     <div className="flex gap-3 border-b border-border pb-3">
@@ -65,7 +77,46 @@ function CartLineItem({ item, currency }: { item: CartItem; currency: string }) 
               {item.selectedModifiers.map((m) => m.optionName).join(", ")}
             </span>
           )}
-          {item.notes && <span className="text-xs text-text-muted italic">&quot;{item.notes}&quot;</span>}
+          {editingNotes ? (
+            <div className="mt-1 flex flex-col gap-1.5">
+              <Textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                rows={2}
+                placeholder={t("notesPlaceholder")}
+                className="text-xs"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={saveNotes}
+                  disabled={isUpdating}
+                  className="text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
+                >
+                  {t("saveNote")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingNotes(false);
+                    setNotesDraft(item.notes ?? "");
+                  }}
+                  className="text-xs text-text-muted hover:underline"
+                >
+                  {t("cancel")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingNotes(true)}
+              className="mt-0.5 self-start text-left text-xs font-medium text-brand-700 hover:underline"
+            >
+              {item.notes ? `"${item.notes}"` : t("addNote")}
+            </button>
+          )}
         </div>
         <IconButton
           label={t("removeItem")}
