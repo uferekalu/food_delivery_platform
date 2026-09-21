@@ -229,6 +229,7 @@ export class AuthController {
       email: user.email,
       name: user.name,
       role: user.role,
+      isSuperAdmin: user.isSuperAdmin,
       isEmailVerified: user.isEmailVerified,
       avatarUrl: user.avatarUrl,
       // `undefined` when the schema field is genuinely absent (see user.schema.ts's phone

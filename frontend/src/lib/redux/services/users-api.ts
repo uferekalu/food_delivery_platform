@@ -1,6 +1,6 @@
 import { api } from "../api";
 import type { AdminUser, PaginatedResult } from "../restaurant-types";
-import type { UserRole, UserStatus } from "@/lib/constants/roles";
+import type { RoleChangeTarget, UserRole, UserStatus } from "@/lib/constants/roles";
 
 export interface ListUsersParams {
   search?: string;
@@ -50,7 +50,10 @@ export const usersApi = api.injectEndpoints({
       ],
     }),
 
-    updateUserRole: builder.mutation<{ id: string; email: string; role: UserRole }, { id: string; role: UserRole }>({
+    updateUserRole: builder.mutation<
+      { id: string; email: string; role: UserRole },
+      { id: string; role: RoleChangeTarget }
+    >({
       query: ({ id, role }) => ({ url: `/users/${id}/role`, method: "PATCH", body: { role } }),
       invalidatesTags: (result, _error, { id }) => [
         { type: "User", id },

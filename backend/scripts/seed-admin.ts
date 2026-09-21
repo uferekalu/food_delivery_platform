@@ -1,7 +1,11 @@
 /**
  * One-time bootstrap for the very first admin account. Promoting anyone to `admin` normally
- * requires an existing admin (PATCH /users/:id/role) — this script exists purely to break that
- * chicken-and-egg problem. Run once per environment, then use the API for every admin after.
+ * requires an existing *super* admin (PATCH /users/:id/role, docs/ROADMAP.md FDP-139) — this
+ * script exists purely to break that chicken-and-egg problem, and always grants
+ * `isSuperAdmin: true` along with the role for the same reason: without at least one super
+ * admin, nobody could ever promote a second admin through the API. Run once per environment,
+ * then use the API for every admin after (a super admin can promote further admins, but they
+ * won't be super admins themselves unless this script is run again for them directly).
  *
  * Usage: register a normal account through the app first, then:
  *   npm run seed:admin -- you@example.com
@@ -29,7 +33,7 @@ async function main() {
   // Mongoose 9 deprecated `new: true` in favor of `returnDocument: 'after'`.
   const user = await UserModel.findOneAndUpdate(
     { email: email.toLowerCase().trim() },
-    { role: 'admin' },
+    { role: 'admin', isSuperAdmin: true },
     { returnDocument: 'after' },
   ).exec();
 
@@ -39,7 +43,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`${user.email} is now an admin.`);
+  console.log(`${user.email} is now an admin (and a super admin).`);
   await mongoose.disconnect();
 }
 

@@ -3686,3 +3686,101 @@ failures, both reproduced passing in isolation and again passing in a second ful
 `favoriteStores`/`tapHeartToSaveStore` (`AccountPage`), `addNote`/`notesPlaceholder`
 (`StoreDetailPage`), and `addNote`/`notesPlaceholder`/`saveNote`/`cancel`/`couldNotUpdateNotes`
 (`CartDrawer`) keys shipped in all 6 languages, key parity verified programmatically.
+
+## 59. Super admin role gate + admin dashboard visibility + reject confirmation (docs/ROADMAP.md FDP-139)
+
+Three related gaps in the admin dashboard and vendor order flow, raised together by the user.
+
+### A super admin concept, not a new role
+
+The admin Users tab let any admin change any user's role to anything, via a plain `<Select>`
+firing on change with zero confirmation — including turning a `restaurant_owner` or `rider` into
+something else by mistake, or any admin (not just a trusted one) granting themselves or anyone
+else full admin access. Two decisions shaped the fix:
+
+- **A boolean flag (`User.isSuperAdmin`), not a new `USER_ROLES` entry.** Adding `'super_admin'`
+  to the roles enum would have meant auditing and updating every one of the dozens of existing
+  `@Roles('admin')`-gated endpoints across the app (analytics, approvals, refunds, payouts, promo
+  codes, ad campaigns, …) to also accept `'super_admin'`, with a real risk of missing one and
+  silently locking a super admin out of an ordinary admin capability. A flag means a super admin
+  is still plain `role: 'admin'` everywhere else — zero other endpoints needed to change.
+- **Restrict the *target*, and separately the *current role*, of the one sensitive endpoint.**
+  `UpdateUserRoleDto`'s accepted `role` narrowed from all four `USER_ROLES` to just
+  `'customer' | 'admin'` (`ROLE_CHANGE_TARGETS`, mirrored on the frontend in
+  `lib/constants/roles.ts`). That alone isn't sufficient — the *current* role also needs checking, or
+  an admin could still "promote" a restaurant_owner to admin. `UsersService` gained a new
+  `changeAdminRole(id, role)`, separate from the pre-existing, general-purpose `updateRole(id,
+  role)`, specifically because `RidersService.apply()` calls the latter directly to flip an
+  applicant's `User.role` straight to `'rider'` at apply time (confirmed by grep before touching
+  anything — restricting `updateRole` itself first broke that flow and a `riders.service.spec.ts`
+  fixture that reuses it to set up a `restaurant_owner` test user, both caught by `tsc --noEmit`).
+  `changeAdminRole` throws `BadRequestException` unless the target user's *current* role is
+  already `customer` or `admin`; demoting to `customer` also clears a stale `isSuperAdmin` flag as
+  hygiene, so a later re-promotion never silently skips the super-admin check.
+
+`isSuperAdmin` flows through the same places `role` already does: the `AccessTokenPayload` JWT
+claim (`issueTokens` in `auth.service.ts`, the one place every token-issuing path shares), and
+`PublicUser`/`GET /auth/me` — the frontend's `state.auth.user.isSuperAdmin` is what the Users tab
+checks to decide whether to render any promote/demote control at all. The claim is optional on
+the backend interface (dozens of existing test fixtures construct an `AccessTokenPayload` literal
+without it) but required on the frontend `PublicUser` type, since only two test fixtures there
+needed updating. A new `SuperAdminGuard` (`@UseGuards`, alongside the existing `@Roles('admin')`)
+gates `PATCH /users/:id/role` — checked only by this one endpoint, not registered globally.
+`npm run seed:admin` now also sets `isSuperAdmin: true` on the account it bootstraps, since
+without at least one super admin nobody could ever promote a second admin through the API.
+
+Frontend: a `restaurant_owner`/`rider` row shows its role as a plain, locked `Badge` — no control
+of any kind, so it can never be changed by mistake through this tab, regardless of who's viewing.
+A `customer`/`admin` row shows the same locked badge to a non-super admin, and only gains a
+promote/demote `Button` when the viewer is a super admin — gated purely on display, since the
+backend would reject the call anyway, but showing a button that always 403s is bad UX. Every
+promote/demote goes through a `ConfirmDialog` with direction-specific title/description ("Make
+{name} an admin?" vs. "Remove {name}'s admin access?") before submitting, per the user's explicit
+ask to avoid an inadvertent change.
+
+### Admin Restaurants/Stores tabs only ever showed pending approvals
+
+Both tabs called `useListPendingRestaurantsQuery`/`useListPendingStoresQuery` — there was no way
+for an admin to see an already-approved restaurant/store at all through the dashboard. Both
+`listAllRestaurantsForAdmin`/`listAllStoresForAdmin` RTK Query hooks already existed (added for
+FDP-116's promo-code scope picker) against an already-existing, unfiltered `GET
+/restaurants|stores/admin` backend endpoint (`RestaurantsService.findAllForAdmin` — `find().sort()`
+with no approval filter) — this was purely a frontend wiring gap, no backend change needed.
+Rebuilt both tabs mirroring `AdminRidersTab`'s existing "show everything, pending-sorted-first"
+pattern (already established in this codebase, just never applied here): a search box, an
+approval-status filter, and a materially more detailed card (status + open/closed + sponsored
+badges, rating and review count, applied date, currency/location) than the old bare
+name-and-cuisine-list summary, per the user's explicit "detailed... for the admin to understand."
+
+### Vendor reject confirmation read as a generic "cancel"
+
+Rejecting a freshly-`PLACED` order already opened a `ConfirmDialog` — shared with the later-stage
+"cancel an already-accepted order" action — but always with cancel-order copy ("if already
+paid... eligible for a refund"), regardless of which action triggered it. Confusing on an order
+nobody has accepted or (necessarily) been charged for yet. Split the shared `confirmingCancel:
+boolean` into `confirmingAction: "reject" | "cancel" | null` in both the restaurant and store
+order-queue pages (identical, independently-maintained components per this codebase's established
+"two small copies, not one shared import" pattern for restaurant/store dashboard pages), rendering
+reject-specific title/description/confirm-button copy only when triggered from the `PLACED`-status
+Reject button. Both actions still transition to the same `CANCELLED` status — no backend or
+`OrderStatus` change, this was purely a confirmation-copy gap.
+
+### Verification
+
+Live end-to-end via Playwright against a real dev server, seeding a super admin, a plain
+(non-super) admin, a customer, a restaurant owner with an approved and a pending restaurant, a
+pending store, a verified-in-progress rider, and a raw-inserted `PLACED` order (mirroring
+`orders.service.spec.ts`'s own test-fixture shape — including its ref-field-as-plain-string
+convention, which the first verification pass got wrong and silently excluded the order from the
+owner's queue until fixed). Confirmed: a super admin can promote a customer to admin and back,
+each step going through the confirmation dialog with correct copy and a success toast; a
+`restaurant_owner` and a `rider` row show no role-change control at all; a plain (non-super) admin
+sees no promote/demote control anywhere, even on customer/admin rows; the Restaurants and Stores
+tabs show both approved and pending listings with a working name search; the reject dialog on a
+real `PLACED` order shows "Reject order …" with reject-specific description text, and completes
+the rejection without error. 6 new `UsersService.changeAdminRole` unit tests plus 4 new
+`SuperAdminGuard` tests; full backend suite green (731 individual tests passing; a handful of
+confirmed-flaky `mongodb-memory-server` teardown failures under parallel load, in files unrelated
+to this ticket); full frontend suite green (121/121). `tsc --noEmit`/`eslint`/production `build`
+clean on both sides. New keys across `AdminUsersTab`, `AdminRestaurantsTab`/`AdminStoresTab`, and
+`DashboardOrdersPage` shipped in all 6 languages, key parity verified programmatically.

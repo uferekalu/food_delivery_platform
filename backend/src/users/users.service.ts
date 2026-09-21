@@ -25,6 +25,10 @@ import {
   UserRole,
 } from './schemas/user.schema';
 import { SavedAddress } from './schemas/saved-address.schema';
+import {
+  ROLE_CHANGE_TARGETS,
+  RoleChangeTarget,
+} from './dto/update-user-role.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateSavedAddressDto } from './dto/create-saved-address.dto';
 import { UpdateSavedAddressDto } from './dto/update-saved-address.dto';
@@ -146,11 +150,39 @@ export class UsersService {
     return counts;
   }
 
+  // General-purpose role transition, used internally by other services for legitimate role
+  // changes that are NOT the admin-facing grant/revoke flow — e.g. RidersService.apply() flips
+  // an applicant's role to 'rider' immediately on submission. Deliberately unrestricted; the
+  // customer<->admin-only restriction below is a separate, narrower method precisely because
+  // this one must stay general-purpose.
   async updateRole(id: string, role: UserRole): Promise<UserDocument | null> {
     // Mongoose 9 deprecated `new: true` in favor of `returnDocument: 'after'`.
     return this.userModel
       .findByIdAndUpdate(id, { role }, { returnDocument: 'after' })
       .exec();
+  }
+
+  // The admin-facing grant/revoke-admin-access flow (docs/ROADMAP.md FDP-139) — deliberately
+  // separate from the general `updateRole` above, which other services (e.g. RidersService.apply)
+  // still need unrestricted. Only a customer<->admin toggle is ever valid here:
+  // `UpdateUserRoleDto` already restricts the *target* to that pair, but the target user's
+  // *current* role also needs checking — a restaurant_owner or rider must never have their role
+  // silently changed through this endpoint (an owner is set at self-registration, a rider only
+  // through its own apply-then-verify flow). Controller-level `SuperAdminGuard` already
+  // restricts *who* can call this at all.
+  async changeAdminRole(id: string, role: RoleChangeTarget): Promise<UserDocument> {
+    const user = await this.findByIdOrThrow(id);
+    if (!ROLE_CHANGE_TARGETS.includes(user.role as RoleChangeTarget)) {
+      throw new BadRequestException(
+        `A ${user.role.replace('_', ' ')}'s role can't be changed here — only a customer can be made an admin, or an admin returned to a customer.`,
+      );
+    }
+    user.role = role;
+    // Hygiene: a demoted admin has no business still carrying this flag if they're ever
+    // re-promoted later — a stale `true` here would silently skip the super-admin check.
+    if (role === 'customer') user.isSuperAdmin = false;
+    await user.save();
+    return user;
   }
 
   /** Admin user management (docs/ROADMAP.md FDP-89) — paginated, optionally filtered by role/

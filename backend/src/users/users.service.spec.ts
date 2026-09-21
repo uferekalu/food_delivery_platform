@@ -457,4 +457,76 @@ describe('UsersService', () => {
       });
     });
   });
+
+  // The admin-facing grant/revoke-admin-access flow (docs/ROADMAP.md FDP-139) — deliberately
+  // separate from the general `updateRole` (still covered indirectly via
+  // riders.service.spec.ts's use of it as a test fixture helper).
+  describe('changeAdminRole', () => {
+    it('promotes a customer to admin', async () => {
+      const user = await createUser();
+      const updated = await usersService.changeAdminRole(
+        user._id.toString(),
+        'admin',
+      );
+      expect(updated.role).toBe('admin');
+    });
+
+    it('demotes an admin to customer and clears a stale isSuperAdmin flag', async () => {
+      const user = await userModel.create({
+        email: 'admin@example.com',
+        passwordHash: 'irrelevant',
+        name: 'An Admin',
+        role: 'admin',
+        isSuperAdmin: true,
+      });
+
+      const updated = await usersService.changeAdminRole(
+        user._id.toString(),
+        'customer',
+      );
+      expect(updated.role).toBe('customer');
+      expect(updated.isSuperAdmin).toBe(false);
+    });
+
+    it('leaves isSuperAdmin untouched when promoting a customer to admin', async () => {
+      const user = await createUser();
+      const updated = await usersService.changeAdminRole(
+        user._id.toString(),
+        'admin',
+      );
+      expect(updated.isSuperAdmin).toBe(false);
+    });
+
+    it("rejects changing a restaurant_owner's role", async () => {
+      const user = await userModel.create({
+        email: 'owner2@example.com',
+        passwordHash: 'irrelevant',
+        name: 'An Owner',
+        role: 'restaurant_owner',
+      });
+
+      await expect(
+        usersService.changeAdminRole(user._id.toString(), 'admin'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("rejects changing a rider's role", async () => {
+      const user = await userModel.create({
+        email: 'rider@example.com',
+        passwordHash: 'irrelevant',
+        name: 'A Rider',
+        role: 'rider',
+      });
+
+      await expect(
+        usersService.changeAdminRole(user._id.toString(), 'customer'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws for an unknown user id', async () => {
+      await expect(
+        usersService.changeAdminRole(new Types.ObjectId().toString(), 'admin'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 });

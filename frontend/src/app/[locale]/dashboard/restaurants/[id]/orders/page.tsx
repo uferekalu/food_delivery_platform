@@ -37,26 +37,35 @@ function OrderActions({ order }: { order: Order }) {
   const t = useTranslations("DashboardOrdersPage");
   const { toast } = useToast();
   const [updateStatus, { isLoading }] = useUpdateOrderStatusMutation();
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  // "Reject" (a freshly-PLACED order the seller never accepted) and "Cancel" (an order already
+  // accepted/preparing) are the same underlying CANCELLED transition, but deserve different
+  // confirmation copy — rejecting a brand-new order a customer just placed is a distinct,
+  // easy-to-fat-finger action from cancelling one already in progress.
+  const [confirmingAction, setConfirmingAction] = useState<"reject" | "cancel" | null>(null);
 
   function transition(status: OrderStatus) {
     void updateStatus({ orderId: order._id, status })
       .unwrap()
-      .then(() => setConfirmingCancel(false))
+      .then(() => setConfirmingAction(null))
       .catch((err: unknown) => {
-        setConfirmingCancel(false);
+        setConfirmingAction(null);
         toast({ title: t("couldNotUpdateOrder"), description: getErrorMessage(err), variant: "danger" });
       });
   }
 
-  const cancelDialog = (
+  const isRejecting = confirmingAction === "reject";
+  const confirmDialog = (
     <ConfirmDialog
-      open={confirmingCancel}
-      onClose={() => setConfirmingCancel(false)}
+      open={confirmingAction !== null}
+      onClose={() => setConfirmingAction(null)}
       onConfirm={() => transition("CANCELLED")}
-      title={t("cancelOrderTitle", { orderNumber: order.orderNumber })}
-      description={t("cancelOrderDescription")}
-      confirmLabel={t("cancelOrder")}
+      title={
+        isRejecting
+          ? t("rejectOrderTitle", { orderNumber: order.orderNumber })
+          : t("cancelOrderTitle", { orderNumber: order.orderNumber })
+      }
+      description={isRejecting ? t("rejectOrderDescription") : t("cancelOrderDescription")}
+      confirmLabel={isRejecting ? t("reject") : t("cancelOrder")}
       isLoading={isLoading}
     />
   );
@@ -67,10 +76,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("ACCEPTED_BY_RESTAURANT")}>
           {t("accept")}
         </Button>
-        <Button size="sm" variant="destructive" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
+        <Button size="sm" variant="destructive" isLoading={isLoading} onClick={() => setConfirmingAction("reject")}>
           {t("reject")}
         </Button>
-        {cancelDialog}
+        {confirmDialog}
       </div>
     );
   }
@@ -81,10 +90,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("PREPARING")}>
           {t("startPreparing")}
         </Button>
-        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
+        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingAction("cancel")}>
           {t("cancel")}
         </Button>
-        {cancelDialog}
+        {confirmDialog}
       </div>
     );
   }
@@ -95,10 +104,10 @@ function OrderActions({ order }: { order: Order }) {
         <Button size="sm" isLoading={isLoading} onClick={() => transition("READY_FOR_PICKUP")}>
           {t("markReady")}
         </Button>
-        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingCancel(true)}>
+        <Button size="sm" variant="ghost" isLoading={isLoading} onClick={() => setConfirmingAction("cancel")}>
           {t("cancel")}
         </Button>
-        {cancelDialog}
+        {confirmDialog}
       </div>
     );
   }

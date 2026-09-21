@@ -15,6 +15,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
+import { useAppSelector } from "@/lib/redux/hooks";
 import {
   useListUsersQuery,
   useSuspendUserMutation,
@@ -23,7 +24,7 @@ import {
 } from "@/lib/redux/services/users-api";
 import { getErrorMessage } from "@/lib/redux/error";
 import { USER_ROLES } from "@/lib/constants/roles";
-import type { UserRole, UserStatus } from "@/lib/constants/roles";
+import type { RoleChangeTarget, UserRole, UserStatus } from "@/lib/constants/roles";
 import type { AdminUser } from "@/lib/redux/restaurant-types";
 
 function SuspendModal({
@@ -89,16 +90,73 @@ function SuspendModal({
   );
 }
 
-function UserRow({ user }: { user: AdminUser }) {
+// Only a customer<->admin toggle is ever offered here, and only to a super admin
+// (docs/ROADMAP.md FDP-139) — restaurant_owner/rider rows show their role as a locked badge,
+// with no control at all, so they can never be changed by mistake through this tab. A plain
+// (non-super) admin sees the same locked badge on every row, including customer/admin ones,
+// since they have no ability to act on it anyway.
+const ROLE_LOCKED_ROLES: UserRole[] = ["restaurant_owner", "rider"];
+
+function RoleChangeConfirmDialog({
+  user,
+  targetRole,
+  onClose,
+}: {
+  user: AdminUser | null;
+  targetRole: RoleChangeTarget | null;
+  onClose: () => void;
+}) {
+  const t = useTranslations("AdminUsersTab");
+  const { toast } = useToast();
+  const [updateRole, { isLoading }] = useUpdateUserRoleMutation();
+
+  function confirm() {
+    if (!user || !targetRole) return;
+    void updateRole({ id: user.id, role: targetRole })
+      .unwrap()
+      .then(() => {
+        onClose();
+        toast({
+          title: targetRole === "admin" ? t("userPromoted", { name: user.name }) : t("userDemoted", { name: user.name }),
+          variant: "success",
+        });
+      })
+      .catch((err: unknown) => {
+        onClose();
+        toast({ title: t("couldNotUpdateRole"), description: getErrorMessage(err), variant: "danger" });
+      });
+  }
+
+  const isPromoting = targetRole === "admin";
+
+  return (
+    <ConfirmDialog
+      open={user !== null && targetRole !== null}
+      onClose={onClose}
+      onConfirm={confirm}
+      title={
+        user
+          ? isPromoting
+            ? t("promoteUserTitle", { name: user.name })
+            : t("demoteUserTitle", { name: user.name })
+          : ""
+      }
+      description={isPromoting ? t("promoteUserDescription") : t("demoteUserDescription")}
+      confirmLabel={isPromoting ? t("makeAdmin") : t("removeAdmin")}
+      variant={isPromoting ? "primary" : "danger"}
+      isLoading={isLoading}
+    />
+  );
+}
+
+function UserRow({ user, viewerIsSuperAdmin }: { user: AdminUser; viewerIsSuperAdmin: boolean }) {
   const t = useTranslations("AdminUsersTab");
   const tRole = useTranslations("UserRole");
   const { toast } = useToast();
   const [suspendTarget, setSuspendTarget] = useState<AdminUser | null>(null);
   const [confirmingReactivate, setConfirmingReactivate] = useState(false);
+  const [confirmingRoleTarget, setConfirmingRoleTarget] = useState<RoleChangeTarget | null>(null);
   const [reactivateUser, { isLoading: reactivating }] = useReactivateUserMutation();
-  const [updateRole, { isLoading: updatingRole }] = useUpdateUserRoleMutation();
-
-  const roleOptions = USER_ROLES.map((role) => ({ value: role, label: tRole(role) }));
 
   function confirmReactivate() {
     void reactivateUser(user.id)
@@ -117,28 +175,18 @@ function UserRow({ user }: { user: AdminUser }) {
       });
   }
 
-  function handleRoleChange(role: string) {
-    if (role === user.role) return;
-    void updateRole({ id: user.id, role: role as UserRole })
-      .unwrap()
-      .catch((err: unknown) =>
-        toast({
-          title: t("couldNotUpdateRole"),
-          description: getErrorMessage(err),
-          variant: "danger",
-        }),
-      );
-  }
+  const canChangeRole = viewerIsSuperAdmin && !ROLE_LOCKED_ROLES.includes(user.role);
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-text">{user.name}</span>
             <Badge variant={user.status === "active" ? "success" : "danger"}>
               {user.status === "active" ? t("active") : t("suspended")}
             </Badge>
+            {user.isSuperAdmin && <Badge variant="primary">{t("superAdmin")}</Badge>}
           </div>
           <span className="text-sm text-text-muted">{user.email}</span>
           <span className="text-xs text-text-muted">
@@ -151,14 +199,17 @@ function UserRow({ user }: { user: AdminUser }) {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select
-            options={roleOptions}
-            value={user.role}
-            onChange={handleRoleChange}
-            disabled={updatingRole}
-            className="w-40"
-            aria-label={t("changeRoleFor", { name: user.name })}
-          />
+          <Badge variant="neutral">{tRole(user.role)}</Badge>
+          {canChangeRole &&
+            (user.role === "customer" ? (
+              <Button size="sm" variant="outline" onClick={() => setConfirmingRoleTarget("admin")}>
+                {t("makeAdmin")}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setConfirmingRoleTarget("customer")}>
+                {t("removeAdmin")}
+              </Button>
+            ))}
           {user.status === "active" ? (
             <Button size="sm" variant="destructive" onClick={() => setSuspendTarget(user)}>
               {t("suspend")}
@@ -190,6 +241,11 @@ function UserRow({ user }: { user: AdminUser }) {
         variant="primary"
         isLoading={reactivating}
       />
+      <RoleChangeConfirmDialog
+        user={confirmingRoleTarget ? user : null}
+        targetRole={confirmingRoleTarget}
+        onClose={() => setConfirmingRoleTarget(null)}
+      />
     </Card>
   );
 }
@@ -197,6 +253,7 @@ function UserRow({ user }: { user: AdminUser }) {
 export function UsersTab() {
   const t = useTranslations("AdminUsersTab");
   const tRole = useTranslations("UserRole");
+  const viewerIsSuperAdmin = useAppSelector((state) => state.auth.user?.isSuperAdmin ?? false);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<UserRole | "">("");
   const [status, setStatus] = useState<UserStatus | "">("");
@@ -264,7 +321,7 @@ export function UsersTab() {
         <>
           <div className={`flex flex-col gap-3 ${isFetching ? "opacity-60" : ""}`}>
             {data.items.map((user) => (
-              <UserRow key={user.id} user={user} />
+              <UserRow key={user.id} user={user} viewerIsSuperAdmin={viewerIsSuperAdmin} />
             ))}
           </div>
           {data.totalPages > 1 && (

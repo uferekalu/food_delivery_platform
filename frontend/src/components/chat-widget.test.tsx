@@ -55,6 +55,7 @@ function renderWidget({ authenticated = false }: { authenticated?: boolean } = {
           email: "ada@example.com",
           name: "Ada",
           role: "customer",
+          isSuperAdmin: false,
           isEmailVerified: true,
           avatarUrl: null,
           phone: null,

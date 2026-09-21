@@ -5,15 +5,16 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
 import type { AccessTokenPayload } from '../auth/interfaces/jwt-payload.interface';
 import { UsersService } from './users.service';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -127,16 +128,19 @@ export class UsersController {
   }
 
   /**
-   * The only way any user reaches `admin` or `rider` after registration (both are excluded
-   * from self-service signup — see SELF_REGISTERABLE_ROLES). The very first admin has to be
-   * bootstrapped via `npm run seed:admin` (see backend/CLAUDE.md) since this endpoint itself
-   * requires an existing admin to call it.
+   * The only way a `customer` reaches `admin` after registration, or an `admin` is returned to
+   * `customer` — both excluded from self-service signup (see SELF_REGISTERABLE_ROLES). The very
+   * first admin (and first super admin) has to be bootstrapped via `npm run seed:admin` (see
+   * backend/CLAUDE.md) since this endpoint itself requires an existing super admin to call it.
+   * Gated by `SuperAdminGuard` on top of `@Roles('admin')` (docs/ROADMAP.md FDP-139) — a plain
+   * admin can view users but can't grant or revoke admin access; `UsersService.updateRole` also
+   * refuses to touch a restaurant_owner's or rider's role, regardless of caller.
    */
   @Roles('admin')
+  @UseGuards(SuperAdminGuard)
   @Patch(':id/role')
   async updateRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
-    const user = await this.usersService.updateRole(id, dto.role);
-    if (!user) throw new NotFoundException('User not found');
+    const user = await this.usersService.changeAdminRole(id, dto.role);
     return { id: user._id.toString(), email: user.email, role: user.role };
   }
 
@@ -173,6 +177,7 @@ function toAdminUserView(user: UserDocument) {
     email: user.email,
     name: user.name,
     role: user.role,
+    isSuperAdmin: user.isSuperAdmin,
     status: user.status,
     suspendedAt: user.suspendedAt,
     suspendedReason: user.suspendedReason,

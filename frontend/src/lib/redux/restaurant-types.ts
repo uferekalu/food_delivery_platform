@@ -504,6 +504,7 @@ export interface AdminUser {
   email: string;
   name: string;
   role: UserRole;
+  isSuperAdmin: boolean;
   status: UserStatus;
   suspendedAt: string | null;
   suspendedReason: string | null;

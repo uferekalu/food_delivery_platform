@@ -48,6 +48,7 @@ export interface PublicUser {
   email: string;
   name: string;
   role: string;
+  isSuperAdmin: boolean;
   isEmailVerified: boolean;
   avatarUrl: string | null;
   phone: string | null;
@@ -73,6 +74,7 @@ function toPublicUser(user: UserDocument): PublicUser {
     email: user.email,
     name: user.name,
     role: user.role,
+    isSuperAdmin: user.isSuperAdmin,
     isEmailVerified: user.isEmailVerified,
     avatarUrl: user.avatarUrl,
     // `undefined` when the schema field is genuinely absent (see user.schema.ts's phone
@@ -568,6 +570,7 @@ export class AuthService {
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
+      isSuperAdmin: user.isSuperAdmin,
     };
     const accessToken = this.jwtService.sign(accessPayload, {
       secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
