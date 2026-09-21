@@ -3607,3 +3607,82 @@ assertions updated for the new `store` field shape — full backend suite green 
 `tsc --noEmit`/`eslint`/production `build` clean on both sides. New `StoreDetailPage.reviews`,
 `OrderDetailPage.rateThisStore`, and 13 new `CategoriesPage` filter-control keys shipped in all 6
 languages, key parity verified programmatically.
+
+## 58. Store favorites and store cart-item notes (docs/ROADMAP.md FDP-137)
+
+Direct, explicit user follow-up to §57's two deliberately-deferred gaps: "fix those too please."
+Favorites only worked for restaurants, and a store cart line had no way to attach a note despite
+the backend already supporting one.
+
+### Store favorites: a line-for-line mirror of the restaurant implementation
+
+`User` gained `favoriteStoreIds: Types.ObjectId[]`, mirroring `favoriteRestaurantIds` down to the
+one deliberate exception to this codebase's usual "thread ids as strings end-to-end" convention:
+favorite-id arrays are the one place write-side always constructs real `new Types.ObjectId(...)`
+instances rather than storing strings. `UsersService` gained `listFavoriteStores`/
+`addFavoriteStore`/`removeFavoriteStore`, each a direct copy of its restaurant counterpart
+(`storesService.findByIdOrThrow`/`findByIds` standing in for the restaurant equivalents), and
+`UsersController` gained the matching `/users/me/favorite-stores` GET/POST/DELETE routes.
+
+**A new circular-dependency cycle, fixed proactively.** Wiring `UsersModule` to `StoresModule`
+(needed so `UsersService` can call `StoresService`) creates `UsersModule -> StoresModule ->
+NotificationsModule -> UsersModule` — the store-side analogue of the restaurant cycle §(FDP-115)
+already fixed (`UsersModule -> RestaurantsModule -> NotificationsModule -> UsersModule`). Applied
+the identical `forwardRef()` pattern at every edge: `UsersModule`'s import of `StoresModule`,
+`StoresModule`'s import of `NotificationsModule` (previously non-circular, now needs it), and the
+constructor-level `@Inject(forwardRef(() => ...))` on both `UsersService.storesService` and
+`StoresService.notificationsService`. This class of bug is exactly the kind that compiles fine and
+passes Jest's per-suite `TestingModule`s (which never require the full module graph) but crashes
+only at real Nest bootstrap — so verification here specifically included booting the actual
+compiled app (`node dist/src/main.js`) and confirming `Nest application successfully started` with
+every module (including the new cycle's three) resolving cleanly and the new routes mapped, not
+just a green test suite.
+
+### Frontend: `FavoriteButton` generalized via a discriminated union
+
+Rather than a second `StoreFavoriteButton` component duplicating all the toggle/loading/toast
+logic, `FavoriteButtonProps` became `{ className? } & ({ restaurantId; storeId?: undefined } |
+{ storeId; restaurantId?: undefined })` — a caller can never pass both or neither. Internally both
+the restaurant and store query/mutation pairs are always called (React hooks can't be
+conditional), each cheaply `skip`ped based on which id prop is actually present. A new
+`"FavoriteStore"` RTK Query tag was added rather than reusing `"Favorite"`, so a restaurant id and
+a store id can never cross-invalidate each other's list even if their id spaces ever collided.
+`favorites-tab.tsx` now renders two sections (Restaurants, Stores) instead of one list, reusing
+`StoreCard` for the store grid the same way the groceries/pharmacy browse tab already does.
+
+### Store cart notes: UI-only, since the backend already supported it
+
+`AddStoreCartItemInput`/`UpdateCartItemInput` already carried an optional `notes` field
+end-to-end — `CartService`, the DTOs, and `CartLineItem`'s read-only notes display were all
+already correct; only the *write* affordances were missing. The store product card
+(`stores/[slug]/page.tsx`) has no restaurant-style `ItemDetailModal` to reuse (products have no
+modifiers, and a full modal would be disproportionate for the fast, high-volume grocery-adding
+pattern), so it gained a lightweight inline toggle instead: an "Add a note" text button that
+expands into a `Textarea` in place, submitted together with the add-to-cart call. `CartDrawer`'s
+`CartLineItem` gained the matching edit affordance — clicking an existing (or absent) note reveals
+the same inline `Textarea` with Save/Cancel, calling the already-fully-wired
+`useUpdateCartItemMutation` with `{ notes }`. Since `CartLineItem` is shared by both restaurant and
+store cart lines, restaurant items incidentally gained the ability to edit a note *after* adding
+it (previously only settable once, at add-time via `ItemDetailModal`) — a side benefit, not
+something separately requested.
+
+### Verification
+
+Booted the real compiled backend (`node dist/src/main.js`) and confirmed clean startup with
+`UsersModule`/`StoresModule`/`NotificationsModule` all resolving and the new
+`/users/me/favorite-stores` routes mapped. Added 5 new `UsersService` unit tests for the store-
+favorites trio (add/list, idempotent re-add, remove, reject-unknown-store, restaurant/store
+favorites stay independent), mirroring the existing restaurant-favorites suite exactly. Fixing
+this suite surfaced two incidental breakages: `riders.service.spec.ts` and
+`reviews.service.spec.ts` both construct a real (non-mocked) `UsersService` in their
+`TestingModule`, which now needs `StoresService` resolvable too — fixed by adding it alongside its
+own no-op `BusinessVerificationService`/`NotificationsService` mocks, the same shape
+`users.service.spec.ts` itself uses. `reviews.service.spec.ts` was also separately missing the
+`phone` field `ApplyRiderDto` has required since FDP-134 (a pre-existing gap, unrelated to this
+ticket, caught by `tsc --noEmit` while verifying) — fixed in the same pass. Full backend suite
+green (721/721; an initial parallel run showed 2 confirmed-flaky `mongodb-memory-server` teardown
+failures, both reproduced passing in isolation and again passing in a second full parallel run).
+`tsc --noEmit`/`eslint`/production `build` clean on both sides. New `favoriteRestaurants`/
+`favoriteStores`/`tapHeartToSaveStore` (`AccountPage`), `addNote`/`notesPlaceholder`
+(`StoreDetailPage`), and `addNote`/`notesPlaceholder`/`saveNote`/`cancel`/`couldNotUpdateNotes`
+(`CartDrawer`) keys shipped in all 6 languages, key parity verified programmatically.

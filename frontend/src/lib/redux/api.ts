@@ -117,6 +117,7 @@ export const api = createApi({
     "Order",
     "SavedAddress",
     "Favorite",
+    "FavoriteStore",
     "DeliveryZone",
     "Rider",
     "Review",

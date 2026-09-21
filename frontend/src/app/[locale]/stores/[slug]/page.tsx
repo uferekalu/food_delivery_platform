@@ -10,10 +10,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { InlineDiscountBadge } from "@/components/inline-discount-badge";
 import { CategoryNav } from "@/components/category-nav";
 import { ReviewsList } from "@/components/reviews-list";
+import { FavoriteButton } from "@/components/favorite-button";
 import { BasketIcon, PillIcon } from "@/components/store-card";
 import { useGetStoreBySlugQuery } from "@/lib/redux/services/stores-api";
 import { useGetStoreCatalogQuery } from "@/lib/redux/services/store-catalog-api";
@@ -63,12 +65,16 @@ function ProductCard({ product, currency, storeIsOpen }: { product: Product; cur
   const { toast } = useToast();
   const [addStoreItem, { isLoading }] = useAddStoreItemMutation();
   const [confirmingReplace, setConfirmingReplace] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState("");
   const outOfStock = product.stockQuantity != null && product.stockQuantity <= 0;
 
   async function add(replace = false) {
     try {
-      await addStoreItem({ productId: product._id, qty: 1, replace }).unwrap();
+      await addStoreItem({ productId: product._id, qty: 1, replace, notes: notes.trim() || undefined }).unwrap();
       setConfirmingReplace(false);
+      setNotesOpen(false);
+      setNotes("");
       toast({ title: t("addedToCart"), variant: "success" });
     } catch (err) {
       if (isConflictError(err)) {
@@ -108,16 +114,34 @@ function ProductCard({ product, currency, storeIsOpen }: { product: Product; cur
         ) : (
           <span className="text-sm font-semibold text-text">{formatMoney(product.price, currency, locale)}</span>
         )}
-        {storeIsOpen && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-auto w-full"
-            disabled={!product.isAvailable || outOfStock}
-            isLoading={isLoading}
-            onClick={() => void add()}
-          >
-            {outOfStock ? t("outOfStock") : t("addToCart")}
+        {storeIsOpen && !outOfStock && product.isAvailable && (
+          <div className="mt-auto flex flex-col gap-1.5">
+            {notesOpen ? (
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder={t("notesPlaceholder")}
+                className="text-xs"
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNotesOpen(true)}
+                className="self-start text-xs font-medium text-brand-700 hover:underline"
+              >
+                {t("addNote")}
+              </button>
+            )}
+            <Button variant="outline" size="sm" className="w-full" isLoading={isLoading} onClick={() => void add()}>
+              {t("addToCart")}
+            </Button>
+          </div>
+        )}
+        {storeIsOpen && (outOfStock || !product.isAvailable) && (
+          <Button variant="outline" size="sm" className="mt-auto w-full" disabled>
+            {t("outOfStock")}
           </Button>
         )}
       </div>
@@ -253,6 +277,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ slug: st
           <h1 className="text-3xl font-bold text-text">{store.name}</h1>
           {store.isSponsored && <Badge variant="warning">{t("sponsored")}</Badge>}
           <Badge variant={isOpenNow ? "success" : "neutral"}>{openLabel}</Badge>
+          <FavoriteButton storeId={store._id} />
         </div>
 
         {store.tags.length > 0 && <p className="text-text-muted">{store.tags.join(", ")}</p>}

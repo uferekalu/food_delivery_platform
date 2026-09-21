@@ -1,7 +1,7 @@
 import { api } from "../api";
 import { setCurrentUser } from "../slices/auth-slice";
 import type { PublicUser } from "../types";
-import type { Address, Restaurant, SavedAddress } from "../restaurant-types";
+import type { Address, Restaurant, SavedAddress, Store } from "../restaurant-types";
 
 export interface UpdateProfileInput {
   name?: string;
@@ -75,6 +75,33 @@ export const accountApi = api.injectEndpoints({
         { type: "Favorite", id: restaurantId },
       ],
     }),
+
+    // Store-catalog counterpart of the three endpoints above (docs/ROADMAP.md FDP-137) — a
+    // separate "FavoriteStore" tag rather than reusing "Favorite", since a restaurant id and a
+    // store id could otherwise collide in the same tag-id space and cross-invalidate the wrong list.
+    listFavoriteStores: builder.query<Store[], void>({
+      query: () => "/users/me/favorite-stores",
+      providesTags: (result) =>
+        result
+          ? [...result.map((s) => ({ type: "FavoriteStore" as const, id: s._id })), { type: "FavoriteStore" as const, id: "LIST" }]
+          : [{ type: "FavoriteStore", id: "LIST" }],
+    }),
+
+    addFavoriteStore: builder.mutation<void, string>({
+      query: (storeId) => ({ url: `/users/me/favorite-stores/${storeId}`, method: "POST" }),
+      invalidatesTags: (result, _error, storeId) => [
+        { type: "FavoriteStore", id: "LIST" },
+        { type: "FavoriteStore", id: storeId },
+      ],
+    }),
+
+    removeFavoriteStore: builder.mutation<void, string>({
+      query: (storeId) => ({ url: `/users/me/favorite-stores/${storeId}`, method: "DELETE" }),
+      invalidatesTags: (result, _error, storeId) => [
+        { type: "FavoriteStore", id: "LIST" },
+        { type: "FavoriteStore", id: storeId },
+      ],
+    }),
   }),
 });
 
@@ -87,4 +114,7 @@ export const {
   useListFavoritesQuery,
   useAddFavoriteMutation,
   useRemoveFavoriteMutation,
+  useListFavoriteStoresQuery,
+  useAddFavoriteStoreMutation,
+  useRemoveFavoriteStoreMutation,
 } = accountApi;

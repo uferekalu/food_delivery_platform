@@ -10,6 +10,8 @@ import {
   RestaurantDocument,
   RestaurantSchema,
 } from '../restaurants/schemas/restaurant.schema';
+import { StoresService } from '../stores/stores.service';
+import { Store, StoreDocument, StoreSchema } from '../stores/schemas/store.schema';
 import {
   RefreshToken,
   RefreshTokenDocument,
@@ -26,8 +28,10 @@ describe('UsersService', () => {
   let moduleRef: TestingModule;
   let usersService: UsersService;
   let restaurantsService: RestaurantsService;
+  let storesService: StoresService;
   let userModel: Model<UserDocument>;
   let restaurantModel: Model<RestaurantDocument>;
+  let storeModel: Model<StoreDocument>;
   let refreshTokenModel: Model<RefreshTokenDocument>;
 
   beforeAll(async () => {
@@ -42,12 +46,14 @@ describe('UsersService', () => {
         MongooseModule.forFeature([
           { name: User.name, schema: UserSchema },
           { name: Restaurant.name, schema: RestaurantSchema },
+          { name: Store.name, schema: StoreSchema },
           { name: RefreshToken.name, schema: RefreshTokenSchema },
         ]),
       ],
       providers: [
         UsersService,
         RestaurantsService,
+        StoresService,
         // Not exercised by this suite (docs/ROADMAP.md FDP-115) — bare no-op mocks.
         {
           provide: BusinessVerificationService,
@@ -67,8 +73,10 @@ describe('UsersService', () => {
 
     usersService = moduleRef.get(UsersService);
     restaurantsService = moduleRef.get(RestaurantsService);
+    storesService = moduleRef.get(StoresService);
     userModel = moduleRef.get(getModelToken(User.name));
     restaurantModel = moduleRef.get(getModelToken(Restaurant.name));
+    storeModel = moduleRef.get(getModelToken(Store.name));
     refreshTokenModel = moduleRef.get(getModelToken(RefreshToken.name));
   }, 60_000);
 
@@ -76,6 +84,7 @@ describe('UsersService', () => {
     await Promise.all([
       userModel.deleteMany({}).exec(),
       restaurantModel.deleteMany({}).exec(),
+      storeModel.deleteMany({}).exec(),
       refreshTokenModel.deleteMany({}).exec(),
     ]);
   });
@@ -98,6 +107,18 @@ describe('UsersService', () => {
     return restaurantsService.create('owner-id', {
       name,
       cuisineTypes: ['Nigerian'],
+      currency: 'NGN',
+      country: 'Nigeria',
+      complianceDocumentUrl: 'https://example.com/doc.pdf',
+      businessRegistrationNumber: 'RC1234567',
+      address: { line1: '1 Main St', city: 'Lagos', state: 'Lagos' },
+    });
+  }
+
+  async function createStore(name = 'Market Square Supermarket') {
+    return storesService.create('owner-id', {
+      name,
+      type: 'groceries',
       currency: 'NGN',
       country: 'Nigeria',
       complianceDocumentUrl: 'https://example.com/doc.pdf',
@@ -243,6 +264,65 @@ describe('UsersService', () => {
       await expect(
         usersService.addFavorite(user._id.toString(), user._id.toString()),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // Store-catalog counterpart of the restaurant favorites suite above (docs/ROADMAP.md
+  // FDP-137) — same behavior, mirrored exactly.
+  describe('favorite stores', () => {
+    it('adds and lists a favorite store', async () => {
+      const user = await createUser();
+      const store = await createStore();
+      await usersService.addFavoriteStore(
+        user._id.toString(),
+        store._id.toString(),
+      );
+
+      const favorites = await usersService.listFavoriteStores(
+        user._id.toString(),
+      );
+      expect(favorites).toHaveLength(1);
+      expect(favorites[0]._id.toString()).toBe(store._id.toString());
+    });
+
+    it('is idempotent — favoriting the same store twice does not duplicate it', async () => {
+      const user = await createUser();
+      const store = await createStore();
+      const id = user._id.toString();
+      await usersService.addFavoriteStore(id, store._id.toString());
+      await usersService.addFavoriteStore(id, store._id.toString());
+
+      const favorites = await usersService.listFavoriteStores(id);
+      expect(favorites).toHaveLength(1);
+    });
+
+    it('removes a favorite store', async () => {
+      const user = await createUser();
+      const store = await createStore();
+      const id = user._id.toString();
+      await usersService.addFavoriteStore(id, store._id.toString());
+      await usersService.removeFavoriteStore(id, store._id.toString());
+
+      expect(await usersService.listFavoriteStores(id)).toHaveLength(0);
+    });
+
+    it('rejects favoriting a store that does not exist', async () => {
+      const user = await createUser();
+      await expect(
+        usersService.addFavoriteStore(user._id.toString(), user._id.toString()),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('keeps restaurant and store favorites independent', async () => {
+      const user = await createUser();
+      const restaurant = await createRestaurant();
+      const store = await createStore();
+      const id = user._id.toString();
+      await usersService.addFavorite(id, restaurant._id.toString());
+      await usersService.addFavoriteStore(id, store._id.toString());
+
+      expect(await usersService.listFavorites(id)).toHaveLength(1);
+      expect(await usersService.listFavoriteStores(id)).toHaveLength(1);
     });
   });
 

@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, QueryFilter } from 'mongoose';
@@ -42,6 +44,10 @@ export class StoresService {
   constructor(
     @InjectModel(Store.name) private readonly storeModel: Model<StoreDocument>,
     private readonly businessVerificationService: BusinessVerificationService,
+    // forwardRef (docs/ROADMAP.md FDP-137) — see StoresModule's doc comment for the full cycle
+    // this breaks: StoresModule -> NotificationsModule -> UsersModule -> StoresModule (UsersService
+    // now depends on StoresService for store favorites).
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
 

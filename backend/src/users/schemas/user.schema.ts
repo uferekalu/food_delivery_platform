@@ -76,6 +76,12 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'Restaurant', default: [] })
   favoriteRestaurantIds: Types.ObjectId[];
 
+  // Store-catalog counterpart of favoriteRestaurantIds (docs/ROADMAP.md FDP-137) — a grocery/
+  // pharmacy store previously had no way to be favorited at all, despite the restaurant side
+  // working end-to-end since day one.
+  @Prop({ type: [Types.ObjectId], ref: 'Store', default: [] })
+  favoriteStoreIds: Types.ObjectId[];
+
   // Admin ban/suspend (docs/ROADMAP.md FDP-89). Suspending immediately revokes every one of this
   // user's refresh tokens (see UsersService.suspend) so silent token refresh stops working right
   // away; a still-valid ~15-min access token keeps working until it naturally expires, since
