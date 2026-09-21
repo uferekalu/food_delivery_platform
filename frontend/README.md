@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend — Food Delivery Platform
 
-## Getting Started
+Next.js (App Router) + TypeScript app for the food/grocery/pharmacy delivery platform. See the
+[repo root README](../README.md) for the full-project overview, and
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) for the technical source of truth. Frontend-
+specific conventions (design tokens, the hand-built UI kit, i18n, state layer rules) are in
+[`CLAUDE.md`](./CLAUDE.md).
 
-First, run the development server:
+## Stack
+
+Next.js App Router, TypeScript, Tailwind CSS on top of a hand-built, token-driven design system
+(no Radix/shadcn — see `src/styles/tokens.css`/`tokens.ts`), Redux Toolkit + RTK Query as the
+single state layer (RTK Query for all server data, plain slices for client/UI state like theme
+and the cart drawer), React Hook Form + Zod for every form, Socket.IO client for realtime order
+updates, Mapbox GL for live delivery tracking, `next-intl` for i18n, Vitest + React Testing
+Library for component tests. Deployed to **Vercel** (see
+[`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md)).
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # NEXT_PUBLIC_API_URL should point at a running backend;
+                              # everything else is optional and degrades gracefully when unset
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Running
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev      # http://localhost:3000
+npm run build     # production build — also the strongest overall correctness check
+npm run start      # serve the production build locally
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Internationalization
 
-## Learn More
+Six locales are supported: English (default), French, Spanish, Portuguese, German, Chinese
+(`src/i18n/routing.ts`). Every new user-facing string ships in all six locale files
+(`messages/*.json`) in the same change — there is no separate translation follow-up step.
 
-To learn more about Next.js, take a look at the following resources:
+## Design system
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Colors, spacing, typography, and radius are **never hardcoded** in components — they come from
+`src/styles/tokens.ts` (typed accessors over `src/styles/tokens.css`, the source of truth). If a
+component needs a value that isn't already a token, add the token first. The UI kit lives under
+`src/components/ui/` and is hand-built rather than pulled from a component library, so it can be
+fully token-driven and support light/dark theming out of the box (`docs/ARCHITECTURE.md` §7).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Testing
 
-## Deploy on Vercel
+```bash
+npm run test         # component tests (Vitest + React Testing Library)
+npm run test:watch    # watch mode
+npm run lint           # eslint
+npx tsc --noEmit        # type-check
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+There is no Playwright dependency committed to the project — live end-to-end verification during
+development is done by importing Chromium directly from the local `npx` cache via a `file://`
+URL in a throwaway script, driving a real dev server. See `docs/ARCHITECTURE.md` for examples of
+this pattern in past tickets' verification notes.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project structure
+
+```
+src/
+  app/[locale]/           Routes (App Router), one folder per page, grouped by locale
+  components/              Shared components; components/ui/ is the hand-built design-system kit
+  lib/redux/               Store, slices, and RTK Query API services (one file per domain)
+  lib/                     Non-Redux utilities (currency formatting, opening-hours logic, etc.)
+  i18n/                    next-intl routing/config
+  styles/                  Design tokens (CSS custom properties + typed TS accessors)
+messages/                  One JSON file per locale, flat-ish key namespaces per page/component
+```
