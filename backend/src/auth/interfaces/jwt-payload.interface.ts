@@ -4,6 +4,11 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: UserRole;
+  // Optional (not `boolean`) deliberately — dozens of existing test fixtures construct this
+  // literal without it, and "claim absent" must mean the same thing as "false" here anyway:
+  // only ever true for `role: 'admin'` users, see User.isSuperAdmin's doc comment
+  // (docs/ROADMAP.md FDP-139). Checked exclusively by `SuperAdminGuard`.
+  isSuperAdmin?: boolean;
 }
 
 export interface EmailTokenPayload {

@@ -74,6 +74,7 @@ function renderPage() {
         email: "vera@example.com",
         name: "Vera",
         role: "restaurant_owner",
+        isSuperAdmin: false,
         isEmailVerified: true,
         avatarUrl: null,
         phone: null,

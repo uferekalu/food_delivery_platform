@@ -5,6 +5,7 @@ export interface PublicUser {
   email: string;
   name: string;
   role: UserRole;
+  isSuperAdmin: boolean;
   isEmailVerified: boolean;
   avatarUrl: string | null;
   phone: string | null;

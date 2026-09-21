@@ -46,6 +46,16 @@ export class User {
   @Prop({ type: String, required: true, enum: USER_ROLES, default: 'customer' })
   role: UserRole;
 
+  // Gates the single most consequential admin action — granting or revoking admin access
+  // (docs/ROADMAP.md FDP-139) — behind a narrower privilege than plain `role: 'admin'`. Every
+  // other `@Roles('admin')`-gated endpoint in the app treats a super admin exactly like any
+  // other admin; this flag is checked only by `UsersController.updateRole`'s `SuperAdminGuard`.
+  // Only ever set by `npm run seed:admin` (the bootstrap script) or by an existing super admin
+  // promoting/demoting a `customer`/`admin` account — never self-service, never via the normal
+  // role-change target list.
+  @Prop({ default: false })
+  isSuperAdmin: boolean;
+
   @Prop({ default: false })
   isEmailVerified: boolean;
 
